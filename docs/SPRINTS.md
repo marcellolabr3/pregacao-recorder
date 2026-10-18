@@ -22,7 +22,7 @@ Classificacao: FUNCIONAL / PARCIAL / COM ERRO / NAO IMPLEMENTADA / NAO TESTADA.
 | MQTT/TLS EMQX (ACK, reconexao, LWT, trava de instancia) | FUNCIONAL | `app/remote/agent.py`, 62 testes |
 | APK Flutter 2.5.0+11 (controle, status, cronometro) | FUNCIONAL | `flutter/pregacao_controle/` |
 | SQLite local (sessions/uploads/events) + logs rotativos no app | FUNCIONAL | `app/db.py`, `app/logging_setup.py` |
-| Suite de testes | FUNCIONAL | 290 pytest verdes em `tests/` |
+| Suite de testes | FUNCIONAL | 301 pytest verdes em `tests/` (18/10) |
 | Documentacao tecnica basica | FUNCIONAL | 13 arquivos (docs/ + README + GUIA-USUARIO + site/) |
 
 ---
@@ -31,10 +31,10 @@ Classificacao: FUNCIONAL / PARCIAL / COM ERRO / NAO IMPLEMENTADA / NAO TESTADA.
 
 | # | Lacuna | Classificacao | Arquivos que serao tocados |
 |---|---|---|---|
-| L1 | Backup/controle de versionamento (repo sem `.git`) | NAO IMPLEMENTADA | raiz do projeto |
-| L2 | Execucao silenciosa completa (ffmpeg consolidacao sem flag; device.py; send.js QR; bats com console/pause) | PARCIAL | `recording/consolidate.py:82`, `audio/device.py:37,232`, `whatsapp/send.js:93`, `iniciar-*.bat` |
-| L3 | Instancia unica do servidor e do tray (so o agente tem trava) | PARCIAL | `app/main.py:127-147`, `tray_app/app.py` |
-| L4 | Log do agente no Windows sem PREGACAO_LOG_FILE (2 handlers, mesma pasta) | PARCIAL | `iniciar-agente.bat` |
+| L1 | Backup/controle de versionamento (repo sem `.git`) | IMPLEMENTADA (S0) | commit `78f6969` + repo GitHub; zips em `D:\Dev\backups\` |
+| L2 | Execucao silenciosa completa (ffmpeg consolidacao sem flag; device.py; send.js QR; bats com console/pause) | IMPLEMENTADA (S1) | `recording/consolidate.py`, `audio/device.py`, `routes.py`, `whatsapp/send.js`, `iniciar-*.bat` |
+| L3 | Instancia unica do servidor e do tray (so o agente tem trava) | IMPLEMENTADA (S0) | `app/main.py:127-147`, `tray_app/app.py` |
+| L4 | Log do agente no Windows sem PREGACAO_LOG_FILE (2 handlers, mesma pasta) | IMPLEMENTADA (S1) | `iniciar-agente.bat` → `logs/pregacao-agente.log` (provado) |
 | L5 | Fila de estudos em memoria (`_aguardando` perde jobs no reinicio) | PARCIAL | `app/estudos.py:43-59,262-310` |
 | L6 | Job manager persistente (job_id, estados, retomada pos-reinicio) | PARCIAL (uploads ja tem) | `app/db.py`, `app/estudos.py`, `app/main.py` |
 | L7 | Estados reais do pipeline (etapa atual por job) | NAO IMPLEMENTADA | novo em `estudos.py` + `db.py` |
@@ -49,7 +49,7 @@ Classificacao: FUNCIONAL / PARCIAL / COM ERRO / NAO IMPLEMENTADA / NAO TESTADA.
 | L16 | Upload Drive: retomada refaz do zero (sem session URI persistida) | PARCIAL | `app/upload/drive.py:354-365` |
 | L17 | Testes: rotas /api/estudos, caminho MP3 da consolidacao, pipeline.py sem suite | NAO TESTADA | `tests/`, novo `sermon-pipeline/tests/` |
 | L18 | AGUARDANDO nao e State proprio (depende de `detail`) | PARCIAL | `app/states.py` |
-| L19 | Docs desatualizados (TESTES.md diz 272; falta manual leigo, fluxogramas, relatorio) | PARCIAL | `docs/` |
+| L19 | Docs desatualizados (TESTES.md dizia 272; falta manual leigo, fluxogramas, relatorio) | PARCIAL (DOC A pronto) | `docs/` - TESTES.md sincronizado (301), `PREGACAO-COMO-FUNCIONA.md/.pdf` entregues; faltam DOC B-E |
 | L20 | Dois APKs divergentes (2.5 Flutter vs 1.4 Kotlin legado) | RISCO | `android/` legado |
 
 ---
@@ -73,21 +73,31 @@ Objetivo: nunca mais perder trabalho; base para alteracoes estruturais.
 
 ### S1 - EXECUCAO SILENCIOSA E LOGS (1-2 dias)  [FASE 1 do prompt]
 Objetivo: zero janelas indevidas na operacao normal.
-- [ ] `consolidate.py:82` → CREATE_NO_WINDOW (ffmpeg da cada gravacao)
-- [ ] `audio/device.py:37,232` → CREATE_NO_WINDOW (listagem e teste de sinal)
-- [ ] `routes.py:136` (systemctl) → CREATE_NO_WINDOW no Windows
-- [ ] `iniciar-gravador.bat` / `iniciar-agente.bat`: rodar sem `pause` com
-      console minimizado; `iniciar-agente.bat` → setar `PREGACAO_LOG_FILE`
-      (resolve 2 handlers na mesma pasta)
-- [ ] `send.js:93`: nao abrir janela do QR no fluxo automatico (QR so no
-      pareamento manual, acao explicita do operador)
-- [ ] Manter JANELA VISIVEL apenas no: login do NotebookLM (excecao oficial)
-      e no pareamento manual do WhatsApp
-- [ ] Limpeza de `handoff_*.log` antigos + teto para `login_nlm.log`
-      (rotacao simples)
-- Marcar L2, L4, L6(parcial de logs)
-- Testes: 290 verdes + teste unitario das flags de subprocess
-- **Prova real**: gravar 1x pelo PC e nao ver NENHUMA janela nova
+- [x] `consolidate.py` → CREATE_NO_WINDOW (ffmpeg de cada gravacao)
+- [x] `audio/device.py` (`_run` listagem + teste de sinal) → CREATE_NO_WINDOW
+- [x] `routes.py` (systemctl) → CREATE_NO_WINDOW no Windows
+- [x] `iniciar-gravador.bat` / `iniciar-agente.bat`: `pause` SO em ERRO
+      (fluxo normal fecha sozinho); `iniciar-agente.bat` →
+      `PREGACAO_LOG_FILE=pregacao-agente.log` (resolve 2 handlers na mesma
+      pasta - provado: a recusa da 2a instancia gravou no log proprio)
+- [x] `send.js` (sermon-pipeline): imagem do QR abre so no pareamento
+      manual (`--login`); o fluxo automatico so registra o caminho
+- [x] JANELA VISIVEL mantida apenas no: login do NotebookLM (excecao
+      oficial) e no pareamento manual do WhatsApp
+- [x] Limpeza de `handoff_*.log` (so os 30 mais novos) + `login_nlm.log`
+      rotativo (2 MB x 3), rodando dentro do vigia periodico
+- [x] Marcar L2 e L4 como IMPLEMENTADAS na tabela de lacunas
+      (L6 permanece PARCIAL - job manager e S2)
+- [x] Testes: **301 verdes** (exit 0) + `tests/test_silencio.py` (7 testes
+      de flag/housekeeping); `docs/TESTES.md` sincronizado em 301
+- [x] **Prova real 18/10 14:26**: gravacao com TTS via `/api/start` +
+      `/api/stop` (IDLE→RECORDING→FINALIZING→COMPLETED) → **7 execucoes
+      de ffmpeg, todas com `MainWindowHandle=0`; 0 janelas novas**; MP3
+      de 180,9 KB em `recordings/2026/10/`. Troca do painel para o codigo
+      S1 (pid 44132) tambem sem janela nova. Prova do `.bat` em erro:
+      `pause` + log proprio.
+- Commit `5ab2515` (push ok); backup `sermon-pipeline_2026-10-18_1429.zip`
+      renovado (inclui o `send.js` alterado)
 
 ### S2 - GERENCIADOR PERSISTENTE DE TAREFAS (2-3 dias)  [FASE 2 base]
 Objetivo: job_id unico, estados reais, sobrevive a reinicio.
