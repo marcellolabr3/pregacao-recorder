@@ -22,7 +22,7 @@ Classificacao: FUNCIONAL / PARCIAL / COM ERRO / NAO IMPLEMENTADA / NAO TESTADA.
 | MQTT/TLS EMQX (ACK, reconexao, LWT, trava de instancia) | FUNCIONAL | `app/remote/agent.py`, 62 testes |
 | APK Flutter 2.5.0+11 (controle, status, cronometro) | FUNCIONAL | `flutter/pregacao_controle/` |
 | SQLite local (sessions/uploads/events) + logs rotativos no app | FUNCIONAL | `app/db.py`, `app/logging_setup.py` |
-| Suite de testes | FUNCIONAL | 301 pytest verdes em `tests/` (18/10) |
+| Suite de testes | FUNCIONAL | 317 pytest verdes em `tests/` (18/10) |
 | Documentacao tecnica basica | FUNCIONAL | 13 arquivos (docs/ + README + GUIA-USUARIO + site/) |
 
 ---
@@ -35,9 +35,9 @@ Classificacao: FUNCIONAL / PARCIAL / COM ERRO / NAO IMPLEMENTADA / NAO TESTADA.
 | L2 | Execucao silenciosa completa (ffmpeg consolidacao sem flag; device.py; send.js QR; bats com console/pause) | IMPLEMENTADA (S1) | `recording/consolidate.py`, `audio/device.py`, `routes.py`, `whatsapp/send.js`, `iniciar-*.bat` |
 | L3 | Instancia unica do servidor e do tray (so o agente tem trava) | IMPLEMENTADA (S0) | `app/main.py:127-147`, `tray_app/app.py` |
 | L4 | Log do agente no Windows sem PREGACAO_LOG_FILE (2 handlers, mesma pasta) | IMPLEMENTADA (S1) | `iniciar-agente.bat` → `logs/pregacao-agente.log` (provado) |
-| L5 | Fila de estudos em memoria (`_aguardando` perde jobs no reinicio) | PARCIAL | `app/estudos.py:43-59,262-310` |
-| L6 | Job manager persistente (job_id, estados, retomada pos-reinicio) | PARCIAL (uploads ja tem) | `app/db.py`, `app/estudos.py`, `app/main.py` |
-| L7 | Estados reais do pipeline (etapa atual por job) | NAO IMPLEMENTADA | novo em `estudos.py` + `db.py` |
+| L5 | Fila de estudos em memoria (`_aguardando` perde jobs no reinicio) | IMPLEMENTADA (S2) | `app/estudos.py` + tabela `jobs` em `app/db.py` |
+| L6 | Job manager persistente (job_id, estados, retomada pos-reinicio) | IMPLEMENTADA (S2) | `app/db.py` (jobs + guards), `app/estudos.py`, `app/main.py` (boot) |
+| L7 | Estados reais do pipeline (etapa atual por job) | PARCIAL (S2: dado; S3: exibir) | `etapa` persistida por job em `db.py`; API/UI na S3 |
 | L8 | Barra de progresso no painel web | NAO IMPLEMENTADA | `web/static/app.js`, `routes.py` |
 | L9 | Progresso via MQTT (agent hoje descarta tick/upload_progress) | NAO IMPLEMENTADA | `app/remote/agent.py:835-837` |
 | L10 | Barra de progresso no APK | NAO IMPLEMENTADA | `flutter/.../tela_principal.dart` |
@@ -101,20 +101,36 @@ Objetivo: zero janelas indevidas na operacao normal.
 
 ### S2 - GERENCIADOR PERSISTENTE DE TAREFAS (2-3 dias)  [FASE 2 base]
 Objetivo: job_id unico, estados reais, sobrevive a reinicio.
-- [ ] Tabela `jobs` no SQLite (`job_id`, `recording_id`, `audio_path`,
+- [x] Tabela `jobs` no SQLite (`job_id`, `recording_id`, `audio_path`,
       `drive_file_id`, `metadados` snapshot, `estado`, `etapa`, `resultado`,
-      `erro`, `tentativas`, timestamps)
-- [ ] Estados: PENDENTE / EXECUTANDO / CONCLUIDO / ERRO /
-      AGUARDANDO INTERVENCAO / CANCELADO
-- [ ] Migrar `estudos.py`: `deque` + `_aguardando` -> banco
-      (preservar a logica de pre-flight/keepalive ja testada)
-- [ ] Recuperacao no boot (`app/main.py`): jobs incompletos voltam para fila
-- [ ] Idempotencia: etapa concluida nunca re-executa (checar por resultado
-      gravado, nao por estado de memoria)
-- Marcar L5, L6, L7 (estado/etapa ja persistem)
-- Testes: novos em `test_estudos.py`/`test_db.py` (reinicio com jobs na fila,
-  nao-duplicacao de etapa)
+      `erro`, `tentativas`, `created/updated/started/finished_at`)
+- [x] Estados: PENDENTE / EXECUTANDO / CONCLUIDO / ERRO /
+      AGUARDANDO_INTERVENCAO / CANCELADO - todas as trocas passam por
+      transicao COM GUARDA no estado atual (testado)
+- [x] Migrar `estudos.py`: `deque` + `_aguardando` -> banco
+      (pre-flight/keepalive preservados - os 14 testes originais seguem
+      verdes, adaptados so para o banco isolado por teste)
+- [x] Recuperacao no boot: `retomar_apos_reinicio()` chamada por
+      `iniciar()` (subida do painel via `main.py` -> `register_routes`);
+      EXECUTANDO volta a PENDENTE **a nao ser que o log de handoff prove
+      `=== CONCLUIDO`** (prova gravada, nao memoria)
+- [x] Idempotencia: `audio_path` UNIQUE (enfileirar duplo = 1 job),
+      guarda de estado em concluir/falhar/aguardar/reenfileirar, etapa
+      concluida nunca re-executa nem e sobrescrita por falha atrasada
+- [x] Acordamento: `diagnosticar()` e o vigia periodico puxam PENDENTE
+      esquecido (nao espera a proxima gravacao)
+- [x] Marcar L5, L6 como IMPLEMENTADAS e L7 como PARCIAL (etapa ja
+      persiste por job; a exposicao na API/UI e da S3)
+- [x] Testes: novo `tests/test_jobs.py` (16 testes: guards, boot,
+      acordamento, enfileirar duplo) + `test_estudos.py` adaptado;
+      **317 verdes, exit 0**
+- [x] **Prova real 18/10 14:49**: job EXECUTANDO orfao criado com o
+      painel FORA -> painel subiu com S2 -> recuperacao devolveu a fila
+      -> pre-flight real -> AGUARDANDO_INTERVENCAO com motivo; linha no
+      banco com `recording_id` + `drive_file_id` snapshot (upload ao
+      Drive congelado), `tentativas=2`, zero janelas novas
 - **Nao fazer**: UI de progresso (S3) - primeiro o dado, depois a barra
+  (respeitado: nenhuma rota/UI nova nesta sprint)
 
 ### S3 - BARRA DE PROGRESSO PC + MQTT + APK (2-3 dias)  [FASE 2 restante]
 Objetivo: o operador ve a etapa real no PC e no celular.

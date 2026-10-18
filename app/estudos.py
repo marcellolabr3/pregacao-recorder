@@ -16,12 +16,19 @@
 # "notebooklm auth check --test --passive" (somente leitura, nao renova
 # nada). Sessao expirada rende UMA tentativa do caminho oficial
 # ("auth refresh"); se a renovacao exigir login no navegador, o job nao
-# morre - ele entra na lista de espera com aviso (estudo_aguardando_auth)
-# e o MP3, o upload do Drive e todos os passos concluidos ficam intactos.
-# Assim que a sessao volta (login pelo painel ou checagem periodica), os
-# jobs em espera voltam para a fila e continuam DIRETO do NotebookLM, sem
-# refazer gravacao nem upload. A checagem periodica e moderada e passiva:
-# falha de rede nao invalida nada e nenhum refresh roda em loop.
+# morre - ele passa a AGUARDANDO_INTERVENCAO no banco com aviso
+# (estudo_aguardando_auth) e o MP3, o upload do Drive e todos os passos
+# concluidos ficam intactos. Assim que a sessao volta (login pelo painel
+# ou checagem periodica), os jobs em espera voltam para PENDENTE e
+# continuam DIRETO do NotebookLM, sem refazer gravacao nem upload. A
+# checagem periodica e moderada e passiva: falha de rede nao invalida
+# nada e nenhum refresh roda em loop.
+#
+# PERSISTENCIA (S2): a fila NAO e mais memoria - cada disparo e uma linha
+# na tabela `jobs` do SQLite (estado/etapa/prova gravada). Job nao se perde
+# em reinicio: `retomar_apos_reinicio()` devolve a fila o que estava em
+# execucao, a nao ser que o log de handoff prove a conclusao. A fonte de
+# verdade e o banco; a memoria guarda apenas o cache de saude da sessao.
 from __future__ import annotations
 
 import os
@@ -29,19 +36,17 @@ import shutil
 import subprocess
 import threading
 import time
-from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .config import config
+from .db import db
 from .logging_setup import get
 from .notify import notify
 
 log = get("estudos")
 
-_fila: deque = deque()
-_trava_fila = threading.Lock()
 _evento = threading.Event()
 _trabalhador: Optional[threading.Thread] = None
 
@@ -54,8 +59,6 @@ _saude = {
     "detalhe": "ainda nao verificado",
     "verificado_em": 0.0,
 }
-_aguardando: list = []  # jobs preservados aguardando sessao ou rede
-_motivo = ""  # motivo da espera (aparece no "detail" do estado MQTT)
 _ultima_renovacao = 0.0  # evita refresh em rajada quando vrios jobs em espera
 _vigia: Optional[threading.Thread] = None
 
@@ -259,14 +262,10 @@ def _renovar_sessao() -> bool:
 # ---------------------------------------------------------------------
 # lista de espera (preservacao do job) e retomada
 # ---------------------------------------------------------------------
-def _aguardar(caminho: str, motivo: str) -> None:
-    global _motivo
-    with _trava_fila:
-        if caminho in _aguardando:
-            return
-        _aguardando.append(caminho)
-        _motivo = motivo
-    log.warning("estudo em espera (%s): %s", motivo, caminho)
+def _aguardar(job_id: str, motivo: str) -> None:
+    if not db.job_aguardar(job_id, motivo):
+        return  # ja tinha saido de EXECUTANDO (corrida): nada a guardar
+    log.warning("job %s em espera (%s)", job_id, motivo)
     if motivo == "autenticacao expirada":
         notify(
             "estudo_aguardando_auth",
@@ -288,26 +287,18 @@ def _aguardar(caminho: str, motivo: str) -> None:
 def _retomar_pendentes() -> int:
     """Devolve os jobs em espera para a fila. So chamar quando a sessao
     foi CONFIRMADA valida (evita oscilar entre espera e disparo)."""
-    global _motivo
-    with _trava_fila:
-        if not _aguardando:
-            return 0
-        pendentes = list(_aguardando)
-        _aguardando.clear()
-        _motivo = ""
-        novos = [p for p in pendentes if p not in _fila]
-        _fila.extend(novos)
+    novos = db.job_retomar()
     if not novos:
         return 0
-    log.info("%d estudo(s) em espera retomado(s)", len(novos))
+    log.info("%d estudo(s) em espera retomado(s)", novos)
     notify(
         "estudo_retomando",
-        f"Sessao do NotebookLM OK - {len(novos)} estudo(s) em espera "
+        f"Sessao do NotebookLM OK - {novos} estudo(s) em espera "
         f"retomado(s)",
         level="info",
     )
     _evento.set()
-    return len(novos)
+    return novos
 
 
 # ---------------------------------------------------------------------
@@ -318,10 +309,10 @@ def status() -> Dict[str, Any]:
     qualquer momento sem tocar na rede."""
     with _trava_saude:
         saude = dict(_saude)
-    with _trava_fila:
-        pendentes = len(_aguardando)
-        fila = len(_fila)
-        motivo = _motivo
+    contagens = db.job_contagens()
+    pendentes = contagens.get("AGUARDANDO_INTERVENCAO", 0)
+    fila = contagens.get("PENDENTE", 0)
+    motivo = db.job_motivo() if pendentes else ""
     if not ligado():
         return {
             "ativo": False,
@@ -358,6 +349,12 @@ def diagnosticar() -> Dict[str, Any]:
             estado = "ok"
             renovada = True
     retomados = _retomar_pendentes() if estado == "ok" else 0
+    # tambem acorda o trabalhador para PENDENTE puro (ex.: job criado
+    # fora do fluxo normal ou congelado com o estudo desligado): o
+    # pre-flight dentro dele decide se roda ou guarda
+    if db.job_contagens().get("PENDENTE"):
+        _iniciar()
+        _evento.set()
     resultado = status()
     resultado["renovada"] = renovada
     resultado["retomados"] = retomados
@@ -470,6 +467,53 @@ def _limpar_logs_antigos(manter: int = 30, teto_mb: float = 2.0) -> None:
         log.debug("limpeza de logs ignorada: %s", exc)
 
 
+def retomar_apos_reinicio() -> int:
+    """Recuperacao no boot (chamada por `iniciar()` na subida do painel).
+
+    O que estava EXECUTANDO quando o processo morreu volta para a fila -
+    a nao ser que o log de handoff prove a conclusao (marcador
+    '=== CONCLUIDO', impresso somente depois que o pipeline terminou o
+    envio). A prova vem do arquivo gravado, nunca de memoria; jobs em
+    outros estados nao sao tocados. Devolve quantos voltaram a fila.
+    """
+    total = 0
+    for job in db.jobs_em_execucao():
+        resultado = job.get("resultado") or ""
+        provado = False
+        if resultado:
+            try:
+                texto = Path(resultado).read_text(
+                    encoding="utf-8", errors="replace"
+                )
+                provado = "=== CONCLUIDO" in texto
+            except OSError:
+                provado = False
+        if provado:
+            db.job_concluir(job["job_id"], resultado=resultado)
+            log.info(
+                "job de %s ja estava concluido (log de handoff) - "
+                "marcado CONCLUIDO",
+                Path(job["audio_path"]).name,
+            )
+        else:
+            db.job_reenfileirar(job["job_id"])
+            log.warning(
+                "job de %s interrompido pelo reinicio - devolvido a fila",
+                Path(job["audio_path"]).name,
+            )
+            total += 1
+    if total:
+        notify(
+            "estudos_retomando",
+            f"{total} estudo(s) interrompidos pelo reinicio devolvidos "
+            f"a fila",
+            level="warning",
+        )
+        _iniciar()
+        _evento.set()
+    return total
+
+
 def iniciar() -> None:
     """Periodo de saude da sessao (chamado na subida do painel).
 
@@ -480,8 +524,12 @@ def iniciar() -> None:
     keepalive oficial e retoma o que estiver em espera. Com a sessao
     morta, o vigia NAO tenta renovar em loop - renovacao acontece no
     disparo (uma vez) ou no botao.
+
+    Antes de tudo, a recuperacao pos-reinicio dos jobs interrompidos
+    (idempotente: so toca em EXECUTANDO).
     """
     global _vigia
+    retomar_apos_reinicio()
     if _vigia is not None and _vigia.is_alive():
         return
     _vigia = threading.Thread(target=_vigia_loop, name="estudos-saude", daemon=True)
@@ -505,6 +553,12 @@ def _vigia_loop() -> None:
             # a casa nao se limpa sozinha: logs do estudo tambem rodam
             # aqui dentro do mesmo passeio periodico
             _limpar_logs_antigos()
+            # auto-curacao: um PENDENTE sem dono acordando (banco tocado
+            # fora do fluxo, estudo religado) nao espera ate a proxima
+            # gravacao para andar
+            if db.job_contagens().get("PENDENTE"):
+                _iniciar()
+                _evento.set()
             # auth: so atualiza o indicador; a renovacao acontece no
             # disparo ou no botao, nunca em loop
         except Exception:  # noqa: BLE001 - o vigia nunca morre
@@ -524,10 +578,9 @@ def enfileirar(caminho: str) -> None:
     if not _cfg("python") or not _cfg("pasta"):
         # recurso nao configurado neste equipamento: silencio absoluto
         return
-    with _trava_fila:
-        if caminho in _fila or caminho in _aguardando:
-            return
-        _fila.append(caminho)
+    if not db.create_job(audio_path=caminho):
+        # ja existe job para este audio (gravacao repetida = 1 job)
+        return
     _iniciar()
     _evento.set()
 
@@ -546,15 +599,19 @@ def _loop() -> None:
     while True:
         _evento.wait()
         _evento.clear()
-        while True:
-            with _trava_fila:
-                if not _fila:
-                    break
-                caminho = _fila.popleft()
+        while ligado():
+            job = db.claim_job()
+            if job is None:
+                break
             try:
-                _rodar(caminho)
+                _rodar(job)
             except Exception as exc:  # noqa: BLE001 - o trabalhador nunca morre
-                log.error("falha ao disparar estudo para %s: %s", caminho, exc)
+                # a guarda do banco evita sobrescrever um CONCLUIDO que ja
+                # tenha acontecido antes da excecao
+                db.job_falhar(job["job_id"], str(exc))
+                log.error(
+                    "falha ao disparar estudo para %s: %s", job["audio_path"], exc
+                )
                 notify(
                     "estudo_erro",
                     f"Falha ao disparar o estudo: {exc}",
@@ -562,14 +619,18 @@ def _loop() -> None:
                 )
 
 
-def _rodar(caminho: str) -> None:
+def _rodar(job: Dict[str, Any]) -> None:
+    job_id = job["job_id"]
+    caminho = job["audio_path"]
     python = _cfg("python")
     pasta = _cfg("pasta")
     if not python or not pasta:
+        db.job_falhar(job_id, "estudo desconfigurado no meio da fila")
         return
     alvo = Path(pasta)
     if not (alvo / "pipeline.py").exists():
         log.warning("pipeline.py nao encontrado em %s - estudo nao disparado", alvo)
+        db.job_falhar(job_id, f"pipeline.py nao encontrado em {alvo}")
         notify(
             "estudo_erro",
             "Pipeline do estudo nao encontrado (sermon-pipeline)",
@@ -585,12 +646,12 @@ def _rodar(caminho: str) -> None:
             _definir("ok", "sessao renovada automaticamente")
             estado = "ok"
     if estado == "auth":
-        _aguardar(caminho, "autenticacao expirada")
+        _aguardar(job_id, "autenticacao expirada")
         return
     if estado == "rede":
         # sem conexao o pipeline tambem quebraria: guarda o MP3 e o
         # periodo de saude devolve o job quando a rede voltar
-        _aguardar(caminho, "sem rede")
+        _aguardar(job_id, "sem rede")
         return
     if estado == "ok":
         # sessao confirmada agora: aproveita para retomar o que ficou
@@ -614,6 +675,9 @@ def _rodar(caminho: str) -> None:
         f"Gerando estudo de {Path(caminho).name} (NotebookLM)...",
         level="info",
     )
+    # prova gravada ANTES do disparo: se o processo morrer no meio, o
+    # boot sabe o que rodava e onde olhar (etapa/resultado persistidos)
+    db.update_job(job_id, etapa="PIPELINE", resultado=str(arquivo_log))
     with open(arquivo_log, "w", encoding="utf-8") as fh:
         fh.write(f"# handoff {selo}\n# cmd: {' '.join(cmd)}\n\n")
         fh.flush()
@@ -627,6 +691,7 @@ def _rodar(caminho: str) -> None:
         codigo = proc.wait()
 
     if codigo == 0:
+        db.job_concluir(job_id, resultado=str(arquivo_log))
         log.info("estudo concluido (%s)", arquivo_log.name)
         notify(
             "estudo_pronto",
@@ -634,6 +699,10 @@ def _rodar(caminho: str) -> None:
             level="success",
         )
     else:
+        db.job_falhar(
+            job_id,
+            f"pipeline terminou com codigo {codigo} - veja {arquivo_log.name}",
+        )
         log.error("pipeline terminou com codigo %s (%s)", codigo, arquivo_log)
         notify(
             "estudo_erro",

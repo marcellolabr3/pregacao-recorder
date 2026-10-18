@@ -9,6 +9,7 @@ import json
 import sqlite3
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
@@ -51,6 +52,24 @@ CREATE TABLE IF NOT EXISTS uploads (
     updated_at     REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS jobs (
+    job_id         TEXT PRIMARY KEY,
+    recording_id   TEXT,
+    audio_path     TEXT NOT NULL UNIQUE,
+    drive_file_id  TEXT,
+    metadados      TEXT,
+    estado         TEXT NOT NULL DEFAULT 'PENDENTE',
+    etapa          TEXT NOT NULL DEFAULT '',
+    motivo         TEXT,
+    resultado      TEXT,
+    erro           TEXT,
+    tentativas     INTEGER NOT NULL DEFAULT 0,
+    created_at     REAL NOT NULL,
+    updated_at     REAL NOT NULL,
+    started_at     REAL,
+    finished_at    REAL
+);
+
 CREATE TABLE IF NOT EXISTS events (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     ts       REAL NOT NULL,
@@ -61,6 +80,7 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_uploads_status ON uploads(status, next_attempt);
+CREATE INDEX IF NOT EXISTS idx_jobs_estado ON jobs(estado, created_at);
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);
 """
 
@@ -223,6 +243,218 @@ class Database:
                 "SELECT status, COUNT(*) AS n FROM uploads GROUP BY status"
             ).fetchall()
         return {r["status"]: r["n"] for r in rows}
+
+    # -- jobs do estudo (pipeline por gravacao) ---------------------------
+    # Estados: PENDENTE / EXECUTANDO / CONCLUIDO / ERRO /
+    #          AGUARDANDO_INTERVENCAO / CANCELADO
+    # Toda troca de estado passa por transicao COM GUARDA no estado atual:
+    # uma etapa concluida nunca "re-executa" nem e sobrescrita por uma
+    # falha atrasada, mesmo apos reinicio do processo.
+    def create_job(self, audio_path: str, metadados: Any = None) -> bool:
+        """Cria o job de estudo de uma gravacao.
+
+        Idempotente: o mesmo audio duas vezes rende UNICO job (UNIQUE em
+        audio_path). Grava junto o recording_id e o drive_file_id que ja
+        existirem - snapshot para as etapas seguintes nao dependerem de
+        memoria. Devolve True somente quando um job foi realmente criado.
+        """
+        agora = time.time()
+        job_id = uuid.uuid4().hex[:16]
+        with self.connection() as conn:
+            sess = conn.execute(
+                "SELECT id, drive_file_id FROM sessions "
+                "WHERE final_path = ? ORDER BY started_at DESC LIMIT 1",
+                (audio_path,),
+            ).fetchone()
+            recording_id = sess["id"] if sess else None
+            drive_file_id = None
+            if sess and sess["drive_file_id"]:
+                drive_file_id = sess["drive_file_id"]
+            if not drive_file_id:
+                up = conn.execute(
+                    "SELECT drive_file_id FROM uploads "
+                    "WHERE file_path = ? AND drive_file_id IS NOT NULL",
+                    (audio_path,),
+                ).fetchone()
+                if up:
+                    drive_file_id = up["drive_file_id"]
+            cur = conn.execute(
+                """
+                INSERT OR IGNORE INTO jobs
+                  (job_id, recording_id, audio_path, drive_file_id, metadados,
+                   estado, tentativas, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'PENDENTE', 0, ?, ?)
+                """,
+                (
+                    job_id,
+                    recording_id,
+                    audio_path,
+                    drive_file_id,
+                    json.dumps(metadados, ensure_ascii=False)
+                    if metadados is not None
+                    else None,
+                    agora,
+                    agora,
+                ),
+            )
+            return cur.rowcount == 1
+
+    def claim_job(self) -> Optional[Dict[str, Any]]:
+        """Pendente mais antigo -> EXECUTANDO (com guarda: uma unica
+        reclamacao vence e a tentativa e contada)."""
+        agora = time.time()
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM jobs WHERE estado = 'PENDENTE' "
+                "ORDER BY created_at, job_id LIMIT 1"
+            ).fetchone()
+            if not row:
+                return None
+            cur = conn.execute(
+                """
+                UPDATE jobs
+                   SET estado = 'EXECUTANDO', etapa = 'PRE-FLIGHT',
+                       tentativas = tentativas + 1,
+                       started_at = COALESCE(started_at, :agora),
+                       updated_at = :agora
+                 WHERE job_id = :job_id AND estado = 'PENDENTE'
+                """,
+                {"job_id": row["job_id"], "agora": agora},
+            )
+            if cur.rowcount != 1:
+                return None
+            job = dict(row)
+        job.update(
+            estado="EXECUTANDO",
+            etapa="PRE-FLIGHT",
+            tentativas=int(job["tentativas"]) + 1,
+        )
+        return job
+
+    def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_jobs(self, limit: int = 20) -> List[Dict[str, Any]]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_job(self, job_id: str, **fields: Any) -> None:
+        """Campos avulsos (etapa, resultado, metadados...) SEM trocar o
+        estado - estado so muda pelas transicoes com guarda abaixo."""
+        if not fields:
+            return
+        fields["updated_at"] = time.time()
+        cols = ", ".join(f"{k} = :{k}" for k in fields)
+        with self.connection() as conn:
+            conn.execute(
+                f"UPDATE jobs SET {cols} WHERE job_id = :_id",
+                {"_id": job_id, **fields},
+            )
+
+    def _transicao(
+        self,
+        job_id: str,
+        estados_de: tuple,
+        estado_para: str,
+        **campos: Any,
+    ) -> bool:
+        marks = ", ".join(f":_e{i}" for i in range(len(estados_de)))
+        params: Dict[str, Any] = {
+            "_id": job_id,
+            "_estado": estado_para,
+            "_agora": time.time(),
+        }
+        params.update({f"_e{i}": e for i, e in enumerate(estados_de)})
+        params.update(campos)
+        sets = ", ".join(f"{k} = :{k}" for k in campos)
+        sql = (
+            "UPDATE jobs SET estado = :_estado, updated_at = :_agora"
+            + (", " + sets if sets else "")
+            + f" WHERE job_id = :_id AND estado IN ({marks})"
+        )
+        with self.connection() as conn:
+            cur = conn.execute(sql, params)
+            return cur.rowcount == 1
+
+    def job_aguardar(self, job_id: str, motivo: str) -> bool:
+        """EXECUTANDO -> AGUARDANDO_INTERVENCAO (pre-flight recusou:
+        sessao expirada ou sem rede; o job e preservado, nao perdido)."""
+        return self._transicao(
+            job_id, ("EXECUTANDO",), "AGUARDANDO_INTERVENCAO", motivo=motivo
+        )
+
+    def job_concluir(self, job_id: str, resultado: Optional[str] = None) -> bool:
+        campos: Dict[str, Any] = {
+            "etapa": "FINAL",
+            "finished_at": time.time(),
+            "erro": None,
+            "motivo": None,
+        }
+        if resultado:
+            campos["resultado"] = resultado
+        return self._transicao(job_id, ("EXECUTANDO",), "CONCLUIDO", **campos)
+
+    def job_falhar(self, job_id: str, erro: str) -> bool:
+        return self._transicao(
+            job_id, ("EXECUTANDO",), "ERRO", erro=erro, finished_at=time.time()
+        )
+
+    def job_reenfileirar(self, job_id: str) -> bool:
+        """EXECUTANDO -> PENDENTE (recuperacao no boot apos crash)."""
+        return self._transicao(job_id, ("EXECUTANDO",), "PENDENTE", motivo=None)
+
+    def job_retomar(self) -> int:
+        """Todos os AGUARDANDO_INTERVENCAO voltam a PENDENTE."""
+        with self.connection() as conn:
+            cur = conn.execute(
+                "UPDATE jobs SET estado = 'PENDENTE', motivo = NULL, "
+                "updated_at = ? WHERE estado = 'AGUARDANDO_INTERVENCAO'",
+                (time.time(),),
+            )
+            return cur.rowcount
+
+    def job_cancelar(self, job_id: str) -> bool:
+        """So PENDENTE ou AGUARDANDO podem ser cancelados; um job em
+        execucao termina o que esta fazendo antes de qualquer cancelamento."""
+        return self._transicao(
+            job_id,
+            ("PENDENTE", "AGUARDANDO_INTERVENCAO"),
+            "CANCELADO",
+            finished_at=time.time(),
+            motivo=None,
+        )
+
+    def jobs_em_execucao(self) -> List[Dict[str, Any]]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM jobs WHERE estado = 'EXECUTANDO' "
+                "ORDER BY created_at"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def job_contagens(self) -> Dict[str, int]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT estado, COUNT(*) AS n FROM jobs GROUP BY estado"
+            ).fetchall()
+        return {r["estado"]: r["n"] for r in rows}
+
+    def job_motivo(self) -> str:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT motivo FROM jobs "
+                "WHERE estado = 'AGUARDANDO_INTERVENCAO' "
+                "AND motivo IS NOT NULL AND motivo != '' "
+                "ORDER BY updated_at DESC LIMIT 1"
+            ).fetchone()
+        return str(row["motivo"]) if row else ""
 
     # -- notificacoes / log de eventos -----------------------------------
     def add_event(self, level: str, kind: str, message: str, payload: Any = None) -> None:

@@ -3,7 +3,16 @@ import os
 import time
 from pathlib import Path
 
+import pytest
+
 from app import estudos
+from app.db import Database
+
+
+@pytest.fixture(autouse=True)
+def _db_isolado(monkeypatch, tmp_path):
+    """Cada teste com seu proprio banco: a fila e persistente (S2)."""
+    monkeypatch.setattr(estudos, "db", Database(tmp_path / "jobs.db"))
 
 
 class _Proc:
@@ -154,17 +163,18 @@ def test_pipeline_inexistente_avisa(monkeypatch, tmp_path):
     time.sleep(0.3)
     assert chamadas == []
     assert avisos and avisos[0] == "estudo_erro"
+    # o job nao some: fica registrado como ERRO com o motivo
+    job = estudos.db.list_jobs(1)[0]
+    assert job["estado"] == "ERRO"
+    assert "pipeline.py" in job["erro"]
 
 
 # ---------------------------------------------------------------------
 # saude da sessao do NotebookLM (pre-flight, espera e retomada)
 # ---------------------------------------------------------------------
 def _limpa():
-    """Estado do modulo zerado entre testes (a fila e global de proposito)."""
-    with estudos._trava_fila:
-        estudos._fila.clear()
-        estudos._aguardando.clear()
-    estudos._motivo = ""
+    """Estado do modulo zerado entre testes (o banco vem do fixture
+    _db_isolado: um jobs.db novo por teste)."""
     estudos._ultima_renovacao = 0.0
     with estudos._trava_saude:
         estudos._saude.update(
@@ -318,9 +328,9 @@ def test_sessao_volta_retoma_o_que_estava_em_espera(monkeypatch, tmp_path):
         lambda cmd, **kw: chamadas.append(cmd) or _Proc(chamadas),
     )
     # um job pausado por uma falha anterior + trabalhador devidamente no ar
-    with estudos._trava_fila:
-        estudos._aguardando.append(str(tmp_path / "espera.mp3"))
-    estudos._motivo = "autenticacao expirada"
+    estudos.db.create_job(audio_path=str(tmp_path / "espera.mp3"))
+    job = estudos.db.claim_job()
+    estudos._aguardar(job["job_id"], "autenticacao expirada")
     estudos._iniciar()
 
     resultado = estudos.diagnosticar()
