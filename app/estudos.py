@@ -400,6 +400,13 @@ def reconectar() -> Dict[str, Any]:
             stderr=subprocess.STDOUT,
             creationflags=flags,
         )
+    # rotacao: cada login abre o arquivo em append; sem teto ele cresce
+    # para sempre
+    if arquivo.stat().st_size > 2 * 1024 * 1024:
+        anterior = logs / "login_nlm.log.1"
+        if anterior.exists():
+            anterior.unlink()
+        arquivo.replace(anterior)
     log.info(
         "janela de login do NotebookLM aberta (browser=%s, log=%s)",
         navegador,
@@ -437,6 +444,32 @@ def _keepalive() -> None:
         log.warning("keepalive saida: %s", texto.strip()[:300])
 
 
+def _limpar_logs_antigos(manter: int = 30, teto_mb: float = 2.0) -> None:
+    """Rotina de housekeeping dos logs do estudo.
+
+    handoff_<selo>.log nasce um por execucao: sem teto, meses de culto
+    viram centenas de arquivos esquecidos. login_nlm.log e aberto em
+    append por cada janela de login: rotaciona ao passar do teto.
+    """
+    logs = Path(_cfg("pasta")) / "logs"
+    try:
+        handoffs = sorted(logs.glob("handoff_*.log"))
+        for antigo in handoffs[:-manter]:
+            antigo.unlink()
+        login = logs / "login_nlm.log"
+        if login.exists() and login.stat().st_size > teto_mb * 1024 * 1024:
+            for indice in (2, 3):
+                velho = logs / f"login_nlm.log.{indice}"
+                if velho.exists():
+                    velho.unlink()
+            anterior = logs / "login_nlm.log.1"
+            if anterior.exists():
+                anterior.unlink()
+            login.replace(anterior)
+    except OSError as exc:
+        log.debug("limpeza de logs ignorada: %s", exc)
+
+
 def iniciar() -> None:
     """Periodo de saude da sessao (chamado na subida do painel).
 
@@ -469,6 +502,9 @@ def _vigia_loop() -> None:
             if estado == "ok":
                 _keepalive()
                 _retomar_pendentes()
+            # a casa nao se limpa sozinha: logs do estudo tambem rodam
+            # aqui dentro do mesmo passeio periodico
+            _limpar_logs_antigos()
             # auth: so atualiza o indicador; a renovacao acontece no
             # disparo ou no botao, nunca em loop
         except Exception:  # noqa: BLE001 - o vigia nunca morre

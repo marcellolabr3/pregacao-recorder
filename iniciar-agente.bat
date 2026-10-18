@@ -23,7 +23,15 @@ call ".venv\Scripts\activate.bat"
 
 echo [PC] iniciando agente de controle remoto (EMQX)...
 echo [PC] PREGACAO_HOME=%PREGACAO_HOME%
+REM log proprio: senao o agente escreve no mesmo pregacao.log do
+REM gravador e os dois processos disputam o arquivo rotativo
+set "PREGACAO_LOG_FILE=pregacao-agente.log"
 python -m app.remote.agent
-echo.
-echo [PC] agente encerrado. Feche esta janela ou pressione qualquer tecla.
-pause
+if errorlevel 1 (
+    echo.
+    echo [ERRO] agente encerrado com erro - veja logs\pregacao-agente.log
+    pause
+    exit /b 1
+)
+echo [PC] agente encerrado normalmente. Esta janela pode fechar.
+exit /b 0

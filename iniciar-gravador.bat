@@ -30,6 +30,11 @@ if errorlevel 1 (
 
 echo [PC] iniciando gravador (interface em http://127.0.0.1:8080)...
 python -m app.main
-echo.
-echo [PC] gravador encerrado. Feche esta janela ou pressione qualquer tecla.
-pause
+if errorlevel 1 (
+    echo.
+    echo [ERRO] gravador encerrado com erro - veja a mensagem acima e logs\pregacao.log
+    pause
+    exit /b 1
+)
+echo [PC] gravador encerrado normalmente. Esta janela pode fechar.
+exit /b 0

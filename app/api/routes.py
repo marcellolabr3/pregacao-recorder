@@ -130,6 +130,10 @@ VALIDATION = {
 }
 
 
+# no Windows o systemctl nao existe, mas a flag evita qualquer janela
+_FLAGS_SUBPROCESS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+
+
 def _service_state(unit: str) -> str:
     """Estado de uma unit do systemd: active / inactive / failed / ..."""
     try:
@@ -138,6 +142,7 @@ def _service_state(unit: str) -> str:
             capture_output=True,
             text=True,
             timeout=5,
+            creationflags=_FLAGS_SUBPROCESS,
         )
         return (proc.stdout or "").strip() or "desconhecido"
     except (OSError, subprocess.SubprocessError):  # pragma: no cover

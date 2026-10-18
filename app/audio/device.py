@@ -7,6 +7,7 @@ Dois backends, sem mudar o contrato das funcoes:
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -14,6 +15,9 @@ import time
 from typing import Any, Dict, List, Optional
 
 from ..logging_setup import get
+
+# no Windows, subprocess sem esta flag abre janela de console visivel
+_FLAGS_SUBPROCESS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
 log = get("audio.device")
 
@@ -35,7 +39,8 @@ DSHOW_LINE_RE = re.compile(
 def _run(cmd: List[str], timeout: int = 10) -> Optional[str]:
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, check=False
+            cmd, capture_output=True, text=True, timeout=timeout, check=False,
+            creationflags=_FLAGS_SUBPROCESS,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         log.warning("falha ao executar %s: %s", " ".join(cmd), exc)
@@ -229,7 +234,13 @@ def capture_level(seconds: float = 2.0, device: Optional[str] = None) -> Dict[st
     else:
         return {"ok": False, "error": "arecord/ffmpeg nao instalado"}
     try:
-        proc = subprocess.run(cmd, capture_output=True, timeout=seconds + 8, check=False)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            timeout=seconds + 8,
+            check=False,
+            creationflags=_FLAGS_SUBPROCESS,
+        )
     except (OSError, subprocess.SubprocessError) as exc:
         return {"ok": False, "error": str(exc)}
 

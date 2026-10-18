@@ -35,8 +35,9 @@ Os testes usam um diretorio temporario (`PREGACAO_HOME`) - **nao** mexem em
 | `tests/test_destinos.py` | destinos de gravacao: SSD e cartao SD, pontos de montagem, escolha valida (18 testes) |
 | `tests/test_estudos.py` | autenticacao do NotebookLM: pre-flight, pausa AGUARDANDO, retomada, keepalive oficial, login visivel (14 testes) |
 | `tests/test_main.py` | instancia unica do servidor (S0) |
+| `tests/test_silencio.py` | silencio no Windows (`CREATE_NO_WINDOW` em todo subprocess) e limpeza/rotacao dos logs do estudo (7 testes) |
 
-Total: **292 testes**.
+Total: **301 testes**.
 
 ### Smoke test do servidor ligado
 
@@ -146,7 +147,7 @@ repetidos.
 
 ## 6. Criterios de aceite do projeto
 
-- [ ] `python -m pytest` verde (292 testes)
+- [ ] `python -m pytest` verde (301 testes)
 - [ ] `scripts/smoke.py` 21/21
 - [ ] `pregacao doctor` sem XX
 - [ ] `pregacao check` com sinal

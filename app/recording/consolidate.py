@@ -9,6 +9,7 @@ conversao terminou com sucesso e que o arquivo final existe e tem tamanho > 0.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,6 +19,9 @@ from ..audio import wav
 from ..logging_setup import get
 
 log = get("recording.consolidate")
+
+# no Windows o ffmpeg sem esta flag abre uma janela de console visivel
+_FLAGS_SUBPROCESS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
 
 def has_ffmpeg() -> bool:
@@ -79,7 +83,14 @@ def consolidate(
             str(tmp_out),
         ]
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=7200, check=False)
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=7200,
+                check=False,
+                creationflags=_FLAGS_SUBPROCESS,
+            )
         finally:
             try:
                 list_file.unlink()
