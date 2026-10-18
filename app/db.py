@@ -390,9 +390,17 @@ class Database:
             job_id, ("EXECUTANDO",), "AGUARDANDO_INTERVENCAO", motivo=motivo
         )
 
-    def job_concluir(self, job_id: str, resultado: Optional[str] = None) -> bool:
+    def job_concluir(
+        self,
+        job_id: str,
+        resultado: Optional[str] = None,
+        etapa: str = "FINAL",
+    ) -> bool:
+        # etapa final e a prova do ultimo marco: "FINAL" = WhatsApp
+        # confirmado; "FINAL_SEM_ENVIO" = concluiu sem enviar (numero
+        # nao configurado) - a barra nunca marca 100% sem envio real
         campos: Dict[str, Any] = {
-            "etapa": "FINAL",
+            "etapa": etapa,
             "finished_at": time.time(),
             "erro": None,
             "motivo": None,

@@ -61,6 +61,9 @@ _saude = {
 }
 _ultima_renovacao = 0.0  # evita refresh em rajada quando vrios jobs em espera
 _vigia: Optional[threading.Thread] = None
+# sequencia de marcos do progresso (S3): sempre crescente, ver _seq()
+_trava_seq = threading.Lock()
+_ultima_seq = 0
 
 _TTL_SAUDE = 600.0  # consulta sem "force" vale por 10 minutos
 _RENOVAR_INTERVALO = 300.0  # no maximo uma renovacao a cada 5 minutos
@@ -322,6 +325,10 @@ def status() -> Dict[str, Any]:
             "aguardando": 0,
             "motivo": "",
             "fila": fila,
+            # a barra da cadeia nao depende do recurso estar ligado: o
+            # estado da ULTIMA gravacao/estudo continua sendo a verdade
+            "job": _job_publico(),
+            "barra": barra(),
         }
     return {
         "ativo": True,
@@ -331,6 +338,8 @@ def status() -> Dict[str, Any]:
         "aguardando": pendentes,
         "motivo": motivo,
         "fila": fila,
+        "job": _job_publico(),
+        "barra": barra(),
     }
 
 
@@ -489,7 +498,16 @@ def retomar_apos_reinicio() -> int:
             except OSError:
                 provado = False
         if provado:
-            db.job_concluir(job["job_id"], resultado=resultado)
+            # a prova vale para os DOIS marcos finais: "=== 8. Enviando"
+            # = envio em curso confirmado; "pulado" = o pipeline acabou
+            # sem numero para enviar - la fora a barra nunca marca 100%
+            # sem WhatsApp real
+            enviado = "=== 8. Enviando" in texto
+            pulado = "por WhatsApp pulado" in texto
+            etapa_final = "FINAL" if enviado and not pulado else "FINAL_SEM_ENVIO"
+            db.job_concluir(
+                job["job_id"], resultado=resultado, etapa=etapa_final
+            )
             log.info(
                 "job de %s ja estava concluido (log de handoff) - "
                 "marcado CONCLUIDO",
@@ -566,6 +584,264 @@ def _vigia_loop() -> None:
 
 
 # ---------------------------------------------------------------------
+# progresso por job (S3): marcos REAIS da cadeia
+# GRAVACAO -> MP3 -> DRIVE -> NOTEBOOKLM -> ESTUDO -> PDF -> WHATSAPP
+# ---------------------------------------------------------------------
+# Quantos marcos da cadeia o pipeline ja deixou para tras em cada etapa.
+# Marca-se somente o que foi CONCLUIDO e com prova: os marcos 1-3 vem da
+# gravacao no banco (ended_at, final_bytes, drive_file_id) e os marcos
+# 4-7 das linhas "=== N." que o proprio pipeline imprime (flush por
+# passo) no log de handoff. 100% exige WhatsApp confirmado (codigo 0 do
+# pipeline com o passo 8 executado - nunca estimativa de tempo).
+_MARCOS_PIPELINE = {
+    "PRE-FLIGHT": 0,
+    "NOTEBOOKLM": 0,
+    "ESTUDO": 1,  # "=== 5." visto: fonte pronta, estudo em geracao
+    "PDF": 2,  # "=== 6." visto: relatorio baixado
+    "WHATSAPP": 3,  # "=== 8." visto: pdf pronto, envio em curso
+    "FINAL": 4,  # WhatsApp confirmado
+    "FINAL_SEM_ENVIO": 3,  # concluiu sem enviar (numero nao configurado)
+}
+
+_DESCRICOES = {
+    "PRE-FLIGHT": "Verificando a sessao do NotebookLM",
+    "NOTEBOOKLM": "NotebookLM preparando o audio",
+    "ESTUDO": "Gerando o estudo devocional",
+    "PDF": "Convertendo o estudo em PDF",
+    "WHATSAPP": "Enviando o PDF por WhatsApp",
+    "FINAL": "Enviado por WhatsApp",
+    "FINAL_SEM_ENVIO": "Estudo pronto (WhatsApp nao configurado - envio pulado)",
+}
+
+
+def _sessao_do_job(job: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    rec = job.get("recording_id")
+    if not rec:
+        return None
+    try:
+        return db.get_session(rec)
+    except Exception:  # noqa: BLE001 - barra nunca derruba o painel
+        return None
+
+
+def _marcos_concluidos(job: Dict[str, Any], etapa: Optional[str] = None) -> int:
+    """0..7: quantos marcos da cadeia tem PROVA gravada."""
+    etapa = etapa or str(job.get("etapa") or "PRE-FLIGHT")
+    base = 0
+    sess = _sessao_do_job(job)
+    if sess and sess.get("ended_at"):
+        base += 1
+    if sess and (sess.get("final_bytes") or 0) > 0:
+        base += 1
+    if job.get("drive_file_id") or (sess and sess.get("drive_file_id")):
+        base += 1
+    return base + _MARCOS_PIPELINE.get(etapa, 0)
+
+
+def _percentual(marcos: int) -> int:
+    return round(100 * max(0, min(7, marcos)) / 7)
+
+
+def _seq() -> int:
+    """Sequencia de progresso sempre crescente.
+
+    Base epoch-ms, mas empurrada para o proximo inteiro quando duas
+    emissoes caem no MESMO milissegundo (ex.: drenagem final vendo o
+    passo 8 e o proprio job concluindo): o agente descarta ``seq <=
+    ultima``, entao empate faria o marco final sumir do celular.
+    """
+    global _ultima_seq
+    with _trava_seq:
+        candidato = int(time.time() * 1000)
+        _ultima_seq = max(candidato, _ultima_seq + 1)
+        return _ultima_seq
+
+
+def _publicar_job(
+    job: Dict[str, Any],
+    etapa: str,
+    *,
+    descricao: Optional[str] = None,
+    estado: Optional[str] = None,
+    level: str = "info",
+) -> None:
+    """Marco real do job: notifica o painel (SSE) e o celular (o agente
+    republica no topic MQTT retido).
+
+    O payload carrega ``seq`` monotona: o agente descarta sequencia
+    antiga, entao uma mensagem velha na fila de reconexao nunca faz a
+    barra voltar para uma etapa que ja passou.
+    """
+    etapa = etapa or str(job.get("etapa") or "PRE-FLIGHT")
+    payload = {
+        "job_id": job.get("job_id"),
+        "recording_id": job.get("recording_id"),
+        "estado": estado or str(job.get("estado") or ""),
+        "etapa": etapa,
+        "percentual": _percentual(_marcos_concluidos(job, etapa)),
+        "descricao": descricao or _DESCRICOES.get(etapa, etapa),
+        "motivo": str(job.get("motivo") or ""),
+        "seq": _seq(),
+        "ts": time.time(),
+    }
+    notify("job_progress", payload["descricao"], level=level, payload=payload)
+
+
+def _drenar_log(
+    caminho: Path, pos: int, job: Dict[str, Any], visto: Dict[str, bool]
+) -> int:
+    """Le o que surgiu no log de handoff desde ``pos`` e emite os marcos.
+
+    As linhas "=== N." sao gravadas com flush pelo proprio pipeline a
+    cada passo concluido - entao ve-las no arquivo e prova de que a
+    etapa terminou (nada de estimar por tempo). Devolve a nova posicao
+    consumida: a linha incompleta do fim e re-lida na proxima drenagem,
+    nunca processada duas vezes.
+    """
+    try:
+        with open(caminho, "rb") as fh:
+            fh.seek(pos)
+            novos = fh.read()
+    except OSError:
+        return pos
+    if b"\n" not in novos:
+        return pos
+    completo, _resto = novos.rsplit(b"\n", 1)
+    atual = job
+    for bruta in completo.split(b"\n"):
+        linha = bruta.decode("utf-8", errors="replace").strip()
+        etapa = None
+        if linha.startswith("=== 5."):
+            etapa = "ESTUDO"
+        elif linha.startswith("=== 6."):
+            etapa = "PDF"
+        elif linha.startswith("=== 8. Enviando"):
+            etapa = "WHATSAPP"
+            visto["envio"] = True
+        elif linha.startswith("=== 8. Envio por WhatsApp pulado"):
+            visto["pulado"] = True
+        if etapa:
+            db.update_job(atual["job_id"], etapa=etapa)
+            atual = dict(atual, etapa=etapa)
+            _publicar_job(atual, etapa)
+    return pos + len(completo) + 1
+
+
+def _job_publico() -> Optional[Dict[str, Any]]:
+    """Ultimo job em linguagem de interface (sem caminhos internos)."""
+    jobs = db.list_jobs(1)
+    if not jobs:
+        return None
+    j = jobs[0]
+    etapa = str(j.get("etapa") or "")
+    return {
+        "job_id": j.get("job_id"),
+        "recording_id": j.get("recording_id"),
+        "estado": j.get("estado"),
+        "etapa": etapa,
+        "percentual": _percentual(_marcos_concluidos(j)),
+        "descricao": _DESCRICOES.get(etapa, ""),
+        "motivo": j.get("motivo") or "",
+        "erro": j.get("erro") or "",
+        "tentativas": j.get("tentativas"),
+        "created_at": j.get("created_at"),
+        "updated_at": j.get("updated_at"),
+        "finished_at": j.get("finished_at"),
+    }
+
+
+def barra() -> Dict[str, Any]:
+    """Estado da cadeia GRAVACAO -> MP3 -> DRIVE -> NOTEBOOKLM -> ESTUDO
+    -> PDF -> WHATSAPP para o painel e para o celular (S3).
+
+    Cada passo so aparece concluido com prova no banco; percentual
+    avanca somente por marco concluido; 100% exige WhatsApp confirmado.
+    Passo ativo herda o tom do job: azul em execucao, amarelo em espera
+    (sessao/rede), vermelho em erro. Sem nada a mostrar, "mostrar" e
+    False e a interface esconde a barra.
+    """
+    job = None
+    sess = None
+    try:
+        jobs = db.list_jobs(1)
+        job = jobs[0] if jobs else None
+        if job:
+            sess = _sessao_do_job(job)
+        else:
+            sessoes = db.list_sessions(1)
+            sess = sessoes[0] if sessoes else None
+    except Exception:  # noqa: BLE001 - barra nunca derruba o painel
+        log.exception("falha ao montar a barra de progresso")
+    if not job and not sess:
+        return {"mostrar": False, "percentual": 0, "etapas": []}
+
+    etapas = []
+
+    def _add(nome, concluido, ativo=False, tom=None):
+        if tom is None:
+            tom = "concluido" if concluido else ("ativo" if ativo else "pendente")
+        etapas.append({"n": len(etapas) + 1, "nome": nome, "tom": tom})
+
+    gravando = bool(sess and not sess.get("ended_at"))
+    _add("GRAVACAO", bool(sess and sess.get("ended_at")), ativo=gravando)
+    mp3_ok = bool(sess and (sess.get("final_bytes") or 0) > 0)
+    _add("MP3", mp3_ok, ativo=bool(sess and sess.get("ended_at") and not mp3_ok))
+    drive_ok = bool(
+        (job and job.get("drive_file_id"))
+        or (sess and sess.get("drive_file_id"))
+    )
+    _add("DRIVE", drive_ok, ativo=bool(sess and mp3_ok and not drive_ok))
+
+    etapa_job = str((job or {}).get("etapa") or "")
+    estado_job = str((job or {}).get("estado") or "")
+    concluidos_pipeline = _MARCOS_PIPELINE.get(etapa_job, 0)
+    tom_ativo = {
+        "EXECUTANDO": "ativo",
+        "AGUARDANDO_INTERVENCAO": "aguardando",
+        "ERRO": "erro",
+    }.get(estado_job)
+    for nome, idx in (("NOTEBOOKLM", 0), ("ESTUDO", 1), ("PDF", 2), ("WHATSAPP", 3)):
+        concluido = concluidos_pipeline > idx
+        ativo = bool(job) and concluidos_pipeline == idx and tom_ativo is not None
+        _add(nome, concluido, ativo=ativo, tom=tom_ativo if ativo else None)
+
+    if estado_job == "ERRO":
+        descricao = "Erro no estudo: " + str(
+            (job or {}).get("erro") or "veja o painel"
+        )[:120]
+    elif estado_job == "AGUARDANDO_INTERVENCAO":
+        descricao = "Estudo em espera: " + str((job or {}).get("motivo") or "sessao")
+    elif estado_job == "PENDENTE":
+        descricao = "Estudo na fila"
+    elif job:
+        descricao = _DESCRICOES.get(etapa_job, "Estudo em andamento")
+    elif gravando:
+        descricao = "Gravando"
+    elif sess and not mp3_ok:
+        descricao = "Convertendo para MP3"
+    elif sess and not drive_ok:
+        descricao = "Enviando ao Drive"
+    else:
+        descricao = "Concluido"
+
+    marcos = _marcos_concluidos(job) if job else sum(
+        1 for e in etapas if e["tom"] == "concluido"
+    )
+    return {
+        "mostrar": True,
+        "percentual": _percentual(marcos),
+        "descricao": descricao,
+        "estado": estado_job or ("RECORDING" if gravando else "COMPLETED"),
+        "job_id": (job or {}).get("job_id"),
+        "recording_id": (job or {}).get("recording_id")
+        if job
+        else (sess or {}).get("id"),
+        "etapas": etapas,
+        "ts": time.time(),
+    }
+
+
+# ---------------------------------------------------------------------
 # fila e trabalhador
 # ---------------------------------------------------------------------
 def enfileirar(caminho: str) -> None:
@@ -619,6 +895,22 @@ def _loop() -> None:
                 )
 
 
+def _publica_falha(job_id: str, job: Dict[str, Any], descricao: str) -> None:
+    """Marco vermelho de erro: estado/etapa verdadeiros vem do banco (a
+    transicao ja aconteceu), nunca da copia antiga na memoria."""
+    try:
+        atual = db.get_job(job_id) or job
+    except Exception:  # noqa: BLE001 - notificacao nunca derruba o job
+        atual = job
+    _publicar_job(
+        atual,
+        str(atual.get("etapa") or "PRE-FLIGHT"),
+        descricao=descricao,
+        estado="ERRO",
+        level="error",
+    )
+
+
 def _rodar(job: Dict[str, Any]) -> None:
     job_id = job["job_id"]
     caminho = job["audio_path"]
@@ -626,17 +918,25 @@ def _rodar(job: Dict[str, Any]) -> None:
     pasta = _cfg("pasta")
     if not python or not pasta:
         db.job_falhar(job_id, "estudo desconfigurado no meio da fila")
+        _publica_falha(job_id, job, "Estudo desconfigurado no meio da fila")
         return
     alvo = Path(pasta)
     if not (alvo / "pipeline.py").exists():
         log.warning("pipeline.py nao encontrado em %s - estudo nao disparado", alvo)
         db.job_falhar(job_id, f"pipeline.py nao encontrado em {alvo}")
+        _publica_falha(
+            job_id, job, "Pipeline do estudo nao encontrado (sermon-pipeline)"
+        )
         notify(
             "estudo_erro",
             "Pipeline do estudo nao encontrado (sermon-pipeline)",
             level="error",
         )
         return
+
+    # marco de entrada: gravacao+mp3+drive entram no payload ja provados
+    # no banco; daqui em diante o percentual so avanca com marco real
+    _publicar_job(job, "PRE-FLIGHT")
 
     # ---- pre-flight da sessao: preserva o job em vez de quebrar ------
     estado = verificar_saude(force=True)
@@ -647,11 +947,25 @@ def _rodar(job: Dict[str, Any]) -> None:
             estado = "ok"
     if estado == "auth":
         _aguardar(job_id, "autenticacao expirada")
+        _publicar_job(
+            dict(job, estado="AGUARDANDO_INTERVENCAO", motivo="autenticacao expirada"),
+            "PRE-FLIGHT",
+            descricao="Em espera: autenticacao do NotebookLM expirada",
+            estado="AGUARDANDO_INTERVENCAO",
+            level="warning",
+        )
         return
     if estado == "rede":
         # sem conexao o pipeline tambem quebraria: guarda o MP3 e o
         # periodo de saude devolve o job quando a rede voltar
         _aguardar(job_id, "sem rede")
+        _publicar_job(
+            dict(job, estado="AGUARDANDO_INTERVENCAO", motivo="sem rede"),
+            "PRE-FLIGHT",
+            descricao="Em espera: sem rede",
+            estado="AGUARDANDO_INTERVENCAO",
+            level="warning",
+        )
         return
     if estado == "ok":
         # sessao confirmada agora: aproveita para retomar o que ficou
@@ -676,8 +990,13 @@ def _rodar(job: Dict[str, Any]) -> None:
         level="info",
     )
     # prova gravada ANTES do disparo: se o processo morrer no meio, o
-    # boot sabe o que rodava e onde olhar (etapa/resultado persistidos)
-    db.update_job(job_id, etapa="PIPELINE", resultado=str(arquivo_log))
+    # boot sabe o que rodava e onde olhar (etapa/resultado persistidos).
+    # NOTEBOOKLM = etapa 4 da cadeia (os passos 3/4 do pipeline)
+    db.update_job(job_id, etapa="NOTEBOOKLM", resultado=str(arquivo_log))
+    job = dict(job, etapa="NOTEBOOKLM", resultado=str(arquivo_log))
+    _publicar_job(job, "NOTEBOOKLM")
+    visto = {"envio": False, "pulado": False}
+    pos_log = 0
     with open(arquivo_log, "w", encoding="utf-8") as fh:
         fh.write(f"# handoff {selo}\n# cmd: {' '.join(cmd)}\n\n")
         fh.flush()
@@ -688,20 +1007,50 @@ def _rodar(job: Dict[str, Any]) -> None:
             stderr=subprocess.STDOUT,
             creationflags=flags,
         )
+        # drena o log a cada fracao de segundo emitindo somente marcos
+        # que JA apareceram no arquivo (o pipeline grava cada passo com
+        # flush): percentual nunca e estimado por tempo decorrido
+        while True:
+            pos_log = _drenar_log(arquivo_log, pos_log, job, visto)
+            if proc.poll() is not None:
+                break
+            time.sleep(0.4)
+        _drenar_log(arquivo_log, pos_log, job, visto)
         codigo = proc.wait()
 
     if codigo == 0:
-        db.job_concluir(job_id, resultado=str(arquivo_log))
+        # 100% so com WhatsApp confirmado: o passo 8 ("Enviando PDF")
+        # foi visto no log. Sem numero configurado o pipeline pula o
+        # envio e o job conclui honestamente em 6/7 - nunca finge envio
+        enviado = bool(visto["envio"]) and not bool(visto["pulado"])
+        etapa_final = "FINAL" if enviado else "FINAL_SEM_ENVIO"
+        db.job_concluir(job_id, resultado=str(arquivo_log), etapa=etapa_final)
+        _publicar_job(
+            dict(job, etapa=etapa_final, estado="CONCLUIDO"),
+            etapa_final,
+            descricao=None
+            if enviado
+            else "Estudo pronto (WhatsApp nao configurado - envio pulado)",
+            estado="CONCLUIDO",
+            level="success" if enviado else "warning",
+        )
         log.info("estudo concluido (%s)", arquivo_log.name)
         notify(
             "estudo_pronto",
-            "Estudo gerado e enviado por WhatsApp",
+            "Estudo gerado e enviado por WhatsApp"
+            if enviado
+            else "Estudo gerado (WhatsApp nao configurado - envio pulado)",
             level="success",
         )
     else:
         db.job_falhar(
             job_id,
             f"pipeline terminou com codigo {codigo} - veja {arquivo_log.name}",
+        )
+        _publica_falha(
+            job_id,
+            job,
+            f"Pipeline terminou com erro (codigo {codigo}) - veja {arquivo_log.name}",
         )
         log.error("pipeline terminou com codigo %s (%s)", codigo, arquivo_log)
         notify(

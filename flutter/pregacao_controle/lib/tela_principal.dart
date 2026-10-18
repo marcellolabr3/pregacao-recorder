@@ -260,6 +260,12 @@ class _TelaPrincipalState extends State<TelaPrincipal>
           ),
         ),
 
+        // ===== PROGRESSO DO ESTUDO (S3) =====
+        // Lido do topic "jobs" retido: o APK que reconectar ve o progresso
+        // atual sem reiniciar nada. Cada etapa so avanca com marco REAL
+        // (o agente republica so o que o app emite via SSE job_progress).
+        _progressoWidget(mqtt),
+
         // mensagem (erros, detalhes de ack)
         if (mqtt.ultimaMensagem.isNotEmpty)
           Padding(
@@ -423,5 +429,63 @@ class _TelaPrincipalState extends State<TelaPrincipal>
       case TomEstado.fraco:
         return Colors.grey;
     }
+  }
+
+  // ------------------------------------------------------------------
+  // progresso do estudo (S3)
+  // ------------------------------------------------------------------
+  Widget _progressoWidget(MqttControlador mqtt) {
+    final pj = mqtt.ultimoProgresso;
+    if (pj == null) return const SizedBox.shrink();
+
+    // Percentual vem do agente (ja honesto: so marco concluido).
+    // A UI so espelha - nada de estimar por tempo.
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'PROGRESSO DO ESTUDO',
+            style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 6),
+          LinearProgressIndicator(
+            value: pj.percentual / 100,
+            minHeight: 8,
+            backgroundColor: Colors.grey[800],
+            valueColor: AlwaysStoppedAnimation<Color>(_corProgresso(pj)),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  pj.descricao.isNotEmpty ? pj.descricao : pj.rotuloEtapa,
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (pj.motivo.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    pj.motivo,
+                    style: const TextStyle(fontSize: 11, color: Colors.orange),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _corProgresso(ProgressoJob pj) {
+    if (pj.falhou) return Colors.red;
+    if (pj.emEspera) return Colors.orange;
+    if (pj.envioConfirmado) return Colors.green;
+    return Colors.blue;
   }
 }

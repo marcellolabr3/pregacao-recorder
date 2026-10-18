@@ -108,6 +108,45 @@ body{
 .bar span.warn{background:var(--amber)}
 .bar span.crit{background:var(--red2)}
 
+/* ---------- progresso do estudo (S3) ---------- */
+.progresso-etapas{
+  display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px;
+  font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+}
+.progresso-etapas span{
+  padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+  background:var(--panel2);color:var(--muted);
+  transition:background .2s,border-color .2s,color .2s;
+}
+.progresso-etapas span.concluido{background:rgba(63,185,80,.18);border-color:var(--green2);color:var(--green2)}
+.progresso-etapas span.ativo{background:rgba(56,139,253,.18);border-color:var(--blue);color:var(--blue)}
+.progresso-etapas span.aguardando{background:rgba(210,153,34,.18);border-color:var(--amber);color:var(--amber)}
+.progresso-etapas span.erro{background:rgba(248,81,73,.18);border-color:var(--red2);color:var(--red2)}
+.progresso-etapas span.pendente{background:var(--panel2);border-color:var(--line);color:var(--muted)}
+
+/* ---------- saude das integracoes (S3) ---------- */
+.integracoes-grid{
+  display:grid;grid-template-columns:1fr;gap:10px;margin-top:8px;
+}
+@media(min-width:600px){.integracoes-grid{grid-template-columns:1fr 1fr}}
+.integracoes-item{
+  background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+}
+.integracoes-head{
+  display:flex;align-items:center;gap:10px;margin-bottom:4px;
+}
+.integracoes-dot{
+  width:10px;height:10px;border-radius:99px;flex:none;
+}
+.integracoes-dot.conectado{background:var(--green2)}
+.integracoes-dot.nao_configurado{background:var(--muted)}
+.integracoes-dot.verificando{background:var(--blue);animation:blink 1.2s ease-in-out infinite}
+.integracoes-dot.autenticacao_necessaria{background:var(--amber)}
+.integracoes-dot.erro{background:var(--red2)}
+.integracoes-name{font-weight:700;font-size:.85rem;flex:1}
+.integracoes-detalhe{font-size:.75rem;color:var(--muted);margin-left:20px}
+.integracoes-acao{font-size:.7rem;color:var(--blue);margin-top:6px;display:block}
+
 /* ---------- notificacoes ---------- */
 .notif{list-style:none;margin:0;padding:0;max-height:230px;overflow-y:auto}
 .notif li{

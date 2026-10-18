@@ -75,6 +75,14 @@
     </dl>
   </section>
 
+  <!-- ===== BARRA DE PROGRESSO DO ESTUDO (S3) ===== -->
+  <section class="card hidden" id="progressoCard">
+    <div class="card-title">PROGRESSO DO ESTUDO</div>
+    <div class="progresso-etapas" id="progressoEtapas"></div>
+    <div class="bar"><span id="progressoBar"></span></div>
+    <div class="muted" id="progressoDesc">--</div>
+  </section>
+
   <!-- NUNCA um unico botao: iniciar e finalizar sao acoes distintas -->
   <section class="actions">
     <button id="btnStart" class="btn btn-start btn-block" type="button">
@@ -188,6 +196,12 @@
          retomam sozinhos apos o login. Apos parar a gravacao, o NotebookLM
          monta o estudo, gera o PDF e envia para este numero - pode levar
          alguns minutos.</p>
+    </section>
+
+    <!-- ===== SAUDE DAS INTEGRACOES (S3) ===== -->
+    <section class="card">
+      <div class="card-title">SAUDE DAS INTEGRACOES</div>
+      <div id="integracoesLista" class="muted">carregando...</div>
     </section>
 
     <div class="btn-row">

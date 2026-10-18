@@ -35,10 +35,18 @@ def _espera(cond, timeout=5.0):
 
 
 class _Proc:
-    def __init__(self, codigo=0):
+    def __init__(self, codigo=0, stdout=None):
         self._codigo = codigo
+        if codigo == 0 and stdout is not None:
+            # o pipeline real grava cada passo com flush; o fake grava os
+            # MESMOS marcos para a drenagem do log provar o envio (S3)
+            stdout.write("=== 8. Enviando PDF\n=== CONCLUIDO\n")
+            stdout.flush()
 
     def wait(self):
+        return self._codigo
+
+    def poll(self):
         return self._codigo
 
 
@@ -254,7 +262,10 @@ def test_enfileirar_nao_duplica_e_conclui_no_banco(monkeypatch, tmp_path):
     monkeypatch.setattr(
         estudos.subprocess,
         "Popen",
-        lambda cmd, **kw: chamadas.append(cmd) or _Proc(0),
+        # o fake grava os marcos do passo 8 no log: a drenagem prova o
+        # envio e o job so termina em FINAL (100%) com essa prova
+        lambda cmd, **kw: chamadas.append(cmd)
+        or _Proc(0, stdout=kw.get("stdout")),
     )
     caminho = str(tmp_path / "pregacao.mp3")
 
@@ -372,3 +383,199 @@ def test_status_conta_pelo_banco(monkeypatch, tmp_path):
     assert st["aguardando"] == 0
     assert st["motivo"] == ""
     assert st["fila"] == 1
+
+
+# -------------------------------------------- progresso por job (S3)
+def test_barra_esconde_quando_nao_ha_nada(monkeypatch, tmp_path):
+    b = estudos.barra()
+    assert b["mostrar"] is False
+    assert b["percentual"] == 0
+    assert b["etapas"] == []
+
+
+def test_barra_somente_com_prova_no_banco(monkeypatch, tmp_path):
+    banco = estudos.db
+    # gravacao em curso: passo 1 ativo, nenhum marco concluido
+    banco.create_session(
+        {"id": "s1", "started_at": time.time(), "state": "RECORDING"}
+    )
+    b = estudos.barra()
+    assert b["mostrar"] is True
+    assert b["percentual"] == 0
+    assert b["etapas"][0] == {"n": 1, "nome": "GRAVACAO", "tom": "ativo"}
+    assert all(e["tom"] == "pendente" for e in b["etapas"][1:])
+    assert b["descricao"] == "Gravando"
+
+    # gravacao terminou e o MP3 existe: 2 de 7 (drive ainda pendente)
+    banco.update_session(
+        "s1", ended_at=time.time(), final_path="x.mp3", final_bytes=1000
+    )
+    b = estudos.barra()
+    assert b["percentual"] == 29  # 2/7 = 28,6 arredondado
+    assert b["etapas"][0]["tom"] == "concluido"
+    assert b["etapas"][1]["tom"] == "concluido"
+    assert b["etapas"][2]["tom"] == "ativo"  # enviando ao Drive
+
+    # prova do Drive: 3 de 7
+    banco.update_session("s1", drive_file_id="gdrive9")
+    b = estudos.barra()
+    assert b["percentual"] == 43
+    assert b["etapas"][2]["tom"] == "concluido"
+
+
+def test_barra_pinta_espera_e_erro_com_o_tom_do_job(monkeypatch, tmp_path):
+    banco = estudos.db
+    banco.create_job(audio_path="x.mp3")  # sem sessao ligada: base 0
+    job = banco.claim_job()
+    banco.job_aguardar(job["job_id"], "autenticacao expirada")
+
+    b = estudos.barra()
+    assert b["estado"] == "AGUARDANDO_INTERVENCAO"
+    assert b["etapas"][3]["tom"] == "aguardando"  # NOTEBOOKLM parado
+    assert "autenticacao expirada" in b["descricao"]
+    assert b["percentual"] == 0  # zero prova de gravacao+mp3+drive
+
+    banco.job_retomar()
+    job = banco.claim_job()
+    banco.update_job(job["job_id"], etapa="PDF")
+    b = estudos.barra()
+    concluidos = [e["nome"] for e in b["etapas"] if e["tom"] == "concluido"]
+    assert concluidos == ["NOTEBOOKLM", "ESTUDO"]  # marcos 4 e 5 provados
+    assert b["etapas"][5]["tom"] == "ativo"  # PDF em conversao
+    assert b["percentual"] == 29  # 2 marcos do pipeline (base 0)
+
+    banco.job_falhar(job["job_id"], "codigo 1")
+    b = estudos.barra()
+    assert b["etapas"][5]["tom"] == "erro"  # parou ONDE falhou
+    assert "codigo 1" in b["descricao"]
+
+
+def test_percentual_cem_somente_com_whatsapp_provado(monkeypatch, tmp_path):
+    banco = estudos.db
+    banco.create_session(
+        {"id": "s1", "started_at": time.time(), "state": "COMPLETED"}
+    )
+    banco.update_session(
+        "s1",
+        ended_at=time.time(),
+        final_path="x.mp3",
+        final_bytes=10,
+        drive_file_id="g1",
+    )
+    banco.create_job(audio_path="x.mp3")
+    job = banco.claim_job()
+    # marcos 1-3 provados pela gravacao, nada do pipeline ainda
+    assert estudos._percentual(estudos._marcos_concluidos(job)) == 43
+
+    banco.job_concluir(job["job_id"], etapa="FINAL")
+    job = banco.get_job(job["job_id"])
+    assert estudos._percentual(estudos._marcos_concluidos(job)) == 100
+
+    # concluiu SEM numero para enviar: 6 de 7, nunca 100%
+    banco.create_session(
+        {"id": "s2", "started_at": time.time(), "state": "COMPLETED"}
+    )
+    banco.update_session(
+        "s2",
+        ended_at=time.time(),
+        final_path="y.mp3",
+        final_bytes=10,
+        drive_file_id="g2",
+    )
+    banco.create_job(audio_path="y.mp3")
+    job2 = banco.claim_job()
+    banco.job_concluir(job2["job_id"], etapa="FINAL_SEM_ENVIO")
+    job2 = banco.get_job(job2["job_id"])
+    assert estudos._percentual(estudos._marcos_concluidos(job2)) == 86
+
+
+def test_drenagem_so_emite_o_que_ja_foi_escrito(monkeypatch, tmp_path):
+    capturas = []
+    monkeypatch.setattr(
+        estudos, "notify", lambda *a, **k: capturas.append((a, k))
+    )
+    banco = estudos.db
+    banco.create_job(audio_path="x.mp3")
+    job = banco.claim_job()
+    arquivo = tmp_path / "handoff_1.log"
+    # passo 5 completo + linha 6 ainda INCOMPLETA (sem quebra de linha)
+    arquivo.write_bytes(b"# handoff\n=== 5. Gerando o ESTUDO\n=== 6.")
+    visto = {"envio": False, "pulado": False}
+    esperado_p1 = len(b"# handoff\n=== 5. Gerando o ESTUDO\n")
+
+    p1 = estudos._drenar_log(arquivo, 0, job, visto)
+    assert p1 == esperado_p1  # consumiu ate a ultima quebra de linha
+    assert banco.get_job(job["job_id"])["etapa"] == "ESTUDO"
+    assert len(capturas) == 1
+    assert capturas[0][0][0] == "job_progress"
+    payload = capturas[0][1]["payload"]
+    assert payload["job_id"] == job["job_id"]
+    assert payload["etapa"] == "ESTUDO"
+    assert payload["percentual"] == 14  # 1 de 7
+    assert payload["seq"] > 0
+
+    # a MESMA drenagem de novo nao emite nada (a linha incompleta do fim
+    # nao forma marco e sera relida quando completar)
+    assert estudos._drenar_log(arquivo, p1, job, visto) == p1
+    assert len(capturas) == 1
+
+    # resto + passo 6 completo + passo 8 (envio) + fim
+    with open(arquivo, "ab") as fh:
+        fh.write(b" Baixando o relatorio\n=== 8. Enviando PDF\n=== CONCLUIDO\n")
+    p2 = estudos._drenar_log(arquivo, p1, job, visto)
+    assert p2 == arquivo.stat().st_size  # termina em \n: tudo consumido
+    assert visto["envio"] is True
+    etapas = [c[1]["payload"]["etapa"] for c in capturas]
+    assert etapas == ["ESTUDO", "PDF", "WHATSAPP"]
+    assert banco.get_job(job["job_id"])["etapa"] == "WHATSAPP"
+
+
+def test_seq_de_progresso_sempre_cresce(monkeypatch, tmp_path):
+    # duas emissoes no MESMO milissegundo nao podem empatar: o agente
+    # descarta seq <= ultima e o marco final sumiria do celular
+    a = estudos._seq()
+    b = estudos._seq()
+    assert b > a
+
+
+def test_espera_emite_marco_de_alerta(monkeypatch, tmp_path):
+    _configura(monkeypatch, tmp_path)
+    capturas = []
+    monkeypatch.setattr(
+        estudos, "notify", lambda *a, **k: capturas.append((a, k))
+    )
+    monkeypatch.setattr(estudos, "verificar_saude", lambda force=False: "auth")
+    monkeypatch.setattr(estudos, "_renovar_sessao", lambda: False)
+
+    estudos.enfileirar(str(tmp_path / "pregacao.mp3"))
+    assert _espera(
+        lambda: estudos.db.job_contagens().get("AGUARDANDO_INTERVENCAO", 0) == 1
+    )
+
+    progresso = [
+        k["payload"]
+        for a, k in capturas
+        if a and a[0] == "job_progress"
+    ]
+    # o primeiro marco e a entrada do job (pre-flight)...
+    assert progresso and progresso[0]["etapa"] == "PRE-FLIGHT"
+    # ...e o ultimo e o alerta da espera, com motivo e nivel de aviso
+    alerta = [p for p in progresso if p["estado"] == "AGUARDANDO_INTERVENCAO"]
+    assert alerta and "autenticacao" in alerta[-1]["descricao"]
+    avisos_de_nivel = [
+        k.get("level") for a, k in capturas
+        if a and a[0] == "job_progress" and a[1] == alerta[-1]["descricao"]
+    ]
+    assert avisos_de_nivel and avisos_de_nivel[0] == "warning"
+
+
+def test_status_expoe_job_e_barra(monkeypatch, tmp_path):
+    _configura(monkeypatch, tmp_path)
+    banco = estudos.db
+    banco.create_job(audio_path="x.mp3")
+
+    st = estudos.status()
+    assert st["job"] and st["job"]["job_id"]
+    assert st["job"]["etapa"] == "PENDENTE" or st["job"]["estado"] == "PENDENTE"
+    assert st["barra"]["mostrar"] is True
+    assert st["barra"]["job_id"] == st["job"]["job_id"]

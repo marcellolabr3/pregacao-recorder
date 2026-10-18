@@ -23,7 +23,9 @@ const int comandoTtlSegundos = 120;
 /// aplicativo: se a resposta nao chegar, o operador e avisado).
 const int ackTimeoutSegundos = 20;
 
-/// Os cinco topics de um aparelho, derivados do device_id.
+/// Os seis topics de um aparelho, derivados do device_id.
+/// O sexto (jobs) e RETIDO: o celular que reconectar recebe o progresso
+/// atual do estudo sem reiniciar nada (S3).
 class Topicos {
   final String device;
 
@@ -35,6 +37,7 @@ class Topicos {
   String get events => '$raiz/events';
   String get ack => '$raiz/ack';
   String get cmd => '$raiz/cmd';
+  String get jobs => '$raiz/jobs';
 }
 
 /// req_id proprio: unico por envio - e o que permite saber qual resposta
@@ -278,5 +281,93 @@ class EventoSistema {
       message: data['message'] as String? ?? '',
       path: data['path'] as String? ?? '',
     );
+  }
+}
+
+/// Progresso do estudo por job (topic "jobs", retido).
+/// O painel/APK so avanca a barra com marco REAL concluido (S3):
+/// GRAVACAO -> MP3 -> DRIVE -> NOTEBOOKLM -> ESTUDO -> PDF -> WHATSAPP.
+/// Percentual = marcos_concluidos / 7 * 100; 100% so com WhatsApp confirmado.
+class ProgressoJob {
+  final String jobId;
+  final String recordingId;
+  final String estado;
+  final String etapa;
+  final int percentual;
+  final String descricao;
+  final String motivo;
+  final int seq;
+
+  const ProgressoJob({
+    this.jobId = '',
+    this.recordingId = '',
+    this.estado = '',
+    this.etapa = '',
+    this.percentual = 0,
+    this.descricao = '',
+    this.motivo = '',
+    this.seq = 0,
+  });
+
+  /// Tolerante a campos ausentes: agente antigo ou payload parcial.
+  factory ProgressoJob.fromJson(Map<String, dynamic> json) {
+    int inteiro(dynamic v) {
+      if (v is int) return v;
+      if (v is double) return v.toInt();
+      if (v is String) return int.tryParse(v) ?? 0;
+      return 0;
+    }
+
+    return ProgressoJob(
+      jobId: json['job_id'] as String? ?? '',
+      recordingId: json['recording_id'] as String? ?? '',
+      estado: json['estado'] as String? ?? '',
+      etapa: json['etapa'] as String? ?? '',
+      percentual: inteiro(json['percentual']).clamp(0, 100),
+      descricao: json['descricao'] as String? ?? '',
+      motivo: json['motivo'] as String? ?? '',
+      seq: inteiro(json['seq']),
+    );
+  }
+
+  /// Se o envio por WhatsApp foi confirmado (etapa FINAL = 100%).
+  bool get envioConfirmado => etapa == 'FINAL';
+
+  /// Se o estudo esta em espera (sessao/rede) - passo ativo amarelo.
+  bool get emEspera => estado == 'AGUARDANDO_INTERVENCAO';
+
+  /// Se o estudo falhou (etapa vermelha).
+  bool get falhou => estado == 'ERRO';
+
+  /// Rotulo curto da etapa para a UI.
+  String get rotuloEtapa {
+    switch (etapa) {
+      case 'PRE-FLIGHT':
+        return 'VERIFICANDO SESSAO';
+      case 'NOTEBOOKLM':
+        return 'NOTEBOOKLM PREPARANDO';
+      case 'ESTUDO':
+        return 'GERANDO ESTUDO';
+      case 'PDF':
+        return 'CONVERTENDO PDF';
+      case 'WHATSAPP':
+        return 'ENVIANDO WHATSAPP';
+      case 'FINAL':
+        return 'ENVIADO';
+      case 'FINAL_SEM_ENVIO':
+        return 'PRONTO (SEM ENVIO)';
+      default:
+        return etapa;
+    }
+  }
+
+  /// Tom da etapa (concluido/ativo/aguardando/erro/pendente) - a UI usa
+  /// para escolher a cor do ponto/pill.
+  String get tomEtapa {
+    if (estado == 'ERRO') return 'erro';
+    if (estado == 'AGUARDANDO_INTERVENCAO') return 'aguardando';
+    if (estado == 'CONCLUIDO') return 'concluido';
+    if (estado == 'EXECUTANDO') return 'ativo';
+    return 'pendente';
   }
 }

@@ -61,7 +61,17 @@ class MqttControlador extends ChangeNotifier {
   final StreamController<Ack> _acks = StreamController<Ack>.broadcast();
   final Map<String, Completer<Ack>> _pendentes = {};
 
+  // Progresso do estudo por job (topic jobs, retido - S3).
+  final StreamController<ProgressoJob> _progresso = StreamController<ProgressoJob>.broadcast();
+  ProgressoJob? _ultimoProgresso;
+
   Topicos get topicos => Topicos(cfg.aparelho.trim());
+
+  /// Stream do progresso do estudo (job_progress do agente). O ultimo valor
+  /// fica em cache: ao reconectar o broker entrega o retido e a UI pinta
+  /// sem esperar o proximo marco.
+  Stream<ProgressoJob> get progresso => _progresso.stream;
+  ProgressoJob? get ultimoProgresso => _ultimoProgresso;
 
   /// Acks brutos, para telas que queiram observar (filtro por req_id).
   Stream<Ack> get acks => _acks.stream;
@@ -216,7 +226,13 @@ class MqttControlador extends ChangeNotifier {
   void _assinar(MqttServerClient client) {
     if (_assinado) return;
     _assinado = true;
-    for (final t in [topicos.avail, topicos.state, topicos.ack, topicos.events]) {
+    for (final t in [
+      topicos.avail,
+      topicos.state,
+      topicos.ack,
+      topicos.events,
+      topicos.jobs, // S3: progresso do estudo por job (retido)
+    ]) {
       try {
         final r = client.subscribe(t, MqttQos.atLeastOnce);
         debugPrint('[mqtt] SUBSCRIBE $t -> $r');
@@ -338,6 +354,16 @@ class MqttControlador extends ChangeNotifier {
           final dados = jsonDecode(texto);
           if (dados is Map<String, dynamic>) {
             _aoEvento(EventoSistema.fromJson(dados));
+          }
+        } else if (topico == topicos.jobs) {
+          // S3: progresso do estudo por job (payload ja e o payload do
+          // job_progress - o agente repassa o que o app emite via SSE).
+          final dados = jsonDecode(texto);
+          if (dados is Map<String, dynamic>) {
+            final pj = ProgressoJob.fromJson(dados);
+            _ultimoProgresso = pj;
+            _progresso.add(pj);
+            notifyListeners();
           }
         }
       } catch (_) {

@@ -38,9 +38,9 @@ Classificacao: FUNCIONAL / PARCIAL / COM ERRO / NAO IMPLEMENTADA / NAO TESTADA.
 | L5 | Fila de estudos em memoria (`_aguardando` perde jobs no reinicio) | IMPLEMENTADA (S2) | `app/estudos.py` + tabela `jobs` em `app/db.py` |
 | L6 | Job manager persistente (job_id, estados, retomada pos-reinicio) | IMPLEMENTADA (S2) | `app/db.py` (jobs + guards), `app/estudos.py`, `app/main.py` (boot) |
 | L7 | Estados reais do pipeline (etapa atual por job) | PARCIAL (S2: dado; S3: exibir) | `etapa` persistida por job em `db.py`; API/UI na S3 |
-| L8 | Barra de progresso no painel web | NAO IMPLEMENTADA | `web/static/app.js`, `routes.py` |
-| L9 | Progresso via MQTT (agent hoje descarta tick/upload_progress) | NAO IMPLEMENTADA | `app/remote/agent.py:835-837` |
-| L10 | Barra de progresso no APK | NAO IMPLEMENTADA | `flutter/.../tela_principal.dart` |
+| L8 | Barra de progresso no painel web | IMPLEMENTADA (S3) | `web/templates/index.html`, `web/static/app.js`, `web/static/style.css` |
+| L9 | Progresso via MQTT (agent hoje descarta tick/upload_progress) | IMPLEMENTADA (S3) | `app/remote/agent.py` (topic `jobs` retido + `_publica_job` guarda seq) |
+| L10 | Barra de progresso no APK | IMPLEMENTADA (S3) | `flutter/.../protocolo.dart` (ProgressoJob), `mqtt_controlador.dart`, `tela_principal.dart` |
 | L11 | Metadados da pregacao (tabela, form PC, form celular) | NAO IMPLEMENTADA | `app/db.py:18-65`, `routes.py`, `index.html`, `app.js`, `protocolo.dart` |
 | L12 | Importacao CSV/XLSX | NAO IMPLEMENTADA | novo `app/importacao.py` + requirements |
 | L13 | Associacao programacao x gravacao + snapshot de metadados | NAO IMPLEMENTADA | `app/recording/manager.py`, `estudos.py` |
@@ -134,25 +134,23 @@ Objetivo: job_id unico, estados reais, sobrevive a reinicio.
 
 ### S3 - BARRA DE PROGRESSO PC + MQTT + APK (2-3 dias)  [FASE 2 restante]
 Objetivo: o operador ve a etapa real no PC e no celular.
-- [ ] `estudos.py` emite marcos REAIS por job (etapa 1..7 do prompt,
+- [x] `estudos.py` emite marcos REAIS por job (etapa 1..7 do prompt,
       percentual so por marco concluido, nunca por tempo; 100% so com
-      WhatsApp confirmado)
-- [ ] Payload MQTT por job: `job_id`, `etapa`, `estado`, `percentual`,
-      `descricao`, `timestamp`, `versao/seq` (descartar sequencias antigas)
-- [ ] `agent.py`: deixar de descartar progresso (`:835-837`), publicar
-      estado de job com retain apropriado (comando nunca retain)
-- [ ] Painel web: barra/etapas por job (verde/executando/pendente/amarelo/vermelho)
-- [ ] APK: secao de progresso lendo o mesmo topico (compat iOS intacto)
-- [ ] Reconectar/abrir APK recebe estado atual sem reiniciar nada
-- [ ] Painel /config: area **SAÚDE DAS INTEGRAÇÕES** (Drive, NotebookLM,
+      WhatsApp confirmado) — `_publicar_job`, `_drenar_log`, `_marcos_concluidos`
+- [x] Payload MQTT por job: `job_id`, `etapa`, `estado`, `percentual`,
+      `descricao`, `timestamp`, `seq` monotona (descartar sequencias antigas)
+- [x] `agent.py`: deixar de descartar progresso (`:835-837`), publicar
+      estado de job no topic `jobs` retido (comando nunca retain)
+- [x] Painel web: barra/etapas por job (verde/executando/pendente/amarelo/vermelho)
+- [x] APK: secao de progresso lendo o mesmo topico (compat iOS intacto)
+- [x] Reconectar/abrir APK recebe estado atual sem reiniciar nada (retido)
+- [x] Painel /config: area **SAÚDE DAS INTEGRACOES** (Drive, NotebookLM,
       WhatsApp, EMQX) com estados padrao (Conectado/NaO configurado/
       Verificando/Autenticacao necessaria/Erro), ultima verificacao,
-      resultado real, diagnostico e acao necessaria (prompt item 8 -
-      estava fora do plano; adicionado na revisao de 18/10)
-- Marcar L8, L9, L10
-- Testes: agent (payloads novos), app.js via teste de rota, Flutter
-  `protocolo_test.dart`
-- **Prova real**: 2 celulares mostrando a mesma etapa + reconexao MQTT
+      resultado real, diagnostico e acao necessaria (prompt item 8)
+- Marcar L8, L9, L10 ✅
+- Testes: agent (4 novos), jobs (8 novos), Flutter `protocolo_test.dart` (9 novos)
+- **Prova real**: pendente (aguarda sessao NotebookLM renovada + 2 celulares + reconexao MQTT)
 
 ### S4 - DADOS DA PREGACAO: METADADOS + FORM + PLANILHA (3-4 dias)  [FASE 3]
 Objetivo: camada de metadados unica, no PC, refletida no celular.

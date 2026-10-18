@@ -78,6 +78,12 @@ COMANDO_TTL_SEGUNDOS = 120
 # continuam com exatamente o mesmo contrato de antes.
 ARGS = ("ssid", "password", "code", "state", "path")
 
+# Cabecalho que marca TODAS as chamadas do agente a API local: o painel
+# registra a "ultima vista" e o /api/integracoes so declara o EMQX
+# conectado enquanto o agente estiver batendo de verdade (nada simulado).
+CABECALHO_AGENTE = "X-Pregacao-Agent"
+VERSAO_AGENTE = "1"
+
 # valores de PREGACAO_REMOTE_ENABLED que desligam o agente por expressao
 _DISABLED_VALUES = {"0", "false", "no", "off", "desligado"}
 
@@ -107,6 +113,9 @@ def topics(device_id: str) -> Dict[str, str]:
         "avail": f"{base}/avail",
         "state": f"{base}/state",
         "events": f"{base}/events",
+        # progresso do estudo por job (S3): payload pequeno, RETIDO - o
+        # celular que reconectar recebe o estado atual sem reiniciar nada
+        "jobs": f"{base}/jobs",
         "ack": f"{base}/ack",
         "cmd": f"{base}/cmd",
     }
@@ -367,6 +376,7 @@ class LocalApi:
     ) -> Tuple[int, Dict[str, Any]]:
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(self.base + path, data=data, method=method)
+        req.add_header(CABECALHO_AGENTE, VERSAO_AGENTE)
         if data:
             req.add_header("Content-Type", "application/json")
         try:
@@ -482,6 +492,7 @@ class LocalApi:
         if not self.pin or not self._logged():
             self.login()
         req = urllib.request.Request(self.base + "/api/stream")
+        req.add_header(CABECALHO_AGENTE, VERSAO_AGENTE)
         return self._opener.open(req, timeout=timeout)
 
     def _logged(self) -> bool:
@@ -534,6 +545,10 @@ class RemoteAgent:
         self._last_signature = ""
         self._last_payload: Dict[str, Any] = {}
         self._lock = threading.Lock()
+        # guarda de ordem do progresso por job (S3): ultima seq publicada
+        # e de qual job - mensagem antiga da fila nunca faz a barra voltar
+        self._job_seq = 0
+        self._job_visto: Optional[str] = None
 
     # ------------------------------------------------------------------
     # mqtt
@@ -620,6 +635,34 @@ class RemoteAgent:
         except Exception as exc:
             log.warning("[REMOTE] falha ao publicar em %s: %s", topic, exc)
             return False
+
+    def _publica_job(self, payload: Dict[str, Any]) -> bool:
+        """Republica o progresso do estudo no topic retido ``jobs`` (S3).
+
+        O payload nasce no app (estudos) e ja vem com ``seq`` monotona:
+        a mesma sequencia ou mais antiga (mensagem velha na fila de
+        reconexao) e descartada - o celular nunca volta para uma etapa
+        que ja passou. Job novo zera a guarda. O ``retain`` faz o
+        aparelho que reconectar receber o progresso atual sem reiniciar
+        nada. Este e o UNICO topico retido de progresso; comandos
+        continuam SEM retain.
+        """
+        try:
+            seq = int(payload.get("seq") or 0)
+        except (TypeError, ValueError):
+            seq = 0
+        job_id = str(payload.get("job_id") or "")
+        if job_id and job_id == self._job_visto and seq and seq <= self._job_seq:
+            log.debug(
+                "[REMOTE] progresso antigo descartado (seq %s <= %s)",
+                seq,
+                self._job_seq,
+            )
+            return False
+        if job_id:
+            self._job_visto = job_id
+            self._job_seq = seq
+        return self._publish(self.topics["jobs"], payload, retain=True)
 
     # ------------------------------------------------------------------
     # estado
@@ -832,6 +875,12 @@ class RemoteAgent:
                         continue
                     if kind == "status":
                         self.publish_state()
+                    elif kind == "job_progress":
+                        # marco real do estudo (S3): repassa ao topic
+                        # retido com guarda de sequencia antiga
+                        payload = parse_event(event)
+                        if payload:
+                            self._publica_job(payload.get("data") or {})
                     elif kind in ("tick", "upload_progress"):
                         # progresso fino nao e republicado: o estado ja diz
                         # "ENVIANDO" e o cronometro nasce do started_at

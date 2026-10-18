@@ -31,14 +31,15 @@ Os testes usam um diretorio temporario (`PREGACAO_HOME`) - **nao** mexem em
 | `tests/test_manager.py` | finalizacao, recuperacao, descarte, **gravacao vazia nao vira ERRO** |
 | `tests/test_network.py` | Ethernet, Wi-Fi, Access Point, watchdog e Tailscale (47 testes) |
 | `tests/test_network_api.py` | API de rede protegida por PIN de administrador |
-| `tests/test_remote_agent.py` | controle remoto: topics, comandos idempotentes, `ack`, prazo de validade (`ts`/TTL), estado retido, ciclo do servico e callbacks do paho (62 testes) |
+| `tests/test_remote_agent.py` | controle remoto: topics, comandos idempotentes, `ack`, prazo de validade (`ts`/TTL), estado retido, ciclo do servico, callbacks do paho, **job_progress retido + guarda seq** (66 testes) |
 | `tests/test_destinos.py` | destinos de gravacao: SSD e cartao SD, pontos de montagem, escolha valida (18 testes) |
 | `tests/test_estudos.py` | autenticacao do NotebookLM: pre-flight, pausa AGUARDANDO, retomada, keepalive oficial, login visivel (14 testes) |
 | `tests/test_main.py` | instancia unica do servidor (S0) |
 | `tests/test_silencio.py` | silencio no Windows (`CREATE_NO_WINDOW` em todo subprocess) e limpeza/rotacao dos logs do estudo (7 testes) |
-| `tests/test_jobs.py` | job manager persistente (S2): fila/estados no SQLite, transicoes com guarda, recuperacao no boot, acordamento de PENDENTE, enfileirar duplo (16 testes) |
+| `tests/test_jobs.py` | job manager persistente (S2): fila/estados no SQLite, transicoes com guarda, recuperacao no boot, acordamento de PENDENTE, enfileirar duplo, **barra/progresso/drenagem/seq honesta** (24 testes) |
+| `flutter/pregacao_controle/test/protocolo_test.dart` | protocolo Dart puro: topicos, comandos, estado, ack, evento, **ProgressoJob + topic jobs retido** (9 testes) |
 
-Total: **317 testes**.
+Total: **338 testes** (317 + 8 jobs + 4 agent + 9 Flutter).
 
 ### Smoke test do servidor ligado
 

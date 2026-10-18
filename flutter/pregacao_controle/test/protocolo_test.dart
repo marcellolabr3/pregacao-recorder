@@ -15,6 +15,7 @@ void main() {
       expect(t.events, 'pregacao/pregacao-igreja-01/events');
       expect(t.ack, 'pregacao/pregacao-igreja-01/ack');
       expect(t.cmd, 'pregacao/pregacao-igreja-01/cmd');
+      expect(t.jobs, 'pregacao/pregacao-igreja-01/jobs');
     });
   });
 
@@ -245,6 +246,120 @@ void main() {
       expect(volta.aparelho, 'igreja-02');
       expect(volta.usuario, cfg.usuario);
       expect(volta.token, cfg.token);
+    });
+  });
+
+  group('ProgressoJob (S3)', () {
+    test('payload completo do agente via SSE', () {
+      final pj = ProgressoJob.fromJson(const {
+        'job_id': 'abc123',
+        'recording_id': '20261018-100000-xyz',
+        'estado': 'EXECUTANDO',
+        'etapa': 'ESTUDO',
+        'percentual': 57,
+        'descricao': 'Gerando o estudo devocional',
+        'motivo': '',
+        'seq': 1790000000123,
+      });
+      expect(pj.jobId, 'abc123');
+      expect(pj.recordingId, '20261018-100000-xyz');
+      expect(pj.estado, 'EXECUTANDO');
+      expect(pj.etapa, 'ESTUDO');
+      expect(pj.percentual, 57);
+      expect(pj.descricao, 'Gerando o estudo devocional');
+      expect(pj.seq, 1790000000123);
+      expect(pj.envioConfirmado, isFalse);
+      expect(pj.emEspera, isFalse);
+      expect(pj.falhou, isFalse);
+      expect(pj.rotuloEtapa, 'GERANDO ESTUDO');
+      expect(pj.tomEtapa, 'ativo');
+    });
+
+    test('etapa FINAL = envio confirmado (100%)', () {
+      final pj = ProgressoJob.fromJson(const {
+        'job_id': 'done',
+        'etapa': 'FINAL',
+        'percentual': 100,
+        'estado': 'CONCLUIDO',
+      });
+      expect(pj.envioConfirmado, isTrue);
+      expect(pj.rotuloEtapa, 'ENVIADO');
+      expect(pj.tomEtapa, 'concluido');
+    });
+
+    test('etapa FINAL_SEM_ENVIO = 86% honesto (WhatsApp nao configurado)', () {
+      final pj = ProgressoJob.fromJson(const {
+        'job_id': 'sem_envio',
+        'etapa': 'FINAL_SEM_ENVIO',
+        'percentual': 86,
+        'estado': 'CONCLUIDO',
+      });
+      expect(pj.envioConfirmado, isFalse);
+      expect(pj.rotuloEtapa, 'PRONTO (SEM ENVIO)');
+      expect(pj.tomEtapa, 'concluido');
+    });
+
+    test('AGUARDANDO_INTERVENCAO = aguardando (amarelo)', () {
+      final pj = ProgressoJob.fromJson(const {
+        'job_id': 'wait',
+        'estado': 'AGUARDANDO_INTERVENCAO',
+        'etapa': 'PRE-FLIGHT',
+        'motivo': 'autenticacao expirada',
+      });
+      expect(pj.emEspera, isTrue);
+      expect(pj.tomEtapa, 'aguardando');
+    });
+
+    test('ERRO = falhou (vermelho)', () {
+      final pj = ProgressoJob.fromJson(const {
+        'job_id': 'fail',
+        'estado': 'ERRO',
+        'etapa': 'PDF',
+        'erro': 'codigo 1',
+      });
+      expect(pj.falhou, isTrue);
+      expect(pj.tomEtapa, 'erro');
+    });
+
+    test('payload malformado (campos ausentes) nao quebra', () {
+      final pj = ProgressoJob.fromJson(const {});
+      expect(pj.jobId, '');
+      expect(pj.percentual, 0);
+      expect(pj.envioConfirmado, isFalse);
+      expect(pj.emEspera, isFalse);
+      expect(pj.falhou, isFalse);
+    });
+
+    test('percentual clamp 0..100 (agente bugado)', () {
+      final pj1 = ProgressoJob.fromJson(const {'percentual': -10});
+      expect(pj1.percentual, 0);
+      final pj2 = ProgressoJob.fromJson(const {'percentual': 200});
+      expect(pj2.percentual, 100);
+    });
+
+    test('seq aceita int, double ou String numerica', () {
+      final a = ProgressoJob.fromJson(const {'seq': 1});
+      final b = ProgressoJob.fromJson(const {'seq': 1.5});
+      final c = ProgressoJob.fromJson(const {'seq': '123'});
+      expect(a.seq, 1);
+      expect(b.seq, 1);
+      expect(c.seq, 123);
+    });
+
+    test('todas as etapas mapeadas para rotulo legivel', () {
+      const etapas = {
+        'PRE-FLIGHT': 'VERIFICANDO SESSAO',
+        'NOTEBOOKLM': 'NOTEBOOKLM PREPARANDO',
+        'ESTUDO': 'GERANDO ESTUDO',
+        'PDF': 'CONVERTENDO PDF',
+        'WHATSAPP': 'ENVIANDO WHATSAPP',
+        'FINAL': 'ENVIADO',
+        'FINAL_SEM_ENVIO': 'PRONTO (SEM ENVIO)',
+      };
+      etapas.forEach((k, v) {
+        final pj = ProgressoJob.fromJson({'etapa': k});
+        expect(pj.rotuloEtapa, v, reason: 'etapa $k');
+      });
     });
   });
 }

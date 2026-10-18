@@ -16,11 +16,18 @@ def _db_isolado(monkeypatch, tmp_path):
 
 
 class _Proc:
-    def __init__(self, spy, codigo=0):
+    def __init__(self, spy, codigo=0, stdout=None):
         self._spy = spy
         self._codigo = codigo
+        if codigo == 0 and stdout is not None:
+            # espelho dos marcos reais do pipeline para a drenagem do log
+            stdout.write("=== 8. Enviando PDF\n=== CONCLUIDO\n")
+            stdout.flush()
 
     def wait(self):
+        return self._codigo
+
+    def poll(self):
         return self._codigo
 
 
@@ -162,7 +169,9 @@ def test_pipeline_inexistente_avisa(monkeypatch, tmp_path):
     estudos.enfileirar("pregacao.mp3")
     time.sleep(0.3)
     assert chamadas == []
-    assert avisos and avisos[0] == "estudo_erro"
+    # alem do aviso, o marco vermelho do job tambem e publicado (S3)
+    assert avisos and "estudo_erro" in avisos
+    assert "job_progress" in avisos
     # o job nao some: fica registrado como ERRO com o motivo
     job = estudos.db.list_jobs(1)[0]
     assert job["estado"] == "ERRO"

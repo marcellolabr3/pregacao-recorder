@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import time
+from datetime import datetime
 from html import escape
 from typing import Any, Dict
 from urllib.parse import quote
@@ -26,6 +27,19 @@ from . import auth
 from .network_routes import register_network_routes
 
 log = get("api")
+
+# ultima vez que o agente MQTT bateu na API local. Toda chamada dele
+# traz o cabecalho X-Pregacao-Agent (app/remote/agent.py, constante
+# CABECALHO_AGENTE - o literal mora aqui para nao puxar o paho-mqtt no
+# boot do painel); o /api/integracoes so declara o EMQX conectado com
+# batida recente de verdade - nada simulado.
+_agente_visto_em = 0.0
+
+
+def _registra_agente() -> None:
+    global _agente_visto_em
+    if request.headers.get("X-Pregacao-Agent"):
+        _agente_visto_em = time.time()
 
 AUDIO_FORMATS = ["S16_LE", "S32_LE", "U8", "S24_3LE"]
 ENCODERS = ["mp3", "wav"]
@@ -238,6 +252,12 @@ def system_status(manager: RecordingManager, uploader: UploadWorker) -> Dict[str
 def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> None:
     # rede (Ethernet/Wi-Fi/Access Point/Tailscale) vive em modulo proprio
     register_network_routes(app)
+
+    # batida do agente MQTT em QUALQUER chamada (poll de /api/status,
+    # stream SSE, comandos): alimenta o card de saude das integracoes
+    @app.before_request
+    def _heartbeat_do_agente():
+        _registra_agente()
 
     # ------------------------------------------------------------------
     # autenticacao
@@ -786,6 +806,166 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
     @auth.require_auth
     def estudos_status():
         return jsonify(estudos.status())
+
+    @app.get("/api/integracoes")
+    @auth.require_auth
+    def integracoes():
+        """Saude das integracoes (S3): Drive, NotebookLM, WhatsApp e EMQX.
+
+        Cada bloco com estado padrao (conectado / nao_configurado /
+        verificando / autenticacao_necessaria / erro), resultado REAL e a
+        acao necessaria quando precisar de intervencao. Nada e estimado:
+        Drive e pelo proprio conector, NotebookLM pelo cache de saude,
+        WhatsApp pelo ultimo job no banco e EMQX pela batida recente do
+        agente (cabecalho visto no before_request).
+        """
+        agora = time.time()
+        saida: Dict[str, Any] = {}
+
+        # --- Google Drive ----------------------------------------------
+        d = drive.status()
+        if d.get("connected"):
+            saida["drive"] = {
+                "estado": "conectado",
+                "detalhe": (
+                    f"conta {d.get('account') or '?'} - "
+                    f"pasta {d.get('folder') or '?'}"
+                ),
+                "acao": "",
+            }
+        elif not d.get("credentials"):
+            saida["drive"] = {
+                "estado": "nao_configurado",
+                "detalhe": "credenciais OAuth ausentes",
+                "acao": "conecte a conta Google (botao Conectar no painel)",
+            }
+        else:
+            saida["drive"] = {
+                "estado": "erro",
+                "detalhe": "credenciais presentes, sessao desconectada",
+                "acao": "refaca a conexao do Drive",
+            }
+
+        # --- NotebookLM -------------------------------------------------
+        nlm = estudos.status()
+        mapa_nlm = {
+            "ok": ("conectado", "sessao valida", ""),
+            "auth": (
+                "autenticacao_necessaria",
+                "sessao do Google expirada",
+                "renove o login (botao Renovar sessao) - nada se perde, "
+                "os estudos ficam em espera",
+            ),
+            "rede": (
+                "erro",
+                "sem resposta do NotebookLM",
+                "verifique a internet do equipamento",
+            ),
+            "desconhecido": (
+                "verificando",
+                "ainda nao verificado nesta subida",
+                "use o botao Diagnosticar",
+            ),
+        }
+        nlm_estado, nlm_detalhe, nlm_acao = mapa_nlm.get(
+            str(nlm.get("estado") or "desconhecido"), mapa_nlm["desconhecido"]
+        )
+        if nlm.get("aguardando"):
+            nlm_detalhe += f" - {nlm['aguardando']} estudo(s) em espera"
+        saida["notebooklm"] = {
+            "estado": nlm_estado,
+            "detalhe": nlm_detalhe,
+            "acao": nlm_acao,
+            "verificado_em": nlm.get("verificado_em", 0.0),
+        }
+
+        # --- WhatsApp ---------------------------------------------------
+        numero = str(config.get("estudos.whatsapp", "") or "").strip()
+        jobs = db.list_jobs(1)
+        ultimo = jobs[0] if jobs else None
+        if not numero:
+            saida["whatsapp"] = {
+                "estado": "nao_configurado",
+                "detalhe": "sem numero de destino",
+                "acao": "defina o numero em Estudo automatico",
+                "ultimo_finished_at": None,
+            }
+        elif not ultimo or not ultimo.get("finished_at"):
+            saida["whatsapp"] = {
+                "estado": "verificando",
+                "detalhe": "numero configurado, sem envio registrado ainda",
+                "acao": "",
+                "ultimo_finished_at": None,
+            }
+        elif str(ultimo.get("etapa")) == "FINAL":
+            saida["whatsapp"] = {
+                "estado": "conectado",
+                "detalhe": "ultimo estudo enviado em "
+                + datetime.fromtimestamp(
+                    float(ultimo["finished_at"])
+                ).strftime("%d/%m %H:%M"),
+                "acao": "",
+                "ultimo_finished_at": ultimo.get("finished_at"),
+            }
+        elif str(ultimo.get("etapa")) == "FINAL_SEM_ENVIO":
+            saida["whatsapp"] = {
+                "estado": "nao_configurado",
+                "detalhe": "ultimo estudo concluiu sem enviar (envio pulado)",
+                "acao": "confira o numero de destino",
+                "ultimo_finished_at": ultimo.get("finished_at"),
+            }
+        else:
+            saida["whatsapp"] = {
+                "estado": "erro",
+                "detalhe": str(ultimo.get("erro") or "ultimo estudo falhou")[
+                    :160
+                ],
+                "acao": "veja o ultimo estudo no painel e corrija a causa",
+                "ultimo_finished_at": ultimo.get("finished_at"),
+            }
+
+        # --- EMQX (agente MQTT) ------------------------------------------
+        from ..remote.agent import RemoteSettings  # import local: nao puxa
+        settings = RemoteSettings()                # paho-mqtt no boot
+
+        visto = _agente_visto_em
+        if not settings.configured:
+            saida["emqx"] = {
+                "estado": "nao_configurado",
+                "detalhe": "sem broker configurado (.env do agente)",
+                "acao": "siga docs/EMQX.md para apontar o agente",
+                "visto_em": visto,
+            }
+        elif not settings.enabled:
+            saida["emqx"] = {
+                "estado": "nao_configurado",
+                "detalhe": "controle remoto desligado no .env",
+                "acao": "remova PREGACAO_REMOTE_ENABLED=0 para ligar",
+                "visto_em": visto,
+            }
+        elif visto and agora - visto < 180:
+            saida["emqx"] = {
+                "estado": "conectado",
+                "detalhe": (
+                    f"agente batendo ha {int(agora - visto)}s "
+                    f"(broker {settings.host}:{settings.port})"
+                ),
+                "acao": "",
+                "visto_em": visto,
+            }
+        else:
+            saida["emqx"] = {
+                "estado": "verificando",
+                "detalhe": (
+                    f"broker {settings.host}:{settings.port} configurado, "
+                    "sem batida recente do agente"
+                ),
+                "acao": "abra o iniciar-agente.bat e veja se mostra conectado",
+                "visto_em": visto,
+            }
+
+        saida["verificado_em"] = agora
+        return jsonify(saida)
 
     @app.post("/api/estudos/diagnosticar")
     @auth.require_auth

@@ -259,6 +259,10 @@
       : (ups.last_error ? "ultimo erro: " + ups.last_error : "");
 
     $("deviceName").textContent = status.device_name || "pregacao-recorder";
+    // barra de progresso do estudo (S3)
+    if (status.estudos && status.estudos.barra) {
+      pintaProgresso(status.estudos.barra);
+    }
     renderRecovery(status.recovery || []);
     tick();
   }
@@ -434,6 +438,7 @@
       $("connState").textContent = "● reconectando";
       $("connState").className = "bad";
     });
+    source.addEventListener("job_progress", onJobProgress);
     source.addEventListener("status", function (ev) {
       try {
         var data = JSON.parse(ev.data);
@@ -449,7 +454,7 @@
      "upload_inicio", "upload_concluido", "upload_pendente", "upload_falho", "erro",
      "recuperacao", "recuperacao_descartada", "servico_parado", "capture_gap",
      "configuracao", "drive_conectado", "drive_desconectado", "audio_teste",
-     "conversao", "notificacao"].forEach(function (kind) {
+     "conversao", "notificacao", "job_progress"].forEach(function (kind) {
       source.addEventListener(kind, function (ev) {
         try {
           var payload = JSON.parse(ev.data);
@@ -464,6 +469,47 @@
         refresh();
       });
     });
+  }
+
+  // ---------------------------------------------------------------- progresso do estudo (S3)
+  function pintaProgresso(b) {
+    var card = $("progressoCard");
+    if (!card) return;
+    if (!b || !b.mostrar) { card.classList.add("hidden"); return; }
+    card.classList.remove("hidden");
+    var bar = $("progressoBar");
+    if (bar) bar.style.width = Math.max(0, Math.min(100, b.percentual || 0)) + "%";
+    var desc = $("progressoDesc");
+    if (desc) desc.textContent = b.descricao || "";
+    var et = $("progressoEtapas");
+    if (et) {
+      et.innerHTML = "";
+      (b.etapas || []).forEach(function (e) {
+        var s = document.createElement("span");
+        s.className = "etapa tom-" + (e.tom || "pendente");
+        s.textContent = e.nome;
+        et.appendChild(s);
+      });
+    }
+  }
+
+  // handler SSE dedicado: atualiza a barra na hora + refresh para trazer a barra completa
+  function onJobProgress(ev) {
+    try {
+      var payload = JSON.parse(ev.data);
+      var data = payload.data || {};
+      if (data.percentual != null || data.etapa) {
+        // snapshot imediato do payload (para feedback rapido no celular/painel)
+        var b = {
+          mostrar: true,
+          percentual: data.percentual || 0,
+          descricao: data.descricao || data.etapa || "",
+          etapas: [] // render() vai preencher a partir de /api/status
+        };
+        pintaProgresso(b);
+      }
+    } catch (e) {}
+    refresh();
   }
 
   // ---------------------------------------------------------------- config
@@ -555,6 +601,56 @@
     if (b2) b2.style.display = acao;
   }
 
+  // ---------------------------------------------------------------- saude das integracaoes (S3)
+  function estadoParaClasse(estado) {
+    // conectado / nao_configurado / verificando / autenticacao_necessaria / erro
+    switch (estado) {
+      case "conectado": return "conectado";
+      case "nao_configurado": return "nao_configurado";
+      case "verificando": return "verificando";
+      case "autenticacao_necessaria": return "autenticacao_necessaria";
+      case "erro": return "erro";
+      default: return "verificando";
+    }
+  }
+
+  function pintaIntegracao(el, bloco) {
+    var dotClass = estadoParaClasse(bloco.estado);
+    el.innerHTML =
+      "<div class='integracoes-head'>" +
+      "  <span class='integracoes-dot " + dotClass + "'></span>" +
+      "  <span class='integracoes-name'>" + bloco.nome + "</span>" +
+      "</div>" +
+      "<div class='integracoes-detalhe'>" + (bloco.detalhe || "") + "</div>" +
+      (bloco.acao ? "<span class='integracoes-acao'>" + bloco.acao + "</span>" : "");
+  }
+
+  function loadIntegracoes() {
+    var box = $("integracoesLista");
+    if (!box) return;
+    api("/api/integracoes").then(function (data) {
+      if (!data) { box.textContent = "sem dados"; return; }
+      box.innerHTML = "";
+      var grid = document.createElement("div");
+      grid.className = "integracoes-grid";
+      var ordem = ["Drive", "NotebookLM", "WhatsApp", "EMQX"];
+      var chaves = ["drive", "notebooklm", "whatsapp", "emqx"];
+      for (var i = 0; i < ordem.length; i++) {
+        var key = chaves[i];
+        var bloco = data[key];
+        if (!bloco) continue;
+        var item = document.createElement("div");
+        item.className = "integracoes-item";
+        bloco.nome = ordem[i];
+        pintaIntegracao(item, bloco);
+        grid.appendChild(item);
+      }
+      box.appendChild(grid);
+    }).catch(function (e) {
+      box.textContent = "falha ao carregar: " + e.message;
+    });
+  }
+
   function loadConfig() {
     api("/api/config").then(function (data) {
       var c = data.config || {};
@@ -588,6 +684,7 @@
       $("cfgDriveFolder").textContent = d.folder || "Pregacoes";
       // o payload completo (credenciais/formatos) so vem para administrador
       if (data.admin) loadAdvanced(data);
+      loadIntegracoes();
     }).catch(function (e) { toast(e.message, "error"); });
   }
 
