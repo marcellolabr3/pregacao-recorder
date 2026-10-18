@@ -1,0 +1,25 @@
+# ---------------------------------------------------------------------------
+# pregacao-recorder - acesso ao Tailscale sem senha para o servico web/watchdog
+#
+# Lista FECHADA de comandos: o servico roda como usuario comum e precisa ler o
+# status / iniciar a autenticacao do Tailscale (binario que exige root).
+# Nada aqui permite instalar pacotes, editar arquivos ou abrir um shell.
+#
+# Instalado por install.sh em /etc/sudoers.d/pregacao-network (0440).
+# ---------------------------------------------------------------------------
+Cmnd_Alias PREG_TAILSCALE = \
+    /usr/bin/tailscale status, \
+    /usr/bin/tailscale status --json, \
+    /usr/bin/tailscale up, \
+    /usr/bin/tailscale up --accept-dns=false, \
+    /usr/bin/tailscale login, \
+    /usr/bin/tailscale version, \
+    /usr/bin/tailscale ip, \
+    /usr/bin/tailscale ip -4, \
+    /usr/bin/tailscale netcheck
+
+Cmnd_Alias PREG_TAILSCALE_CTL = \
+    /usr/bin/systemctl is-active tailscaled, \
+    /usr/bin/systemctl is-enabled tailscaled
+
+@USUARIO@ ALL=(root) NOPASSWD: PREG_TAILSCALE, PREG_TAILSCALE_CTL

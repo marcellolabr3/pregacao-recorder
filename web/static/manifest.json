@@ -1,0 +1,10 @@
+{
+  "name": "pregacao-recorder",
+  "short_name": "Gravador",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "description": "Estacao de gravacao de pregacoes",
+  "icons": []
+}

@@ -1,0 +1,36 @@
+[Unit]
+Description=pregacao-recorder - watchdog de rede (mantem o equipamento acessivel)
+Documentation=file:///opt/pregacao-recorder/docs/REDE.md
+# Sobe depois do NetworkManager e ANTES do servico de gravacao, conforme a
+# ordem de boot: rede -> Access Point (se necessario) -> web -> gravacao.
+After=NetworkManager.service network-pre.target
+Wants=NetworkManager.service
+Before=pregacao-recorder.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/pregacao-recorder
+Environment=PREGACAO_HOME=/opt/pregacao-recorder
+EnvironmentFile=-/opt/pregacao-recorder/.env
+ExecStart=/usr/bin/python3 -m app.network.watchdog
+Restart=always
+RestartSec=10
+
+# Logs no journal: `journalctl -u pregacao-netwatch -f`
+# (linhas com as tags [NETWORK] e [TAILSCALE])
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pregacao-net
+
+# ATENCAO: NAO usar NoNewPrivileges aqui. O watchdog precisa de duas
+# escaladas legitimas para manter o sistema acessivel:
+#   1) `sudo -n tailscale ...`  (lista fechada em /etc/sudoers.d/)
+#   2) acoes do NetworkManager via polkit (regra do servico)
+# Tanto nmcli quanto tailscale sao binarios do proprio sistema.
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+// ---------------------------------------------------------------------------
+// pregacao-recorder - autoriza o NetworkManager para o usuario do equipamento
+//
+// Motivo: a regra padrao do Debian/NetworkManager exige
+//   subject.local && subject.active
+// e um servico systemd nao tem sessao ativa ("active"), por isso o nmcli
+// retornava "not authorized". Testado no equipamento: nem "local" nem
+// "active" valem para processo sem sessao logind (servico ou runuser), o
+// criterio util aqui e apenas o usuario. A regra continua limitada ao
+// usuario do equipamento e a acoes de rede do NetworkManager.
+//
+// Instalado por install.sh em /etc/polkit-1/rules.d/
+// ---------------------------------------------------------------------------
+polkit.addRule(function(action, subject) {
+    if (subject.user == "@USUARIO@") {
+        if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0) {
+            return polkit.Result.YES;
+        }
+    }
+    return polkit.Result.NOT_HANDLED;
+});

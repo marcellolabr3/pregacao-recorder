@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- cabecalho: aparelho + ONLINE/OFFLINE -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/txtDispositivo"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/titulo_principal"
+                android:textColor="@color/texto"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/badgeConexao"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@color/offline"
+                android:paddingStart="12dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="4dp"
+                android:text="@string/estado_offline"
+                android:textColor="#FFFFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- aviso de destino caido: o SSD desconectou e as gravacoes passaram
+             a cair no cartao SD. Fica no topo, antes de tudo, porque e' o
+             unico problema que o operador precisa ver antes de gravar. -->
+        <TextView
+            android:id="@+id/txtAvisoArmazenamento"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@color/atencao"
+            android:padding="12dp"
+            android:textColor="#FFFFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <!-- ESTADO -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/rotulo_estado"
+            android:textColor="@color/texto_fraco"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/txtEstado"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/cartao"
+            android:gravity="center"
+            android:padding="20dp"
+            android:text="@string/aguardando"
+            android:textColor="@color/texto_fraco"
+            android:textSize="26sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/txtDetalhe"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/cartao"
+            android:gravity="center"
+            android:paddingBottom="12dp"
+            android:textColor="@color/texto_fraco"
+            android:textSize="13sp" />
+
+        <!-- TEMPO -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/rotulo_tempo"
+            android:textColor="@color/texto_fraco"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/txtTempo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/cartao"
+            android:fontFamily="monospace"
+            android:gravity="center"
+            android:padding="16dp"
+            android:text="@string/tempo_zero"
+            android:textColor="@color/texto"
+            android:textSize="40sp"
+            android:textStyle="bold" />
+
+        <!-- acao principal -->
+        <Button
+            android:id="@+id/btnAcao"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:enabled="false"
+            android:text="@string/btn_iniciar"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/txtMensagem"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:padding="8dp"
+            android:textColor="@color/atencao"
+            android:textSize="13sp" />
+
+        <!-- UPLOAD -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/rotulo_upload"
+            android:textColor="@color/texto_fraco"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/cartao"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/txtUpload"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/upload_off"
+                android:textColor="@color/texto"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <ProgressBar
+                android:id="@+id/barraUpload"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:indeterminate="true"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- ARQUIVO -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/rotulo_arquivo"
+            android:textColor="@color/texto_fraco"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/txtArquivo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/cartao"
+            android:padding="16dp"
+            android:text="@string/arquivo_nenhum"
+            android:textColor="@color/texto"
+            android:textSize="14sp" />
+
+        <!-- EVENTOS -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/rotulo_eventos"
+            android:textColor="@color/texto_fraco"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/txtEventos"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/cartao"
+            android:fontFamily="monospace"
+            android:padding="16dp"
+            android:text="@string/eventos_nenhum"
+            android:textColor="@color/texto_fraco"
+            android:textSize="12sp" />
+    </LinearLayout>
+</ScrollView>

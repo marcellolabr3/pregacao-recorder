@@ -1,0 +1,42 @@
+{
+  "device_name": "Pulpito",
+  "device_id": "",
+  "audio": {
+    "device": "auto",
+    "format": "S16_LE",
+    "sample_rate": 44100,
+    "channels": 2,
+    "segment_seconds": 60,
+    "encoder": "mp3",
+    "bitrate": 128,
+    "mp3_quality": 2
+  },
+  "storage": {
+    "recordings_dir": "",
+    "min_free_mb": 512,
+    "retention_days": 0,
+    "keep_local": true
+  },
+  "drive": {
+    "enabled": true,
+    "auto_upload": true,
+    "folder_id": "",
+    "folder_name": "Pregacoes",
+    "keep_local": true,
+    "retention_days": 0,
+    "client_id": "",
+    "client_secret": ""
+  },
+  "network": {
+    "check_host": "www.googleapis.com",
+    "check_port": 443,
+    "retry_seconds": 30
+  },
+  "setup": {
+    "completed": false
+  },
+  "web": {
+    "host": "0.0.0.0",
+    "port": 8080
+  }
+}

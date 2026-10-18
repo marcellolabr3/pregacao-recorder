@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Wrapper do comando `pregacao` (tambem instalado em /usr/local/bin pelo install.sh)
+set -euo pipefail
+APP_DIR="${PREGACAO_HOME:-/opt/pregacao-recorder}"
+export PREGACAO_HOME="${APP_DIR}"
+cd "${APP_DIR}"
+PY="${APP_DIR}/.venv/bin/python"
+[[ -x "${PY}" ]] || PY=python3
+exec "${PY}" -m app.cli "$@"

@@ -1,0 +1,17 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!--
+  pregacao-recorder - publica o painel na rede local
+
+  Garante que "pregacao-pi.local:8080" apareca na rede da igreja mesmo quando
+  o hostname nao for anunciado automaticamente. Instalado por install.sh em
+  /etc/avahi/services/pregacao-http.service
+-->
+<service-group>
+  <name replace-wildcards="yes">%h - pregacao-recorder</name>
+  <service>
+    <type>_http._tcp</type>
+    <port>8080</port>
+    <txt-record>path=/ txt=pregacao-recorder</txt-record>
+  </service>
+</service-group>

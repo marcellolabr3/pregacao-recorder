@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="fundo">#FFF7F7F7</color>
+    <color name="cartao">#FFFFFFFF</color>
+    <color name="texto">#FF212121</color>
+    <color name="texto_fraco">#FF757575</color>
+    <color name="online">#FF2E7D32</color>
+    <color name="offline">#FF9E9E9E</color>
+    <color name="gravando">#FFC62828</color>
+    <color name="pronto">#FF1565C0</color>
+    <color name="atencao">#FFE65100</color>
+    <color name="enviando">#FF6A1B9A</color>
+    <color name="enviado">#FF2E7D32</color>
+    <!-- fundo do icone do aplicativo -->
+    <color name="ic_fundo">#FF1565C0</color>
+</resources>

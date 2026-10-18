@@ -1,0 +1,44 @@
+[Unit]
+Description=pregacao-recorder - agente de controle remoto (servico remoto)
+Documentation=file:///opt/pregacao-recorder/docs/AGENTE.md
+# Sobe DEPOIS do servico de gravacao: o agente fala com a API local.
+After=pregacao-recorder.service network-online.target
+Wants=network-online.target
+# limite de reinicios: evita loop infinito se o agente quebrar de vez
+# (estas chaves pertencem a [Unit] desde o systemd 230)
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/pregacao-recorder
+Environment=PREGACAO_HOME=/opt/pregacao-recorder
+# arquivo de log proprio: dois processos nao podem rodar o mesmo rotativo
+Environment=PREGACAO_LOG_FILE=pregacao-remote.log
+EnvironmentFile=-/opt/pregacao-recorder/.env
+ExecStart=/usr/bin/python3 -m app.remote.agent
+# on-failure (nao always): sem PREGACAO_REMOTE_HOST o agente termina com 0
+# e fica inativo, sem ficar reiniciando a toa. Com configuracao, falha de
+# execucao reinicia em 5 s.
+Restart=on-failure
+RestartSec=5
+
+# Encerramento limpo: publica "offline" antes de sair (o LWT cobre queda)
+TimeoutStopSec=15
+KillSignal=SIGTERM
+
+# Logs no journal: `journalctl -u pregacao-remote -f` (tag [REMOTE])
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pregacao-remote
+
+# endurecimento: este processo nao escala privilegio nenhum (so fala com a
+# API local por HTTP e com o servico remoto por MQTT/TLS)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

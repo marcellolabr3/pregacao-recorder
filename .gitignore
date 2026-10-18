@@ -1,0 +1,38 @@
+# Segredos (nunca versionar)
+.env
+.env.*
+CONTEXTO.md
+config/google_credentials.json
+config/google_token.json
+config/config.json
+
+# Runtime (dados gerados)
+logs/
+recordings/
+recovery/
+data/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+.venv.old/
+venv/
+
+# Artefatos de build (gerados; versoes ficam nos Releases do GitHub)
+*.apk
+/*.zip
+flutter/pregacao_controle/build/
+flutter/pregacao_controle/.dart_tool/
+flutter/pregacao_controle/ios/Pods/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+node_modules/
+
+# Editores
+.vscode/
+.idea/
+site/

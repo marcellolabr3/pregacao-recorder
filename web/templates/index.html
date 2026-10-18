@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>pregacao-recorder</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="manifest" href="/static/manifest.json">
+</head>
+<body data-view="home">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">●</span>
+    <span id="deviceName">{{ device_name }}</span>
+  </div>
+  <nav class="topnav">
+    <button id="navHome" class="navbtn active" type="button">GRAVAR</button>
+    <button id="navHistory" class="navbtn" type="button">HISTORICO</button>
+    <button id="navConfig" class="navbtn" type="button">CONFIG</button>
+  </nav>
+</header>
+
+<!-- ============================ LOGIN ============================ -->
+<div id="loginOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <h2>Acesso restrito</h2>
+    <p>Informe o PIN do equipamento para controlar gravacoes.</p>
+    <input id="pinInput" type="password" inputmode="numeric" autocomplete="off"
+           maxlength="12" placeholder="PIN">
+    <p id="pinError" class="msg-error hidden">PIN incorreto</p>
+    <button id="pinBtn" class="btn btn-primary btn-block" type="button">ENTRAR</button>
+    <p class="hint">A interface funciona apenas na rede local da igreja.</p>
+  </div>
+</div>
+
+<!-- ============== LOGIN ADMINISTRADOR (CONFIGURACOES AVANCADAS) ============== -->
+<div id="adminOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <h2>Configuracoes avancadas</h2>
+    <p>Area restrita ao administrador do equipamento.</p>
+    <input id="adminPinInput" type="password" inputmode="numeric" autocomplete="off"
+           maxlength="12" placeholder="PIN do administrador">
+    <p id="adminPinError" class="msg-error hidden">PIN incorreto</p>
+    <div class="btn-row">
+      <button id="adminCancel" class="btn btn-ghost" type="button">CANCELAR</button>
+      <button id="adminOk" class="btn btn-primary" type="button">ENTRAR</button>
+    </div>
+    <p class="hint">Nao e necessario para gravar ou acompanhar envios.</p>
+  </div>
+</div>
+
+<!-- ============================ AVISOS RECUPERACAO ============================ -->
+<section id="recoveryPanel" class="card danger hidden">
+  <div class="card-title">⚠ GRAVACAO INTERROMPIDA</div>
+  <p class="muted">Uma gravacao foi interrompida inesperadamente (queda de energia ou reinicializacao).
+     O audio encontrado esta preservado e <strong>nao sera apagado automaticamente</strong>.</p>
+  <div id="recoveryList"></div>
+</section>
+
+<!-- ============================ PAINEL PRINCIPAL ============================ -->
+<main id="viewHome">
+
+  <section class="status-card" id="statusCard">
+    <div class="status-banner" id="banner">PRONTO</div>
+    <div class="status-detail" id="stateDetail">Aguardando inicio</div>
+
+    <div class="timer" id="timer">00:00:00</div>
+
+    <dl class="meta">
+      <div><dt>Inicio</dt><dd id="startTime">--</dd></div>
+      <div><dt>Arquivo</dt><dd id="fileSize">--</dd></div>
+      <div><dt>Segmentos</dt><dd id="segmentCount">--</dd></div>
+    </dl>
+  </section>
+
+  <!-- NUNCA um unico botao: iniciar e finalizar sao acoes distintas -->
+  <section class="actions">
+    <button id="btnStart" class="btn btn-start btn-block" type="button">
+      INICIAR GRAVACAO
+    </button>
+    <div class="separator"></div>
+    <button id="btnStop" class="btn btn-stop btn-block" type="button" disabled>
+      FINALIZAR GRAVACAO
+    </button>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <div class="card-title">ARMAZENAMENTO</div>
+      <div class="big" id="freeSpace">--</div>
+      <div class="muted" id="storagePath">--</div>
+      <div class="bar"><span id="storageBar"></span></div>
+      <div class="muted" id="storageCount"></div>
+      <div class="hint" id="storageAviso" style="display:none"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">REDE</div>
+      <div class="big" id="networkState">--</div>
+      <div class="muted" id="networkHint">verificando...</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">INTERFACE DE AUDIO</div>
+      <div class="big" id="audioDevice">--</div>
+      <div class="muted" id="audioName">--</div>
+      <button id="btnAudioTest" class="btn btn-ghost btn-sm" type="button">TESTAR SINAL</button>
+      <div class="muted" id="audioTestResult"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">GOOGLE DRIVE</div>
+      <div class="big" id="driveState">--</div>
+      <div class="muted" id="driveHint">--</div>
+      <div class="muted" id="uploadStats"></div>
+      <button id="btnRetryUploads" class="btn btn-ghost btn-sm" type="button">REENVIAR FILA</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">ULTIMA GRAVACAO</div>
+      <div class="mono" id="lastFile">nenhuma</div>
+      <div class="muted" id="lastFileMeta"></div>
+      <div class="muted" id="lastUpload"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">NOTIFICACOES</div>
+      <ul id="notifications" class="notif"></ul>
+    </div>
+  </section>
+</main>
+
+<!-- ============================ HISTORICO ============================ -->
+<main id="viewHistory" class="hidden">
+  <section class="card">
+    <div class="card-title">HISTORICO DE GRAVACOES</div>
+    <div class="muted" id="histSummary">carregando...</div>
+    <div class="histlist" id="histList"></div>
+  </section>
+</main>
+
+<!-- ===================== CONFIGURACAO (USUARIO COMUM) ===================== -->
+<main id="viewConfig" class="hidden">
+  <form id="configForm" class="stack">
+    <section class="card">
+      <div class="card-title">EQUIPAMENTO</div>
+      <label>Nome do equipamento
+        <input name="device_name" type="text" maxlength="40">
+      </label>
+    </section>
+
+    <section class="card">
+      <div class="card-title">GOOGLE DRIVE</div>
+      <div class="big" id="cfgDriveState">--</div>
+      <dl class="meta">
+        <div><dt>Conta</dt><dd id="cfgDriveAccount">--</dd></div>
+        <div><dt>Pasta</dt><dd id="cfgDriveFolder">--</dd></div>
+      </dl>
+      <div class="btn-row">
+        <button id="btnDriveConnect" class="btn btn-primary" type="button">CONECTAR CONTA GOOGLE</button>
+        <button id="btnDriveTest" class="btn btn-ghost" type="button">TESTAR CONEXAO</button>
+        <button id="btnDriveDisconnect" class="btn btn-ghost" type="button">DESCONECTAR</button>
+      </div>
+      <p class="hint">O Google abre a janela oficial de login. Nenhuma senha e
+         guardada neste equipamento - apenas a autorizacao da conta.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-title">ESTUDO AUTOMATICO (NOTEBOOKLM)</div>
+      <label><input name="estudos.ativo" type="checkbox">
+        Gerar estudo e enviar o PDF por WhatsApp apos gravar</label>
+      <label>Numero do WhatsApp (com DDI)
+        <input name="estudos.whatsapp" type="tel" inputmode="numeric"
+               maxlength="16" placeholder="5521999999999">
+      </label>
+      <div class="big" id="cfgNlmState">--</div>
+      <dl class="meta">
+        <div><dt>Estudos</dt><dd id="cfgNlmPend">--</dd></div>
+      </dl>
+      <div class="btn-row">
+        <button id="btnNlmCheck" class="btn btn-ghost" type="button">DIAGNOSTICAR SESSAO</button>
+        <button id="btnNlmLogin" class="btn btn-primary" type="button">RENOVAR LOGIN</button>
+      </div>
+      <p class="hint">A sessao do NotebookLM e separada da conta Google do
+         Drive. Se expirar, os estudos ficam em espera (nada se perde) e
+         retomam sozinhos apos o login. Apos parar a gravacao, o NotebookLM
+         monta o estudo, gera o PDF e envia para este numero - pode levar
+         alguns minutos.</p>
+    </section>
+
+    <div class="btn-row">
+      <button class="btn btn-primary btn-block" type="submit">SALVAR</button>
+    </div>
+    <div id="configMsg" class="muted"></div>
+
+    <button id="btnAdvanced" class="btn btn-ghost btn-block" type="button">
+      CONFIGURACOES AVANCADAS
+    </button>
+    <p class="hint">Audio, armazenamento, credenciais e rede: somente para o administrador.</p>
+  </form>
+</main>
+
+<!-- ================== CONFIGURACOES AVANCADAS (ADMIN) ================== -->
+<main id="viewAdvanced" class="hidden">
+  <form id="advancedForm" class="stack">
+    <section class="card">
+      <div class="card-title">AUDIO</div>
+      <label>Dispositivo de captura
+        <select name="audio.device" id="cfgDevice"></select>
+      </label>
+      <div class="muted" id="cfgDeviceDetected"></div>
+      <div class="row">
+        <label>Formato
+          <select name="audio.format" id="cfgFormat"></select>
+        </label>
+        <label>Sample rate
+          <select name="audio.sample_rate" id="cfgRate"></select>
+        </label>
+      </div>
+      <div class="row">
+        <label>Canais
+          <select name="audio.channels">
+            <option value="2">2 (estereo)</option>
+            <option value="1">1 (mono)</option>
+          </select>
+        </label>
+        <label>Encoder final
+          <select name="audio.encoder" id="cfgEncoder"></select>
+        </label>
+      </div>
+      <div class="row">
+        <label>Bitrate (kbps)
+          <select name="audio.bitrate" id="cfgBitrate"></select>
+        </label>
+        <label>Tamanho do segmento (s)
+          <input name="audio.segment_seconds" type="number" min="10" max="900" step="5">
+        </label>
+      </div>
+      <p class="hint">Segmentos curtos limitam a perda em caso de queda de energia.
+         O usuario ve apenas uma gravacao unica.</p>
+      <div id="cfgFfmpeg" class="hint"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">ARMAZENAMENTO</div>
+      <label>Onde gravar
+        <select name="storage.recordings_dir" id="cfgDestino"></select>
+      </label>
+      <div class="hint" id="cfgDestinoInfo"></div>
+      <div class="hint" id="cfgDestinoAviso" style="display:none"></div>
+      <div class="row">
+        <label>Espaco minimo (MB)
+          <input name="storage.min_free_mb" type="number" min="0" max="100000">
+        </label>
+        <label>Retencao local (dias, 0 = sempre)
+          <input name="storage.retention_days" type="number" min="0" max="3650">
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">GOOGLE DRIVE (TECNICO)</div>
+      <label class="check">
+        <input name="drive.enabled" type="checkbox"> Habilitar integracao com Drive
+      </label>
+      <label class="check">
+        <input name="drive.auto_upload" type="checkbox"> Upload automatico apos gravar
+      </label>
+      <label class="check">
+        <input name="drive.keep_local" type="checkbox"> Manter copia local apos o upload
+      </label>
+      <label>Pasta de destino no Drive
+        <input name="drive.folder_name" type="text" placeholder="Pregacoes">
+      </label>
+      <label>Client ID (OAuth do Google)
+        <input name="drive.client_id" type="text" placeholder="xxxx.apps.googleusercontent.com"
+               autocomplete="off" spellcheck="false">
+      </label>
+      <label>Client Secret
+        <input name="drive.client_secret" type="password"
+               placeholder="(digite apenas para cadastrar ou trocar)" autocomplete="new-password">
+      </label>
+      <div class="muted" id="cfgDriveCreds">credenciais: --</div>
+      <div class="btn-row">
+        <button id="btnDriveTestFolder" class="btn btn-ghost" type="button">TESTAR PASTA</button>
+      </div>
+      <p class="hint">Credenciais definidas uma unica vez pelo administrador; o
+         usuario final nunca as enxerga.</p>
+    </section>
+
+    <section class="card" id="netCard">
+      <div class="card-title">REDE</div>
+
+      <dl class="meta net-summary">
+        <div><dt>Internet</dt><dd id="netInternet">--</dd></div>
+        <div class="so-linux"><dt>Ethernet</dt><dd id="netEth">--</dd></div>
+        <div class="so-linux"><dt>Wi-Fi</dt><dd id="netWifi">--</dd></div>
+        <div class="so-linux"><dt>Acesso remoto</dt><dd id="netRemote">--</dd></div>
+      </dl>
+      <div class="btn-row">
+        <button id="btnNetTest" class="btn btn-ghost btn-sm" type="button">TESTAR CONEXAO</button>
+        <button id="btnNetRefresh" class="btn btn-ghost btn-sm" type="button">ATUALIZAR</button>
+      </div>
+      <div class="muted" id="netMsg"></div>
+
+      <div class="subhead so-linux">ETHERNET</div>
+      <dl class="meta so-linux">
+        <div><dt>Status</dt><dd id="netEthState">--</dd></div>
+        <div><dt>IP</dt><dd id="netEthIp">--</dd></div>
+        <div><dt>Gateway</dt><dd id="netEthGw">--</dd></div>
+      </dl>
+
+      <div class="subhead so-linux">WI-FI</div>
+      <dl class="meta so-linux">
+        <div><dt>Rede</dt><dd id="netWifiSsid">--</dd></div>
+        <div><dt>IP</dt><dd id="netWifiIp">--</dd></div>
+        <div><dt>Sinal</dt><dd id="netWifiSignal">--</dd></div>
+        <div><dt>Gateway</dt><dd id="netWifiGw">--</dd></div>
+      </dl>
+      <div class="btn-row so-linux">
+        <button id="btnWifiScan" class="btn btn-ghost btn-sm" type="button">PROCURAR REDES</button>
+        <button id="btnWifiDisconnect" class="btn btn-ghost btn-sm" type="button">DESCONECTAR</button>
+        <button id="btnWifiForget" class="btn btn-ghost btn-sm" type="button">ESQUECER REDE</button>
+      </div>
+      <ul id="wifiList" class="wifilist so-linux"><li class="muted">clique em PROCURAR REDES</li></ul>
+      <label class="so-linux">Senha da rede selecionada
+        <input id="wifiPassword" type="password" autocomplete="new-password"
+               placeholder="(vazio = rede aberta)">
+      </label>
+      <div class="btn-row so-linux">
+        <button id="btnWifiConnect" class="btn btn-primary btn-sm" type="button">CONECTAR</button>
+      </div>
+
+      <div class="subhead so-linux">ACCESS POINT DE CONFIGURACAO</div>
+      <dl class="meta so-linux">
+        <div><dt>Status</dt><dd id="netApState">--</dd></div>
+        <div><dt>Rede</dt><dd id="netApSsid">--</dd></div>
+        <div><dt>IP</dt><dd id="netApIp">--</dd></div>
+      </dl>
+      <div class="btn-row so-linux">
+        <button id="btnApOn" class="btn btn-ghost btn-sm" type="button">ATIVAR MODO DE CONFIGURACAO</button>
+        <button id="btnApOff" class="btn btn-ghost btn-sm" type="button">DESATIVAR</button>
+      </div>
+      <p class="hint so-linux">Sem Ethernet e sem Wi-Fi funcional o equipamento ativa esta
+         rede sozinho, para configurar pelo celular. Senha padrao: <strong>pregacao12345</strong>.</p>
+
+      <div class="subhead so-linux">ACESSO REMOTO (TAILSCALE)</div>
+      <dl class="meta so-linux">
+        <div><dt>Status</dt><dd id="netTsState">--</dd></div>
+        <div><dt>Dispositivo</dt><dd id="netTsName">--</dd></div>
+        <div><dt>IP</dt><dd id="netTsIp">--</dd></div>
+      </dl>
+      <div class="btn-row so-linux">
+        <button id="btnTsLogin" class="btn btn-primary btn-sm" type="button">AUTENTICAR</button>
+        <button id="btnTsTest" class="btn btn-ghost btn-sm" type="button">TESTAR ACESSO REMOTO</button>
+      </div>
+      <a id="netTsLink" class="hidden linkblock so-linux" target="_blank" rel="noopener">abrir o link de autenticacao</a>
+
+      <div class="subhead">ACESSOS DO PAINEL</div>
+      <ul id="netUrls" class="notiff"><li class="muted">--</li></ul>
+      <p class="hint">O painel aceita nome local ou IP da rede. Nenhuma porta e
+         aberta no roteador da igreja.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-title">DIAGNOSTICO E LOGS</div>
+      <div class="row">
+        <label>Servidor de teste de internet
+          <input name="network.check_host" type="text" spellcheck="false">
+        </label>
+        <label>Porta
+          <input name="network.check_port" type="number" min="1" max="65535">
+        </label>
+      </div>
+      <label>Tentar envio novamente a cada (s)
+        <input name="network.retry_seconds" type="number" min="5" max="3600">
+      </label>
+      <button id="btnLoadLogs" class="btn btn-ghost btn-sm" type="button">CARREGAR LOGS</button>
+      <pre id="logsBox" class="logsbox">-</pre>
+    </section>
+
+    <div class="btn-row">
+      <button class="btn btn-primary btn-block" type="submit">SALVAR CONFIGURACOES AVANCADAS</button>
+      <button id="btnAdvancedBack" class="btn btn-ghost btn-block" type="button">VOLTAR</button>
+    </div>
+    <div id="advancedMsg" class="muted"></div>
+  </form>
+</main>
+
+<!-- ============================ CONFIRMACAO ============================ -->
+<div id="confirmOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <h2>Tem certeza que deseja finalizar a gravacao?</h2>
+    <p class="muted" id="confirmDetail"></p>
+    <div class="btn-row">
+      <button id="confirmCancel" class="btn btn-ghost" type="button">CANCELAR</button>
+      <button id="confirmOk" class="btn btn-stop" type="button">FINALIZAR</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ASSISTENTE DE PRIMEIRO ACESSO ==================== -->
+<div id="setupOverlay" class="overlay hidden">
+  <div class="overlay-card wide">
+    <h2>CONFIGURACAO INICIAL</h2>
+    <div class="steps" id="setupSteps">
+      <span class="stepdot active" data-dot="1">1 Audio</span>
+      <span class="stepdot" data-dot="2">2 Armazenamento</span>
+      <span class="stepdot" data-dot="3">3 Google Drive</span>
+      <span class="stepdot" data-dot="4">4 Finalizar</span>
+    </div>
+
+    <!-- administrador: protege as trocas tecnicas do assistente -->
+    <div id="wizAdminBlock" class="hidden">
+      <p>PIN do administrador para gravar a configuracao inicial:</p>
+      <input id="wizAdminPin" type="password" inputmode="numeric" autocomplete="off"
+             maxlength="12" placeholder="PIN do administrador">
+      <p id="wizAdminError" class="msg-error hidden">PIN incorreto</p>
+      <button id="wizAdminOk" class="btn btn-primary btn-block" type="button">LIBERAR</button>
+    </div>
+
+    <div id="wizStep1" class="wizstep">
+      <p>Selecione a interface de audio onde chega o som da mesa.</p>
+      <select id="wizDevice"></select>
+      <div class="muted" id="wizDeviceHint"></div>
+      <button id="wizAudioTest" class="btn btn-ghost" type="button">TESTAR AUDIO</button>
+      <div class="muted" id="wizAudioResult"></div>
+    </div>
+
+    <div id="wizStep2" class="wizstep hidden">
+      <p>Pasta onde as gravacoes serao salvas.</p>
+      <input id="wizDir" type="text" spellcheck="false">
+      <div class="muted" id="wizFree">Espaco livre: --</div>
+    </div>
+
+    <div id="wizStep3" class="wizstep hidden">
+      <p>Conecte a conta Google que recebera as gravacoes. O Google abre a
+         janela oficial de login.</p>
+      <div class="muted" id="wizDriveStatus">--</div>
+      <button id="wizDriveConnect" class="btn btn-primary btn-block" type="button">
+        CONECTAR GOOGLE DRIVE
+      </button>
+      <p class="hint">E opcional: pode ser feito depois, em CONFIG.</p>
+    </div>
+
+    <div id="wizStep4" class="wizstep hidden">
+      <p>Pronto! O equipamento ja pode ser usado.</p>
+      <ul class="hint wizsummary">
+        <li>Audio: <span id="wizSumAudio">--</span></li>
+        <li>Gravacoes: <span id="wizSumDir">--</span></li>
+        <li>Google Drive: <span id="wizSumDrive">--</span></li>
+      </ul>
+      <p class="hint">Esta tela nao sera exibida de novo.</p>
+    </div>
+
+    <div class="btn-row">
+      <button id="wizBack" class="btn btn-ghost" type="button">VOLTAR</button>
+      <button id="wizNext" class="btn btn-primary" type="button">AVANCAR</button>
+      <button id="wizFinish" class="btn btn-start hidden" type="button">CONCLUIR CONFIGURACAO</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts" class="toasts"></div>
+
+<footer class="foot">
+  <span id="connState">● conectando</span>
+  <span id="clock">--:--</span>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

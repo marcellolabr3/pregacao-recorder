@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tema do app: mesmo visual do tema do sistema, mas com o fundo cinza claro
+  definido na propria janela. Assim os cartoes brancos ficam visiveis sem o
+  layout precisar repintar a tela inteira (evita "overdraw").
+-->
+<resources>
+    <style name="TemaPregacao" parent="@android:style/Theme.Material.Light.DarkActionBar">
+        <item name="android:windowBackground">@color/fundo</item>
+        <item name="android:colorAccent">@color/pronto</item>
+    </style>
+</resources>

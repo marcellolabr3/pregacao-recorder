@@ -1,0 +1,11 @@
+Flask>=2.2,<4
+Werkzeug>=2.2
+waitress>=2.1,<4
+
+# Integração com Google Drive (obrigatória apenas para o upload)
+google-api-python-client>=2.70
+google-auth-oauthlib>=1.0
+google-auth-httplib2>=0.1
+
+# Controle remoto (Remote Agent) - MQTT sobre TLS
+paho-mqtt>=1.6,<3

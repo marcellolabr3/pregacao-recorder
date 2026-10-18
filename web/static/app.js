@@ -1,0 +1,1318 @@
+/* pregacao-recorder - interface web
+   O NAVEGADOR NUNCA decide se o Raspberry esta gravando.
+   Ele apenas exibe o estado devolvido pelo servidor (fonte de verdade). */
+
+(function () {
+  "use strict";
+
+  var status = null;
+  var authed = false;
+  var pinRequired = false;
+  var isAdmin = false;
+  var wizStep = 1;              // assistente de primeiro acesso
+  var clockOffset = 0;      // servidor - navegador
+  var source = null;
+  var notifCount = 0;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------------------------------------------------------------- utils
+  function api(path, method, body) {
+    return fetch(path, {
+      method: method || "GET",
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: "same-origin"
+    }).then(function (resp) {
+      if (resp.status === 401) {
+        authed = false;
+        showLogin(true);
+        throw new Error("PIN obrigatorio");
+      }
+      return resp.json().catch(function () { return {}; }).then(function (data) {
+        if (!resp.ok) {
+          var err = new Error(data.message || ("erro " + resp.status));
+          err.data = data;
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+
+  function hms(total) {
+    total = Math.max(0, Math.floor(total));
+    var h = Math.floor(total / 3600);
+    var m = Math.floor((total % 3600) / 60);
+    var s = total % 60;
+    return pad(h) + ":" + pad(m) + ":" + pad(s);
+  }
+
+  function bytes(v) {
+    if (v === null || v === undefined) return "--";
+    var u = ["B", "KB", "MB", "GB", "TB"], i = 0;
+    v = Number(v);
+    while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+    return (i === 0 ? v : v.toFixed(1)) + " " + u[i];
+  }
+
+  function hora(ts) {
+    if (!ts) return "--";
+    var d = new Date(ts * 1000);
+    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  function dataHora(ts) {
+    if (!ts) return "--";
+    var d = new Date(ts * 1000);
+    return pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + "/" + d.getFullYear() +
+           " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  // ---------------------------------------------------------------- toasts
+  function toast(message, level) {
+    var box = $("toasts");
+    var el = document.createElement("div");
+    el.className = "toast " + (level || "info");
+    el.textContent = message;
+    box.appendChild(el);
+    setTimeout(function () {
+      el.style.transition = "opacity .4s";
+      el.style.opacity = "0";
+      setTimeout(function () { el.remove(); }, 400);
+    }, 5200);
+  }
+
+  function addNotif(message, level, ts) {
+    var list = $("notifications");
+    var li = document.createElement("li");
+    var lvl = document.createElement("span");
+    lvl.className = "lvl " + (level || "info");
+    var body = document.createElement("div");
+    var txt = document.createElement("span");
+    txt.textContent = message;
+    var time = document.createElement("time");
+    time.textContent = hora((ts || Date.now() / 1000));
+    body.appendChild(txt);
+    body.appendChild(time);
+    li.appendChild(lvl);
+    li.appendChild(body);
+    list.insertBefore(li, list.firstChild);
+    notifCount++;
+    while (list.children.length > 40) list.removeChild(list.lastChild);
+  }
+
+  // ---------------------------------------------------------------- login
+  function showLogin(show) {
+    $("loginOverlay").classList.toggle("hidden", !show);
+    if (show) setTimeout(function () { $("pinInput").focus(); }, 60);
+  }
+
+  function tryLogin() {
+    var pin = $("pinInput").value;
+    api("/api/login", "POST", { pin: pin }).then(function () {
+      authed = true;
+      $("pinError").classList.add("hidden");
+      $("pinInput").value = "";
+      showLogin(false);
+      start();
+      api("/api/me").then(function (me) {
+        isAdmin = !!me.admin;
+        if (me.setup_needed) showSetup();
+      }).catch(function () {});
+    }).catch(function () {
+      $("pinError").classList.remove("hidden");
+      $("pinInput").select();
+    });
+  }
+
+  // ---------------------------------------------------------------- render
+  var BANNER = {
+    IDLE: ["PRONTO", "ready"],
+    RECORDING: ["GRAVANDO", "recording"],
+    FINALIZING: ["FINALIZANDO", "uploading"],
+    UPLOADING: ["ENVIANDO", "uploading"],
+    COMPLETED: ["PRONTO", "ready"],
+    RECOVERY_REQUIRED: ["ATENCAO", "attention"],
+    ERROR: ["ATENCAO", "error"]
+  };
+
+  function render() {
+    if (!status) return;
+    var st = status.state || "IDLE";
+    var map = BANNER[st] || ["PRONTO", "ready"];
+    var bannerText = status.banner && st !== "IDLE" && st !== "COMPLETED"
+      ? status.banner : map[0];
+    if (st === "IDLE" || st === "COMPLETED") bannerText = "PRONTO";
+
+    $("banner").textContent = bannerText;
+    var card = $("statusCard");
+    card.className = "status-card " + map[1];
+    $("stateDetail").textContent = status.detail ||
+      (st === "IDLE" ? "Aguardando inicio" : map[0]);
+
+    var rec = status.recording || {};
+    var startedAt = rec.active ? rec.started_at : (st === "RECORDING" ? status.started_at : null);
+
+    if (st === "RECORDING") {
+      $("startTime").textContent = startedAt ? dataHora(startedAt) : "--";
+      $("segmentCount").textContent = rec.segments || 0;
+      $("fileSize").textContent = bytes(rec.bytes);
+    } else {
+      $("startTime").textContent = "--";
+      $("segmentCount").textContent = "--";
+      $("fileSize").textContent = "--";
+    }
+    card.dataset.started = startedAt || "";
+
+    // botoes: acoes separadas, sem toggle
+    var recovery = (status.recovery || []).length > 0;
+    $("btnStart").disabled = (st === "RECORDING" || st === "FINALIZING" ||
+                              st === "UPLOADING" || recovery);
+    $("btnStop").disabled = (st !== "RECORDING");
+
+    // armazenamento
+    var disk = status.storage || {};
+    if (disk.ok) {
+      $("freeSpace").textContent = bytes(disk.free_mb * 1024 * 1024) + " livres";
+      $("storagePath").textContent = disk.path;
+      var pct = disk.used_percent || 0;
+      $("storageBar").style.width = pct + "%";
+      $("storageBar").className = pct > 90 ? "crit" : (pct > 75 ? "warn" : "");
+      var summ = status.storage_detail || {};
+      $("storageCount").textContent = (summ.count || 0) + " arquivo(s) gravado(s)";
+    } else {
+      $("freeSpace").textContent = "SEM DISCO";
+      $("storagePath").textContent = disk.error || "verifique o armazenamento USB";
+    }
+
+    // destino de gravacao: com o SSD desmontado o diretorio configurado
+    // continua existindo dentro do cartao SD e a gravacao "funciona" la -
+    // sem este aviso a troca passaria despercebida
+    var avisoDestino = status.storage_aviso;
+    var elAvisoDestino = $("storageAviso");
+    if (elAvisoDestino) {
+      elAvisoDestino.style.display = avisoDestino ? "" : "none";
+      elAvisoDestino.textContent = avisoDestino || "";
+      elAvisoDestino.style.color = avisoDestino ? "var(--amber)" : "";
+    }
+
+    // rede
+    var online = status.network && status.network.online;
+    $("networkState").textContent = online ? "ONLINE" : "OFFLINE";
+    $("networkState").style.color = online ? "var(--green2)" : "var(--amber)";
+    $("networkHint").textContent = online
+      ? "internet disponivel" : "sem internet - as gravacoes ficam no SSD";
+
+    // audio
+    var dev = status.device || {};
+    $("audioDevice").textContent = dev.hw || "nao detectado";
+    $("audioName").textContent = dev.name || "conecte a interface USB";
+
+    // recursos do Raspberry (nmcli/Access Point/Tailscale): no Windows
+    // nao existem - escondidos para o operador nao se perder
+    var soWin = status.platform === "windows";
+    Array.prototype.forEach.call(
+      document.querySelectorAll(".so-linux"),
+      function (el) { el.style.display = soWin ? "none" : ""; }
+    );
+
+    // drive
+    var drive = status.drive || {};
+    var ups = status.uploads || {};
+    if (!drive.libraries) {
+      $("driveState").textContent = "NAO INSTALADO";
+      $("driveHint").textContent = "bibliotecas do Google ausentes";
+    } else if (!drive.credentials) {
+      $("driveState").textContent = "NAO CONFIGURADO";
+      $("driveState").style.color = "var(--amber)";
+      $("driveHint").textContent = "solicitacao registrada - fale com o administrador";
+    } else if (drive.connected) {
+      $("driveState").textContent = "● CONECTADO";
+      $("driveState").style.color = "var(--green2)";
+      $("driveHint").textContent = (drive.account || "conta conectada") +
+        (ups.online === false ? " · offline - fila aguardando internet"
+                              : " · pronto para envio");
+    } else {
+      $("driveState").textContent = "DESCONECTADO";
+      $("driveState").style.color = "var(--amber)";
+      $("driveHint").textContent = "conecte em CONFIGURACOES";
+    }
+    $("uploadStats").textContent =
+      "pendentes: " + (ups.pending || 0) + " | concluidos: " + (ups.done || 0);
+
+    // ultima gravacao / upload
+    var last = status.last_recording;
+    if (last && last.final_path) {
+      $("lastFile").textContent = last.final_path.split(/[\\/]/).pop();
+      $("lastFileMeta").textContent =
+        bytes(last.final_bytes) + " · " + (last.state || "") +
+        (last.ended_at ? " · " + dataHora(last.ended_at) : "");
+    } else {
+      $("lastFile").textContent = "nenhuma gravacao";
+      $("lastFileMeta").textContent = "";
+    }
+    $("lastUpload").textContent = ups.last_upload
+      ? "ultimo upload: " + ups.last_upload.file + " [ok]"
+      : (ups.last_error ? "ultimo erro: " + ups.last_error : "");
+
+    $("deviceName").textContent = status.device_name || "pregacao-recorder";
+    renderRecovery(status.recovery || []);
+    tick();
+  }
+
+  function renderRecovery(items) {
+    var panel = $("recoveryPanel");
+    if (!items.length) { panel.classList.add("hidden"); return; }
+    panel.classList.remove("hidden");
+    var box = $("recoveryList");
+    box.innerHTML = "";
+    items.forEach(function (item) {
+      var div = document.createElement("div");
+      div.className = "recovery-item";
+      var row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML =
+        "<span><strong>Inicio:</strong> " + item.started_label + "</span>" +
+        "<span><strong>Duracao recuperada:</strong> " + hms(item.duration) + "</span>" +
+        "<span><strong>Tamanho:</strong> " + bytes(item.bytes) + "</span>" +
+        "<span><strong>Segmentos:</strong> " + item.segments + "</span>";
+      div.appendChild(row);
+      if (item.error) {
+        var err = document.createElement("p");
+        err.className = "muted";
+        err.style.margin = "6px 0 0";
+        err.textContent = "Motivo: falha na conversao - " + item.error;
+        div.appendChild(err);
+      }
+      var btns = document.createElement("div");
+      btns.className = "btn-row";
+      var rec = document.createElement("button");
+      rec.className = "btn btn-primary";
+      rec.type = "button";
+      rec.textContent = "RECUPERAR";
+      rec.onclick = function () {
+        rec.disabled = true; rec.textContent = "RECUPERANDO...";
+        api("/api/recovery/" + encodeURIComponent(item.id) + "/recover", "POST")
+          .then(function () { toast("Recuperando a gravacao...", "success"); })
+          .catch(function (e) { toast(e.message, "error"); rec.disabled = false; });
+      };
+      var disc = document.createElement("button");
+      disc.className = "btn btn-ghost";
+      disc.type = "button";
+      disc.textContent = "DESCARTAR";
+      disc.onclick = function () {
+        if (!window.confirm("Descartar definitivamente esta gravacao interrompida?")) return;
+        api("/api/recovery/" + encodeURIComponent(item.id) + "/discard", "POST")
+          .then(function () { toast("Gravacao descartada", "warning"); })
+          .catch(function (e) { toast(e.message, "error"); });
+      };
+      btns.appendChild(rec);
+      btns.appendChild(disc);
+      div.appendChild(btns);
+      box.appendChild(div);
+    });
+  }
+
+  function esc(t) {
+    return String(t === null || t === undefined ? "" : t)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // ------------------------------------------------------------- historico
+  var STATE_PT = {
+    IDLE: "PRONTO", RECORDING: "GRAVANDO", FINALIZING: "FINALIZANDO",
+    UPLOADING: "ENVIANDO", COMPLETED: "CONCLUIDA",
+    RECOVERY_REQUIRED: "INTERROMPIDA", ERROR: "ERRO"
+  };
+
+  function loadHistory() {
+    $("histSummary").textContent = "carregando...";
+    api("/api/recordings").then(function (data) {
+      var sessions = data.sessions || [];
+      var summ = data.summary || {};
+      var list = $("histList");
+      list.innerHTML = "";
+      $("histSummary").textContent = (summ.count || 0) + " arquivo(s) · " +
+        bytes(summ.bytes || 0) + " gravados em disco";
+      if (!sessions.length) {
+        list.innerHTML = "<p class='muted'>Nenhuma gravacao registrada ainda.</p>";
+        return;
+      }
+      sessions.forEach(function (s) {
+        var div = document.createElement("div");
+        div.className = "histitem";
+        var upload = s.drive_file_id
+          ? "<span class='tag ok'>ENVIADO</span>"
+          : "<span class='tag pend'>PENDENTE</span>";
+        var drive = s.drive_path ? esc(s.drive_path) : "aguardando envio";
+        var statusTxt = (STATE_PT[s.state] || s.state || "--") +
+          (s.interrupted ? " (recuperada)" : "");
+        div.innerHTML =
+          "<div class='histdate'>" + dataHora(s.started_at) + "</div>" +
+          "<div class='histmeta'>" +
+            "<span><strong>Duracao:</strong> " + hms(s.duration_secs || 0) + "</span>" +
+            "<span><strong>Tamanho:</strong> " + bytes(s.final_bytes || s.bytes) + "</span>" +
+            "<span><strong>Status:</strong> " + esc(statusTxt) + "</span>" +
+            "<span><strong>Upload:</strong> " + upload + "</span>" +
+            "<span><strong>Google Drive:</strong> " + drive + "</span>" +
+          "</div>";
+        if (s.error) {
+          var err = document.createElement("p");
+          err.className = "muted";
+          err.textContent = "Erro: " + s.error;
+          div.appendChild(err);
+        }
+        list.appendChild(div);
+      });
+    }).catch(function (e) { $("histSummary").textContent = e.message; });
+  }
+
+  // ---------------------------------------------------------------- tempo
+  function tick() {
+    var started = Number($("statusCard").dataset.started || 0);
+    if (status && status.state === "RECORDING" && started) {
+      var now = (Date.now() / 1000) + clockOffset;
+      $("timer").textContent = hms(now - started);
+    } else {
+      $("timer").textContent = "00:00:00";
+    }
+    var d = new Date();
+    $("clock").textContent = pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+  setInterval(tick, 1000);
+
+  // ---------------------------------------------------------------- acoes
+  function doStart() {
+    api("/api/start", "POST").then(function () {
+      toast("Gravacao iniciada", "success");
+      addNotif("Gravacao iniciada", "success");
+    }).catch(function (e) { toast(e.message, "error"); });
+  }
+
+  function askStop() {
+    var st = status || {};
+    var rec = st.recording || {};
+    $("confirmDetail").textContent =
+      "Duracao atual: " + $("timer").textContent +
+      (rec.segments ? " · segmentos: " + rec.segments : "") +
+      ". Depois de confirmada, a gravacao sera consolidada e salva.";
+    $("confirmOverlay").classList.remove("hidden");
+  }
+
+  function doStop() {
+    $("confirmOverlay").classList.add("hidden");
+    $("btnStop").disabled = true;
+    api("/api/stop", "POST").then(function () {
+      toast("Finalizando gravacao...", "success");
+      addNotif("Gravacao finalizada; consolidando arquivos", "success");
+    }).catch(function (e) { toast(e.message, "error"); refresh(); });
+  }
+
+  function refresh() {
+    return api("/api/status").then(function (data) {
+      status = data;
+      clockOffset = (data.now || Date.now() / 1000) - Date.now() / 1000;
+      render();
+    }).catch(function () {});
+  }
+
+  // ---------------------------------------------------------------- SSE
+  function connect() {
+    if (!window.EventSource) { setInterval(refresh, 5000); return; }
+    if (source) source.close();
+    source = new EventSource("/api/stream");
+
+    source.addEventListener("open", function () {
+      $("connState").textContent = "● conectado";
+      $("connState").className = "ok";
+    });
+    source.addEventListener("error", function () {
+      $("connState").textContent = "● reconectando";
+      $("connState").className = "bad";
+    });
+    source.addEventListener("status", function (ev) {
+      try {
+        var data = JSON.parse(ev.data);
+        if (data.state !== undefined) {
+          status = data;
+          if (data.now) clockOffset = data.now - Date.now() / 1000;
+          render();
+        }
+      } catch (e) { /* ignora */ }
+    });
+
+    ["gravacao_iniciada", "gravacao_finalizada", "gravacao_pronta",
+     "upload_inicio", "upload_concluido", "upload_pendente", "upload_falho", "erro",
+     "recuperacao", "recuperacao_descartada", "servico_parado", "capture_gap",
+     "configuracao", "drive_conectado", "drive_desconectado", "audio_teste",
+     "conversao", "notificacao"].forEach(function (kind) {
+      source.addEventListener(kind, function (ev) {
+        try {
+          var payload = JSON.parse(ev.data);
+          var data = payload.data || {};
+          if (data.message) {
+            addNotif(data.message, data.level || "info", payload.ts);
+            if (kind !== "upload_inicio" && kind !== "conversao") {
+              toast(data.message, data.level || "info");
+            }
+          }
+        } catch (e) { /* ignora */ }
+        refresh();
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------- config
+  function fillSelect(sel, options, current) {
+    sel.innerHTML = "";
+    options.forEach(function (opt) {
+      var o = document.createElement("option");
+      if (typeof opt === "object") { o.value = opt.value; o.textContent = opt.label; }
+      else { o.value = opt; o.textContent = opt; }
+      if (typeof opt === "object" && opt.disabled) o.disabled = true;
+      if (String(opt.value !== undefined ? opt.value : opt) === String(current)) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+
+  // Preenche o seletor "Onde gravar" com os destinos que ESTAO disponiveis
+  // agora. Ler /proc/mounts e medir espaco e trabalho do servidor - aqui so
+  // recebemos o resultado pronto de /api/storage. Destino com disco ausente
+  // fica visivel (para o usuario entender o aviso) mas marcado como
+  // indisponivel, igualzinho o servidor recusa ao salvar.
+  function carregaDestinos(selecionado) {
+    var sel = $("cfgDestino");
+    if (!sel) return;
+    api("/api/storage").then(function (r) {
+      var itens = (r.items || []).slice();
+      if (selecionado && !itens.some(function (i) { return i.caminho === selecionado; })) {
+        itens.unshift({ caminho: selecionado, rotulo: "destino digitado",
+                        montado: false, externo: false, disco: {} });
+      }
+      fillSelect(sel, itens.map(function (i) {
+        var disco = i.disco || {};
+        var livre = disco.livre_gb != null ? disco.livre_gb + " GB livres" : "";
+        var sufixo;
+        if (!i.montado) sufixo = "  -  DISCO AUSENTE";
+        else if (i.externo) sufixo = "  -  " + (i.rotulo ? i.rotulo + " - " : "") + livre;
+        else sufixo = "  -  cartao SD - " + livre;
+        return { value: i.caminho, label: i.caminho + sufixo, disabled: !i.montado };
+      }), selecionado);
+
+      var aviso = r.aviso;
+      var elAviso = $("cfgDestinoAviso");
+      if (elAviso) {
+        elAviso.style.display = aviso ? "" : "none";
+        elAviso.textContent = aviso || "";
+        elAviso.style.color = aviso ? "var(--amber)" : "";
+      }
+      var sit = r.situacao || {};
+      var elInfo = $("cfgDestinoInfo");
+      if (elInfo) {
+        elInfo.textContent = sit.disponivel
+          ? "gravando em " + r.current
+            + (sit.device ? " (" + sit.device + ")" : "")
+          : "destino atual fora do lugar - escolha outro ou reconecte o disco";
+      }
+    }).catch(function () {
+      // sem /api/storage o select fica vazio: nao e motivo de quebrar a tela
+    });
+  }
+
+  function pintaNlm(p) {
+    var el = $("cfgNlmState");
+    if (!el) return;
+    var mapa = {
+      ok: ["● SESSAO ATIVA", "var(--green2)"],
+      auth: ["○ SESSAO EXPIRADA", "var(--amber)"],
+      rede: ["○ SEM RESPOSTA", "var(--amber)"],
+      desconhecido: ["○ NAO VERIFICADA", "var(--amber)"]
+    };
+    var m = mapa[p.estado] || mapa.desconhecido;
+    if (p.aguardando) {
+      el.textContent = "● AGUARDANDO: " + (p.motivo || "sessao");
+      el.style.color = "var(--amber)";
+    } else {
+      el.textContent = m[0];
+      el.style.color = m[1];
+    }
+    var pend = $("cfgNlmPend");
+    if (pend) {
+      pend.textContent = p.aguardando
+        ? p.aguardando + " em espera (nada perdido)"
+        : (p.fila ? p.fila + " na fila" : "nenhum");
+    }
+    // acoes que mexem no PC so para o administrador (o servidor tambem
+    // bloqueia - aqui e so para o operador comum nao se confundir)
+    var b1 = $("btnNlmCheck");
+    var b2 = $("btnNlmLogin");
+    var acao = isAdmin ? "" : "none";
+    if (b1) b1.style.display = acao;
+    if (b2) b2.style.display = acao;
+  }
+
+  function loadConfig() {
+    api("/api/config").then(function (data) {
+      var c = data.config || {};
+      $("configForm").elements["device_name"].value = c.device_name || "";
+      // usuario comum recebe "estudos" no topo; admin traz dentro de config
+      var est = data.estudos || c.estudos || {};
+      $("configForm").elements["estudos.ativo"].checked = est.ativo !== false;
+      $("configForm").elements["estudos.whatsapp"].value = est.whatsapp || "";
+
+      // card ESTUDO: saude da sessao do NotebookLM (consulta propria,
+      // independente do Drive - sao autenticacoes diferentes)
+      api("/api/estudos/status").then(pintaNlm).catch(function () {
+        // sem /api/estudos/status o card fica com "--" e nada mais quebra
+      });
+
+      // card GOOGLE DRIVE (usuario comum nunca ve credenciais)
+      var d = data.drive || {};
+      if (d.connected) {
+        $("cfgDriveState").textContent = "● CONECTADO";
+        $("cfgDriveState").style.color = "var(--green2)";
+      } else if (!d.credentials) {
+        $("cfgDriveState").textContent = "○ NAO CONFIGURADO";
+        $("cfgDriveState").style.color = "var(--amber)";
+      } else {
+        $("cfgDriveState").textContent = "○ NAO CONECTADO";
+        $("cfgDriveState").style.color = "var(--amber)";
+      }
+      $("cfgDriveAccount").textContent = d.connected
+        ? (d.account || "conta conectada")
+        : (d.credentials ? "conecte a conta Google" : "aguardando o administrador");
+      $("cfgDriveFolder").textContent = d.folder || "Pregacoes";
+      // o payload completo (credenciais/formatos) so vem para administrador
+      if (data.admin) loadAdvanced(data);
+    }).catch(function (e) { toast(e.message, "error"); });
+  }
+
+  function loadAdvanced(data) {
+    var apply = function (data) {
+      var c = data.config || {};
+      var form = $("advancedForm");
+
+      fillSelect($("cfgDevice"),
+        [{ value: "auto", label: "AUTO (detectar interface USB)" }].concat(
+          (data.audio_devices || []).map(function (d) {
+            return { value: d.hw, label: d.hw + " - " + d.name };
+          })), c.audio.device);
+      fillSelect($("cfgFormat"), data.formats || [], c.audio.format);
+      fillSelect($("cfgRate"), data.rates || [], c.audio.sample_rate);
+      fillSelect($("cfgEncoder"), data.encoders || [], c.audio.encoder);
+      fillSelect($("cfgBitrate"), data.bitrates || [], c.audio.bitrate);
+      $("cfgDeviceDetected").textContent = data.detected
+        ? "detectado: " + data.detected.hw + " - " + data.detected.name
+        : "";
+      $("cfgFfmpeg").textContent = data.has_ffmpeg
+        ? "ffmpeg disponivel: a gravacao final sera MP3."
+        : "ffmpeg ausente: a gravacao final ficara em WAV (maior, porem compativel).";
+
+      form.elements["audio.channels"].value = String(c.audio.channels);
+      form.elements["audio.segment_seconds"].value = c.audio.segment_seconds;
+      var destinoAtual = c.storage.recordings_dir || "";
+      form.elements["storage.recordings_dir"].value = destinoAtual;
+      carregaDestinos(destinoAtual);  // opcoes reais vem de /api/storage
+      form.elements["storage.min_free_mb"].value = c.storage.min_free_mb;
+      form.elements["storage.retention_days"].value = c.storage.retention_days;
+      form.elements["drive.enabled"].checked = !!c.drive.enabled;
+      form.elements["drive.auto_upload"].checked = !!c.drive.auto_upload;
+      form.elements["drive.keep_local"].checked = !!c.drive.keep_local;
+      form.elements["drive.folder_name"].value = c.drive.folder_name || "Pregacoes";
+      form.elements["drive.client_id"].value = c.drive.client_id || "";
+      form.elements["network.check_host"].value =
+        (c.network && c.network.check_host) || "";
+      form.elements["network.check_port"].value =
+        (c.network && c.network.check_port) || 443;
+      form.elements["network.retry_seconds"].value =
+        (c.network && c.network.retry_seconds) || 30;
+      var secretInput = form.elements["drive.client_secret"];
+      secretInput.value = "";
+      secretInput.placeholder = c.drive.client_secret_set
+        ? "(secret definido - digite apenas para trocar)"
+        : "(secret nao definido)";
+
+      var d = data.drive || {};
+      var srcLabel = {
+        manual: "cadastradas NA INTERFACE",
+        arquivo: "no arquivo google_credentials.json",
+        env: "na variavel .env",
+        "": "AUSENTES"
+      };
+      $("cfgDriveCreds").textContent = "Credenciais: "
+        + (srcLabel[d.source] !== undefined ? srcLabel[d.source] : d.source);
+
+      loadNetwork();
+    };
+    if (data) apply(data);
+    else api("/api/config").then(apply).catch(function (e) { toast(e.message, "error"); });
+  }
+
+  function saveConfig(ev) {
+    ev.preventDefault();
+    var form = $("configForm");
+    var payload = {
+      "device_name": form.elements["device_name"].value,
+      "estudos.ativo": form.elements["estudos.ativo"].checked,
+      "estudos.whatsapp": form.elements["estudos.whatsapp"].value.trim()
+    };
+    var msg = $("configMsg");
+    msg.textContent = "salvando...";
+    api("/api/config", "POST", payload).then(function (res) {
+      msg.textContent = "Configuracao salva";
+      toast("Configuracao salva", "success");
+      addNotif("Configuracao atualizada", "success");
+      loadConfig();
+    }).catch(function (e) {
+      msg.textContent = "";
+      toast(e.message, "error");
+    });
+  }
+
+  function saveAdvanced(ev) {
+    ev.preventDefault();
+    var form = $("advancedForm");
+    var payload = {
+      "audio.device": form.elements["audio.device"].value,
+      "audio.format": form.elements["audio.format"].value,
+      "audio.sample_rate": form.elements["audio.sample_rate"].value,
+      "audio.channels": form.elements["audio.channels"].value,
+      "audio.encoder": form.elements["audio.encoder"].value,
+      "audio.bitrate": form.elements["audio.bitrate"].value,
+      "audio.segment_seconds": form.elements["audio.segment_seconds"].value,
+      "storage.recordings_dir": form.elements["storage.recordings_dir"].value,
+      "storage.min_free_mb": form.elements["storage.min_free_mb"].value,
+      "storage.retention_days": form.elements["storage.retention_days"].value,
+      "drive.enabled": form.elements["drive.enabled"].checked,
+      "drive.auto_upload": form.elements["drive.auto_upload"].checked,
+      "drive.keep_local": form.elements["drive.keep_local"].checked,
+      "drive.folder_name": form.elements["drive.folder_name"].value,
+      "drive.client_id": form.elements["drive.client_id"].value.trim(),
+      "network.check_host": form.elements["network.check_host"].value.trim(),
+      "network.check_port": form.elements["network.check_port"].value,
+      "network.retry_seconds": form.elements["network.retry_seconds"].value
+    };
+    // o secret so vai para o servidor quando digitado (nunca e devolvido)
+    var secret = form.elements["drive.client_secret"].value.trim();
+    if (secret) payload["drive.client_secret"] = secret;
+    var msg = $("advancedMsg");
+    msg.textContent = "salvando...";
+    api("/api/config", "POST", payload).then(function () {
+      msg.textContent = "Configuracoes avancadas salvas";
+      toast("Configuracoes avancadas salvas", "success");
+      loadAdvanced();
+      loadConfig();
+    }).catch(function (e) {
+      msg.textContent = "";
+      toast(e.message, "error");
+      if (e.data && e.data.error === "admin_obrigatorio") openAdmin();
+    });
+  }
+
+  // ---------------------------------------------------------------- admin
+  function openAdmin() {
+    $("adminPinError").classList.add("hidden");
+    $("adminPinInput").value = "";
+    $("adminOverlay").classList.remove("hidden");
+    setTimeout(function () { $("adminPinInput").focus(); }, 60);
+  }
+
+  function tryAdminLogin() {
+    api("/api/admin/login", "POST", { pin: $("adminPinInput").value })
+      .then(function () {
+        isAdmin = true;
+        $("adminOverlay").classList.add("hidden");
+        $("adminPinInput").value = "";
+        loadAdvanced();
+        setView("advanced");
+      }).catch(function () {
+        $("adminPinError").classList.remove("hidden");
+        $("adminPinInput").select();
+      });
+  }
+
+  function openAdvanced() {
+    if (isAdmin) { loadAdvanced(); setView("advanced"); }
+    else openAdmin();
+  }
+
+  // ------------------------------------------------------------- rede
+  var netData = null;      // ultimo status de rede recebido
+  var netSsid = null;      // SSID escolhido na lista de redes
+
+  function netText(id, text, cls) {
+    var el = $(id);
+    if (!el) return;
+    el.textContent = text === undefined || text === null || text === "" ? "--" : text;
+    el.className = cls || "";
+  }
+
+  function sinalLabel(v) {
+    v = Number(v) || 0;
+    if (v >= 70) return "Forte";
+    if (v >= 45) return "Medio";
+    if (v > 0) return "Fraco";
+    return "sem sinal";
+  }
+
+  function renderRemote(r) {
+    r = r || {};
+    var svc = r.service || "";
+    var ativo = svc === "active";
+    netText("remService",
+      !r.configured ? "NAO CONFIGURADO"
+        : (ativo ? "ATIVO" : (svc || "PARADO").toUpperCase()),
+      ativo ? "st-ok" : (r.configured ? "st-warn" : ""));
+    netText("remHost", r.configured
+      ? (r.host + ":" + r.port + (r.tls ? " (TLS)" : " (sem TLS)"))
+      : "sem PREGACAO_REMOTE_HOST no .env");
+    netText("remDeviceId", r.device_id || "--");
+    netText("remToken", r.operator_token
+      || "(defina PREGACAO_OPERATOR_TOKEN no .env)");
+  }
+
+  function loadNetwork() {
+    api("/api/network/status").then(function (data) {
+      netData = data;
+      renderNetwork(data);
+    }).catch(function (e) { netText("netMsg", e.message, "st-bad"); });
+  }
+
+  function renderTailscale(ts) {
+    ts = ts || {};
+    netText("netTsState",
+      ts.connected ? "CONECTADO"
+        : (ts.message || (ts.installed ? "DESCONECTADO" : "NAO INSTALADO")),
+      ts.connected ? "st-ok" : "st-warn");
+    netText("netTsName", ts.hostname || ts.dns_name || "--");
+    netText("netTsIp", ts.ip || "--");
+    var link = $("netTsLink");
+    if (ts.auth_url) {
+      link.href = ts.auth_url;
+      link.textContent = "abrir o link de autenticacao";
+      link.classList.remove("hidden");
+    } else {
+      link.classList.add("hidden");
+    }
+  }
+
+  function renderNetwork(d) {
+    d = d || {};
+    var inet = !!(d.internet && d.internet.connected);
+    var eth = d.ethernet || {};
+    var wifi = d.wifi || {};
+    var ap = d.accessPoint || {};
+    var ts = d.tailscale || {};
+
+    netText("netInternet", inet ? "ONLINE" : "OFFLINE", inet ? "st-ok" : "st-bad");
+    netText("netEth", eth.connected ? "CONECTADO" : "DESCONECTADO",
+            eth.connected ? "st-ok" : "st-bad");
+    netText("netWifi", wifi.connected ? "CONECTADO" : "DESCONECTADO",
+            wifi.connected ? "st-ok" : "st-bad");
+    netText("netRemote", ts.connected ? "CONECTADO"
+            : (ts.installed ? "DESCONECTADO" : "NAO INSTALADO"),
+            ts.connected ? "st-ok" : "st-warn");
+
+    netText("netEthState", eth.state, eth.connected ? "st-ok" : "");
+    netText("netEthIp", eth.ip);
+    netText("netEthGw", eth.gateway);
+
+    netText("netWifiSsid", wifi.connected ? wifi.ssid : "nao conectado",
+            wifi.connected ? "st-ok" : "");
+    netText("netWifiIp", wifi.ip);
+    netText("netWifiSignal", wifi.connected && wifi.signal
+      ? wifi.signal + "% - " + sinalLabel(wifi.signal) +
+        (wifi.security ? " - " + wifi.security : "")
+      : (wifi.available === false ? "interface ausente" : "--"));
+    netText("netWifiGw", wifi.gateway);
+
+    netText("netApState", ap.active ? "ATIVO" : "INATIVO", ap.active ? "st-warn" : "");
+    netText("netApSsid", ap.ssid);
+    netText("netApIp", ap.ip);
+
+    renderTailscale(ts);
+
+    var urls = (d.access && d.access.urls) || [];
+    var ul = $("netUrls");
+    ul.textContent = "";
+    if (!urls.length) {
+      var vazio = document.createElement("li");
+      vazio.className = "muted";
+      vazio.textContent = "nenhum endereco ativo";
+      ul.appendChild(vazio);
+    }
+    urls.forEach(function (u) {
+      var li = document.createElement("li");
+      var a = document.createElement("a");
+      a.href = u.value;
+      a.textContent = u.value;
+      a.className = "linkblock";
+      var nota = document.createElement("div");
+      nota.className = "muted";
+      nota.textContent = u.label + (u.note ? " - " + u.note : "");
+      li.appendChild(a);
+      li.appendChild(nota);
+      ul.appendChild(li);
+    });
+  }
+
+  function renderWifiList(networks, atual) {
+    var ul = $("wifiList");
+    ul.textContent = "";
+    if (!networks || !networks.length) {
+      var li0 = document.createElement("li");
+      li0.className = "muted";
+      li0.textContent = "nenhuma rede encontrada";
+      ul.appendChild(li0);
+      return;
+    }
+    networks.forEach(function (n) {
+      var li = document.createElement("li");
+      li.dataset.ssid = n.ssid;
+      var nome = document.createElement("span");
+      nome.className = "ssid";
+      nome.textContent = n.ssid;
+      var info = document.createElement("span");
+      info.className = "sig";
+      info.textContent = n.signal + "% " + sinalLabel(n.signal) +
+        (n.secure ? " - protegida" : " - aberta");
+      li.appendChild(nome);
+      li.appendChild(info);
+      if (n.in_use) {
+        var uso = document.createElement("span");
+        uso.className = "inuse";
+        uso.textContent = "EM USO";
+        li.appendChild(uso);
+      }
+      li.addEventListener("click", function () { selectWifi(n.ssid); });
+      ul.appendChild(li);
+      if (atual && n.ssid === atual) li.classList.add("selected");
+    });
+  }
+
+  function selectWifi(ssid) {
+    netSsid = ssid;
+    Array.prototype.forEach.call($("wifiList").children, function (li) {
+      li.classList.toggle("selected", li.dataset.ssid === ssid);
+    });
+    var campo = $("wifiPassword");
+    campo.value = "";
+    campo.focus();
+  }
+
+  function netMessage(texto, erro) {
+    var el = $("netMsg");
+    el.textContent = texto || "";
+    el.className = erro ? "st-bad" : "muted";
+  }
+
+  function netOp(path, body, okMsg) {
+    netMessage("aguarde, operando a rede...", false);
+    api(path, "POST", body).then(function (r) {
+      var texto = r.message || okMsg || "operacao concluida";
+      netMessage(texto, false);
+      toast(texto, "success");
+      if (r.status) { netData = r.status; renderNetwork(r.status); }
+      loadNetwork();
+    }).catch(function (e) {
+      netMessage(e.message, true);
+      toast(e.message, "error");
+      loadNetwork();
+    });
+  }
+
+  function pollTailscale() {
+    var n = 0;
+    var timer = setInterval(function () {
+      n++;
+      api("/api/network/tailscale/status").then(function (ts) {
+        renderTailscale(ts);
+        if (ts.connected) {
+          clearInterval(timer);
+          netMessage("Acesso remoto pronto: http://" + ts.ip, false);
+          toast("Tailscale conectado", "success");
+        } else if (n >= 15) {
+          clearInterval(timer);
+          netMessage(ts.message || "autenticacao nao concluida", true);
+        }
+      }).catch(function () { if (n >= 15) clearInterval(timer); });
+    }, 2000);
+  }
+
+  // ------------------------------------------------- assistente 1o acesso
+  function showSetup() {
+    wizStep = 1;
+    $("setupOverlay").classList.remove("hidden");
+    api("/api/setup").then(function (info) {
+      $("wizAdminBlock").classList.toggle("hidden", !!info.admin);
+      $("wizDir").value = info.recordings_dir || "";
+      $("wizDriveStatus").textContent = info.drive_connected
+        ? "Conta ja conectada" : "nao conectada";
+      var st = (status || {}).storage || {};
+      $("wizFree").textContent = "Espaco livre: " +
+        (st.ok ? bytes(st.free_mb * 1024 * 1024) : "--");
+      return api("/api/audio/devices");
+    }).then(function (devs) {
+      fillSelect($("wizDevice"),
+        [{ value: "auto", label: "AUTO (detectar interface USB)" }].concat(
+          (devs.items || []).map(function (d) {
+            return { value: d.hw, label: d.hw + " - " + d.name };
+          })), devs.selected && devs.selected.hw);
+      var sel = $("wizDevice");
+      var cur = sel.options[sel.selectedIndex];
+      $("wizDeviceHint").textContent = cur && cur.value !== "auto"
+        ? "selecionado: " + cur.label : "conecte a interface USB e clique em AVANCAR";
+    }).catch(function () {});
+    renderWiz();
+  }
+
+  function renderWiz() {
+    [1, 2, 3, 4].forEach(function (n) {
+      $("wizStep" + n).classList.toggle("hidden", wizStep !== n);
+    });
+    document.querySelectorAll("#setupSteps .stepdot").forEach(function (dot) {
+      dot.classList.toggle("active", Number(dot.dataset.dot) <= wizStep);
+    });
+    $("wizBack").disabled = wizStep === 1;
+    $("wizNext").classList.toggle("hidden", wizStep === 4);
+    $("wizFinish").classList.toggle("hidden", wizStep !== 4);
+    if (wizStep === 4) {
+      var sel = $("wizDevice");
+      var cur = sel.options[sel.selectedIndex];
+      $("wizSumAudio").textContent = cur ? cur.label : "--";
+      $("wizSumDir").textContent = $("wizDir").value || "--";
+      $("wizSumDrive").textContent = $("wizDriveStatus").textContent;
+    }
+  }
+
+  function wizAdvance() {
+    if (wizStep === 1) {
+      api("/api/config", "POST", { "audio.device": $("wizDevice").value })
+        .then(function () { wizStep = 2; renderWiz(); })
+        .catch(function (e) { toast(e.message, "error"); openWizAdmin(); });
+    } else if (wizStep === 2) {
+      api("/api/config", "POST", { "storage.recordings_dir": $("wizDir").value })
+        .then(function () { wizStep = 3; renderWiz(); })
+        .catch(function (e) { toast(e.message, "error"); openWizAdmin(); });
+    } else {
+      wizStep = 4;
+      renderWiz();
+    }
+  }
+
+  function openWizAdmin() {
+    $("wizAdminBlock").classList.remove("hidden");
+    $("wizAdminError").classList.add("hidden");
+    setTimeout(function () { $("wizAdminPin").focus(); }, 60);
+  }
+
+  function tryWizAdmin() {
+    api("/api/admin/login", "POST", { pin: $("wizAdminPin").value })
+      .then(function () {
+        isAdmin = true;
+        $("wizAdminPin").value = "";
+        $("wizAdminBlock").classList.add("hidden");
+        $("wizAdminError").classList.add("hidden");
+        toast("Configuracoes liberadas", "success");
+      }).catch(function () {
+        $("wizAdminError").classList.remove("hidden");
+        $("wizAdminPin").select();
+      });
+  }
+
+  function finishSetup() {
+    api("/api/setup/complete", "POST").then(function () {
+      $("setupOverlay").classList.add("hidden");
+      toast("Configuracao inicial concluida!", "success");
+      addNotif("Configuracao inicial concluida", "success");
+      loadConfig();
+    }).catch(function (e) { toast(e.message, "error"); });
+  }
+
+  // ---------------------------------------------------------------- eventos
+  function bind() {
+    $("pinBtn").addEventListener("click", tryLogin);
+    $("pinInput").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") tryLogin();
+    });
+
+    $("btnStart").addEventListener("click", doStart);
+    $("btnStop").addEventListener("click", askStop);
+    $("confirmCancel").addEventListener("click", function () {
+      $("confirmOverlay").classList.add("hidden");
+      refresh();
+    });
+    $("confirmOk").addEventListener("click", doStop);
+
+    $("navHome").addEventListener("click", function () { setView("home"); });
+    $("navConfig").addEventListener("click", function () {
+      setView("config");
+      if (authed) loadConfig();
+    });
+    $("navHistory").addEventListener("click", function () {
+      setView("history");
+      if (authed) loadHistory();
+    });
+
+    $("configForm").addEventListener("submit", saveConfig);
+    $("advancedForm").addEventListener("submit", saveAdvanced);
+    $("btnAdvanced").addEventListener("click", openAdvanced);
+    $("btnAdvancedBack").addEventListener("click", function () {
+      setView("config");
+      loadConfig();
+    });
+    $("adminOk").addEventListener("click", tryAdminLogin);
+    $("adminCancel").addEventListener("click", function () {
+      $("adminOverlay").classList.add("hidden");
+    });
+    $("adminPinInput").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") tryAdminLogin();
+    });
+    $("btnLoadLogs").addEventListener("click", function () {
+      $("logsBox").textContent = "carregando...";
+      api("/api/logs?lines=150").then(function (r) {
+        $("logsBox").textContent = r.content || "(log vazio)";
+      }).catch(function (e) { $("logsBox").textContent = e.message; });
+    });
+    $("btnDriveTestFolder").addEventListener("click", function () {
+      api("/api/drive/test", "POST").then(function (r) {
+        toast("Pasta acessivel (id " + r.folder_id + ")", "success");
+      }).catch(function (e) { toast(e.message, "error"); });
+    });
+
+    // ---- rede (area do administrador) ----
+    $("btnNetRefresh").addEventListener("click", function () {
+      netMessage("atualizando...", false);
+      loadNetwork();
+    });
+    $("btnNetTest").addEventListener("click", function () {
+      netMessage("testando a conexao...", false);
+      api("/api/network/connectivity-test", "POST").then(function (r) {
+        netMessage(r.connected
+          ? "Internet OK via " + r.host + " (" + r.seconds + "s)"
+          : (r.local ? "Sem Internet - o painel continua funcionando na rede local"
+                     : "Sem Internet e sem rede local"),
+          !r.connected);
+      }).catch(function (e) { netMessage(e.message, true); });
+    });
+    $("btnWifiScan").addEventListener("click", function () {
+      netMessage("procurando redes...", false);
+      api("/api/network/wifi/scan?rescan=1").then(function (r) {
+        var atual = netData && netData.wifi && netData.wifi.ssid;
+        renderWifiList(r.networks, atual);
+        netMessage(r.count + " rede(s) encontrada(s)", false);
+      }).catch(function (e) { netMessage(e.message, true); });
+    });
+    $("btnWifiConnect").addEventListener("click", function () {
+      if (!netSsid) { toast("Selecione uma rede na lista", "warning"); return; }
+      var senha = $("wifiPassword").value;
+      var apAtivo = netData && netData.accessPoint && netData.accessPoint.active;
+      if (apAtivo && !window.confirm(
+        "Conectar ao Wi-Fi desligara o Access Point de configuracao. " +
+        "O celular precisara entrar na rede '" + netSsid + "' para voltar " +
+        "ao painel. Continuar?")) return;
+      netOp("/api/network/wifi/connect",
+            { ssid: netSsid, password: senha || null },
+            "Conectado a " + netSsid);
+      $("wifiPassword").value = "";
+    });
+    $("btnWifiDisconnect").addEventListener("click", function () {
+      netOp("/api/network/wifi/disconnect", {}, "Wi-Fi desconectado");
+    });
+    $("btnWifiForget").addEventListener("click", function () {
+      if (!netSsid) { toast("Selecione uma rede na lista", "warning"); return; }
+      if (!window.confirm("Esquecer a rede '" + netSsid +
+                          "'? A senha sera apagada do equipamento.")) return;
+      var alvo = netSsid;
+      netSsid = null;
+      netOp("/api/network/wifi/forget", { ssid: alvo }, "Rede esquecida");
+    });
+    $("btnApOn").addEventListener("click", function () {
+      var ssid = (netData && netData.accessPoint && netData.accessPoint.ssid)
+        || "PREGACAO-PI-XXXX";
+      if (!window.confirm(
+        "Ativar o modo de configuracao Wi-Fi? O equipamento passara a emitir " +
+        "a rede '" + ssid + "' (senha pregacao12345) e, enquanto isso, o " +
+        "Wi-Fi cliente fica desativado.")) return;
+      netOp("/api/network/ap/enable", {}, "Modo de configuracao ativado");
+    });
+    $("btnApOff").addEventListener("click", function () {
+      netOp("/api/network/ap/disable", {}, "Modo de configuracao desativado");
+    });
+    $("btnTsLogin").addEventListener("click", function () {
+      netMessage("iniciando a autenticacao do Tailscale...", false);
+      api("/api/network/tailscale/login", "POST").then(function (r) {
+        netMessage(r.message || "autenticacao iniciada - acompanhe abaixo", false);
+        pollTailscale();
+      }).catch(function (e) { netMessage(e.message, true); });
+    });
+    $("btnTsTest").addEventListener("click", function () {
+      netMessage("testando o acesso remoto...", false);
+      api("/api/network/tailscale/test", "POST").then(function (r) {
+        netMessage(r.message, !r.ok);
+        toast(r.message, r.ok ? "success" : "error");
+      }).catch(function (e) { netMessage(e.message, true); });
+    });
+
+    // assistente de primeiro acesso
+    $("wizNext").addEventListener("click", wizAdvance);
+    $("wizBack").addEventListener("click", function () {
+      if (wizStep > 1) { wizStep--; renderWiz(); }
+    });
+    $("wizFinish").addEventListener("click", finishSetup);
+    $("wizAdminOk").addEventListener("click", tryWizAdmin);
+    $("wizAdminPin").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") tryWizAdmin();
+    });
+    $("wizAudioTest").addEventListener("click", function () {
+      var el = $("wizAudioResult");
+      el.textContent = "testando (2s)...";
+      api("/api/audio/test", "POST").then(function (r) {
+        if (!r.ok) { el.textContent = "FALHA: " + r.error; return; }
+        el.textContent = r.silent
+          ? "SILENCIO - suba o fader da mesa"
+          : "Sinal OK · pico " + r.peak_db + " dBFS";
+      }).catch(function (e) { el.textContent = e.message; });
+    });
+    $("wizDriveConnect").addEventListener("click", function () {
+      api("/api/drive/connect", "POST").then(function (r) {
+        if (r.url) window.location.assign(r.url);
+      }).catch(function (e) { toast(e.message, "error"); });
+    });
+
+    $("btnAudioTest").addEventListener("click", function () {
+      var el = $("audioTestResult");
+      el.textContent = "testando (2s)...";
+      api("/api/audio/test", "POST").then(function (r) {
+        if (!r.ok) { el.textContent = "FALHA: " + r.error; return; }
+        el.textContent = r.silent
+          ? "SILENCIO - suba o fader da mesa"
+          : "Sinal OK · pico " + r.peak_db + " dBFS";
+      }).catch(function (e) { el.textContent = e.message; });
+    });
+
+    $("btnRetryUploads").addEventListener("click", function () {
+      api("/api/uploads/retry", "POST").then(function (r) {
+        toast(r.requeued + " upload(s) na fila", "success");
+      }).catch(function (e) { toast(e.message, "error"); });
+    });
+
+    $("btnDriveConnect").addEventListener("click", function () {
+      // fluxo oficial do Google, na MESMA aba; sem credenciais o servidor
+      // responde 412 e a interface apenas orienta o usuario comum.
+      api("/api/drive/connect", "POST").then(function (r) {
+        if (r.url) window.location.assign(r.url);
+      }).catch(function (e) {
+        toast(e.message, "error");
+        if (e.data && e.data.error === "drive_nao_configurado" && isAdmin) {
+          loadAdvanced();
+          setView("advanced");
+        }
+      });
+    });
+    $("btnDriveDisconnect").addEventListener("click", function () {
+      api("/api/drive/disconnect", "POST").then(function () {
+        toast("Conta desconectada", "warning");
+        loadConfig();
+      }).catch(function (e) { toast(e.message, "error"); });
+    });
+    $("btnDriveTest").addEventListener("click", function () {
+      api("/api/drive/test", "POST").then(function (r) {
+        toast("Conexao OK - pasta acessivel", "success");
+      }).catch(function (e) { toast(e.message, "error"); });
+    });
+
+    $("btnNlmCheck").addEventListener("click", function () {
+      var el = $("cfgNlmPend");
+      if (el) el.textContent = "verificando...";
+      api("/api/estudos/diagnosticar", "POST").then(function (r) {
+        pintaNlm(r);
+        if (r.renovada) {
+          toast("Sessao renovada automaticamente", "success");
+        } else if (r.retomados) {
+          toast(r.retomados + " estudo(s) retomado(s)", "success");
+        } else if (r.estado === "ok") {
+          toast("Sessao do NotebookLM ativa", "success");
+        } else {
+          toast("Sessao " + (r.estado || "?") + " - " + (r.detalhe || ""),
+            "error");
+        }
+      }).catch(function (e) { toast(e.message, "error"); });
+    });
+    $("btnNlmLogin").addEventListener("click", function () {
+      api("/api/estudos/reconectar", "POST").then(function () {
+        toast("Janela de login aberta - conclua e toque em DIAGNOSTICAR",
+          "success");
+      }).catch(function (e) { toast(e.message, "error"); });
+    });
+  }
+
+  function setView(view) {
+    document.body.dataset.view = view;
+    $("viewHome").classList.toggle("hidden", view !== "home");
+    $("viewConfig").classList.toggle("hidden", view !== "config");
+    $("viewAdvanced").classList.toggle("hidden", view !== "advanced");
+    $("viewHistory").classList.toggle("hidden", view !== "history");
+    $("navHome").classList.toggle("active", view === "home");
+    $("navHistory").classList.toggle("active", view === "history");
+    $("navConfig").classList.toggle("active", view === "config" || view === "advanced");
+    history.replaceState(null, "",
+      view === "home" ? "/" : (view === "history" ? "/historico" : "/config"));
+  }
+
+  // ---------------------------------------------------------------- boot
+  function boot() {
+    bind();
+    // resultado do login do Google (retornado em /config?drive=ok|erro)
+    var q = new URLSearchParams(location.search);
+    var driveRes = q.get("drive");
+    if (location.pathname.indexOf("/config") === 0) setView("config");
+    else if (location.pathname.indexOf("/historico") === 0) setView("history");
+    if (driveRes) {
+      history.replaceState(null, "", "/config");
+      var dmsg = q.get("msg") || "";
+      if (driveRes === "ok") toast("Conta Google conectada ao Drive", "success");
+      else toast("Falha ao conectar o Drive: " + dmsg, "error");
+    }
+
+    // o estado geral (PRONTO/GRAVANDO/espaco/rede) e publico: ja exibe atras do
+    // login para quem olha a tela, mesmo sem ter digitado o PIN.
+    refresh();
+    setInterval(refresh, 15000);
+
+    api("/api/me").then(function (me) {
+      authed = me.auth;
+      pinRequired = me.pin_required;
+      isAdmin = !!me.admin;
+      $("deviceName").textContent = me.device_name;
+      if (pinRequired && !authed) { showLogin(true); return; }
+      start();
+      if (authed && me.setup_needed) showSetup();
+    }).catch(function () { showLogin(true); });
+  }
+
+  function start() {
+    refresh().then(function () {
+      if (authed) loadConfig();
+      if (authed && document.body.dataset.view === "history") loadHistory();
+      // historico de notificacoes
+      if (authed) {
+        api("/api/events/history").then(function (data) {
+          (data.items || []).slice().reverse().forEach(function (item) {
+            addNotif(item.message, item.level, item.ts);
+          });
+        }).catch(function () {});
+      }
+      connect();
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", boot);
+  window.__pregacao = {
+    reconnect: function () { if (authed) start(); }
+  };
+})();
