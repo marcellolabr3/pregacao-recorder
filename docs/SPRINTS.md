@@ -58,14 +58,17 @@ Classificacao: FUNCIONAL / PARCIAL / COM ERRO / NAO IMPLEMENTADA / NAO TESTADA.
 
 ### S0 - FUNDACAO E SEGURANCA (1 dia)  [antecede tudo - regra 19]
 Objetivo: nunca mais perder trabalho; base para alteracoes estruturais.
-- [ ] `git init` + `.gitignore` (excluir `.env`, `config/*.json` com segredo,
+- [x] `git init` + `.gitignore` (excluir `.env`, `config/*.json` com segredo,
       `whatsapp/auth/`, `recordings/`, `.venv/`, `node_modules/`) + commit inicial
-- [ ] Backup zip datado de `sermon-pipeline` + `pregacao-recorder` (fora do repo)
-- [ ] Trava de instancia unica no servidor (`app/main.py`) reaproveitando
+      -> repo `marcellolabr3/pregacao-recorder` (publico), commit `78f6969`
+- [x] Backup zip datado de `sermon-pipeline` + `pregacao-recorder` (fora do repo)
+      -> `D:\Dev\backups\*_2026-10-18_1237.zip`
+- [x] Trava de instancia unica no servidor (`app/main.py`) reaproveitando
       `TravaInstancia` de `app/remote/agent.py:981` e no tray do pipeline
-- [ ] Sincronizar `docs/TESTES.md` (290) e registrar a auditoria (este arquivo)
+      (`tray_app/app.py`, trava nova por pid - entra em vigor no proximo boot)
+- [x] Sincronizar `docs/TESTES.md` (292) e registrar a auditoria (este arquivo)
 - Marcar L1, L3, parte de L19
-- Testes: 290 verdes + teste novo de trava no servidor
+- Testes: 292 verdes + `tests/test_main.py` (2 testes de trava)
 - **Nao fazer**: nenhuma feature nova nesta sprint
 
 ### S1 - EXECUCAO SILENCIOSA E LOGS (1-2 dias)  [FASE 1 do prompt]

@@ -31,9 +31,12 @@ Os testes usam um diretorio temporario (`PREGACAO_HOME`) - **nao** mexem em
 | `tests/test_manager.py` | finalizacao, recuperacao, descarte, **gravacao vazia nao vira ERRO** |
 | `tests/test_network.py` | Ethernet, Wi-Fi, Access Point, watchdog e Tailscale (47 testes) |
 | `tests/test_network_api.py` | API de rede protegida por PIN de administrador |
-| `tests/test_remote_agent.py` | controle remoto: topics, comandos idempotentes, `ack`, prazo de validade (`ts`/TTL), estado retido, ciclo do servico e callbacks do paho (35 testes) |
+| `tests/test_remote_agent.py` | controle remoto: topics, comandos idempotentes, `ack`, prazo de validade (`ts`/TTL), estado retido, ciclo do servico e callbacks do paho (62 testes) |
+| `tests/test_destinos.py` | destinos de gravacao: SSD e cartao SD, pontos de montagem, escolha valida (18 testes) |
+| `tests/test_estudos.py` | autenticacao do NotebookLM: pre-flight, pausa AGUARDANDO, retomada, keepalive oficial, login visivel (14 testes) |
+| `tests/test_main.py` | instancia unica do servidor (S0) |
 
-Total: **272 testes**.
+Total: **292 testes**.
 
 ### Smoke test do servidor ligado
 
@@ -143,7 +146,7 @@ repetidos.
 
 ## 6. Criterios de aceite do projeto
 
-- [ ] `python -m pytest` verde (101 testes)
+- [ ] `python -m pytest` verde (292 testes)
 - [ ] `scripts/smoke.py` 21/21
 - [ ] `pregacao doctor` sem XX
 - [ ] `pregacao check` com sinal

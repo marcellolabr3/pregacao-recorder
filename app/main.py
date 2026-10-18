@@ -124,12 +124,34 @@ def _install_signal_handlers(manager, uploader) -> None:  # pragma: no cover
             pass
 
 
-def run(host: Optional[str] = None, port: Optional[int] = None) -> None:
+def _so_uma_instancia(log) -> bool:
+    """Impede duas instancias do servidor no mesmo equipamento.
+
+    A segunda brigaria pela porta e, antes de perder, ja teria subido
+    recuperacao de gravacoes, uploader e fila de estudos - trabalho
+    duplicado (nenhuma etapa pode rodar duas vezes).
+    """
+    from .remote.agent import TravaInstancia
+
+    caminho = paths.home() / "logs" / "servidor.pid"
+    if not TravaInstancia(caminho).adquirir():
+        log.error(
+            "outra instancia do pregacao-recorder ja esta rodando "
+            "(pid em %s); encerre a outra antes de iniciar esta",
+            caminho,
+        )
+        return False
+    return True
+
+
+def run(host: Optional[str] = None, port: Optional[int] = None) -> Optional[bool]:
     _bootstrap()
     from .config import config
     from .logging_setup import get
 
     log = get("main")
+    if not _so_uma_instancia(log):
+        return False
     app, manager, uploader = build()
     _install_signal_handlers(manager, uploader)
 
@@ -168,8 +190,8 @@ def main(argv: Optional[list] = None) -> int:
         print(f"{len(items)} gravacao(oes) interrompida(s)")
         return 0
 
-    run(args.host, args.port)
-    return 0
+    iniciou = run(args.host, args.port)
+    return 1 if iniciou is False else 0
 
 
 if __name__ == "__main__":  # pragma: no cover
