@@ -118,6 +118,11 @@ Objetivo: o operador ve a etapa real no PC e no celular.
 - [ ] Painel web: barra/etapas por job (verde/executando/pendente/amarelo/vermelho)
 - [ ] APK: secao de progresso lendo o mesmo topico (compat iOS intacto)
 - [ ] Reconectar/abrir APK recebe estado atual sem reiniciar nada
+- [ ] Painel /config: area **SAÚDE DAS INTEGRAÇÕES** (Drive, NotebookLM,
+      WhatsApp, EMQX) com estados padrao (Conectado/NaO configurado/
+      Verificando/Autenticacao necessaria/Erro), ultima verificacao,
+      resultado real, diagnostico e acao necessaria (prompt item 8 -
+      estava fora do plano; adicionado na revisao de 18/10)
 - Marcar L8, L9, L10
 - Testes: agent (payloads novos), app.js via teste de rota, Flutter
   `protocolo_test.dart`
@@ -168,8 +173,10 @@ Objetivo: fechar as lacunas de resiliencia com prova real.
 
 ### S7 - DOCUMENTACAO COMPLETA (3-4 dias)  [FASE 6 - obrigatorio]
 Objetivo: entrega para leigos + manutencao + relatorio final.
-- [ ] DOC A: `docs/PREGACAO-COMO-FUNCIONA.md` (leigo, fluxogramas,
-      tabela de tecnologias, o que pronto/pendente) - formatar PDF
+- [x] DOC A: `docs/PREGACAO-COMO-FUNCIONA.md` (leigo:13 secoes, fluxogramas,
+      tabela de tecnologias, o que pronto/pendente) - **concluido em 18/10**:
+      fonte Markdown + `docs/PREGACAO-COMO-FUNCIONA.pdf` (7 paginas, gerado
+      por `scripts/md_para_pdf.py`) + exemplo visual da barra de progresso
 - [ ] DOC B: manual do operador (atualizar/expandir `GUIA-USUARIO.md`) - PDF,
       so com screenshots reais
 - [ ] DOC C: documentacao tecnica (atualizar `docs/` + `DOCUMENTACAO.md`:
