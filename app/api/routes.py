@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import subprocess
 import time
 from datetime import datetime
 from html import escape
+from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import quote
 
@@ -17,6 +19,13 @@ from ..audio import device as audio_device
 from ..config import config
 from ..db import db
 from ..events import bus
+from ..importacao import (
+    PregacaoImportada,
+    gerar_modelo_csv,
+    gravar_pregacoes,
+    importar_csv,
+    importar_xlsx,
+)
 from ..logging_setup import get
 from ..recording.manager import ManagerError, RecordingManager
 from ..states import InvalidTransition, State, state_machine
@@ -966,6 +975,145 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
 
         saida["verificado_em"] = agora
         return jsonify(saida)
+
+    # =====================================================================
+    # S4: programacao de pregacoes (metadados) + importacao CSV/XLSX
+    # =====================================================================
+    @app.get("/api/pregacoes")
+    @auth.require_auth
+    def listar_pregacoes():
+        data_de = request.args.get("data_de")
+        data_ate = request.args.get("data_ate")
+        pregacoes = db.list_pregacoes(data_de, data_ate)
+        return jsonify({"pregacoes": pregacoes})
+
+    @app.get("/api/pregacoes/<int:pid>")
+    @auth.require_auth
+    def obter_pregacao(pid: int):
+        p = db.get_pregacao(pid)
+        if not p:
+            return _err("Pregacao nao encontrada", 404, "nao_encontrado")
+        return jsonify(p)
+
+    @app.post("/api/pregacoes")
+    @auth.require_admin
+    def criar_pregacao():
+        body = request.get_json(silent=True) or {}
+        try:
+            pid = db.create_pregacao(
+                data=str(body.get("data", "") or "").strip(),
+                horario=str(body.get("horario", "") or "").strip(),
+                pregador=str(body.get("pregador", "") or "").strip(),
+                igreja=str(body.get("igreja", "") or "").strip(),
+                texto_base=str(body.get("texto_base", "") or "").strip(),
+                tema=str(body.get("tema", "") or "").strip(),
+            )
+        except sqlite3.IntegrityError:
+            return _err(
+                "Ja existe pregacao nesta data e horario", 409, "duplicata"
+            )
+        return jsonify({"id": pid, "ok": True})
+
+    @app.put("/api/pregacoes/<int:pid>")
+    @auth.require_admin
+    def atualizar_pregacao(pid: int):
+        body = request.get_json(silent=True) or {}
+        ok = db.update_pregacao(
+            pid,
+            data=body.get("data"),
+            horario=body.get("horario"),
+            pregador=body.get("pregador"),
+            igreja=body.get("igreja"),
+            texto_base=body.get("texto_base"),
+            tema=body.get("tema"),
+        )
+        if not ok:
+            return _err("Pregacao nao encontrada ou versao desatualizada", 404, "nao_encontrado")
+        return jsonify({"ok": True})
+
+    @app.delete("/api/pregacoes/<int:pid>")
+    @auth.require_admin
+    def deletar_pregacao(pid: int):
+        ok = db.delete_pregacao(pid)
+        if not ok:
+            return _err("Pregacao nao encontrada", 404, "nao_encontrado")
+        return jsonify({"ok": True})
+
+    @app.post("/api/importacao/previa")
+    @auth.require_admin
+    def importacao_previa():
+        """Le CSV ou XLSX (multipart) e devolve previa: validos, erros, duplicatas.
+        Nao grava nada no banco."""
+        if "arquivo" not in request.files:
+            return _err("arquivo nao enviado", 400, "arquivo_ausente")
+        f = request.files["arquivo"]
+        nome = f.filename or ""
+        extensao = Path(nome).suffix.lower()
+        conteudo = f.read()
+        try:
+            if extensao == ".csv":
+                texto = conteudo.decode("utf-8", errors="replace")
+                resultado = importar_csv(texto, db.get_pregacao_por_data_horario)
+            elif extensao in (".xlsx", ".xls"):
+                # salva temporario para openpyxl
+                import tempfile
+                with tempfile.NamedTemporaryFile(
+                    suffix=extensao, delete=False
+                ) as tmp:
+                    tmp.write(conteudo)
+                    tmp_path = Path(tmp.name)
+                try:
+                    resultado = importar_xlsx(tmp_path, db.get_pregacao_por_data_horario)
+                finally:
+                    tmp_path.unlink(missing_ok=True)
+            else:
+                return _err("formato nao suportado (use .csv ou .xlsx)", 400, "formato_invalido")
+        except Exception as exc:  # noqa: BLE001
+            return _err(f"falha ao ler arquivo: {exc}", 400, "leitura_falhou")
+
+        return jsonify({
+            "validos": [p.to_dict() for p in resultado.validos],
+            "erros": resultado.erros,
+            "duplicatas": resultado.duplicatas,
+        })
+
+    @app.post("/api/importacao/confirmar")
+    @auth.require_admin
+    def importacao_confirmar():
+        """Recebe a lista de validos (ja validados na previa) e grava no banco."""
+        body = request.get_json(silent=True) or {}
+        validos = body.get("validos", [])
+        if not isinstance(validos, list) or not validos:
+            return _err("nenhuma pregacao valida para gravar", 400, "vazio")
+        pregacoes = [
+            PregacaoImportada(
+                data=str(v.get("data", "")).strip(),
+                horario=str(v.get("horario", "")).strip(),
+                pregador=str(v.get("pregador", "")).strip(),
+                igreja=str(v.get("igreja", "")).strip(),
+                texto_base=str(v.get("texto_base", "")).strip(),
+                tema=str(v.get("tema", "")).strip(),
+                linha_origem=0,
+            )
+            for v in validos
+        ]
+        try:
+            ids = gravar_pregacoes(db, pregacoes)
+        except sqlite3.IntegrityError:
+            return _err("duplicata detectada na gravacao", 409, "duplicata")
+        return jsonify({"gravados": len(ids), "ids": ids, "ok": True})
+
+    @app.get("/api/importacao/modelo")
+    @auth.require_auth
+    def importacao_modelo():
+        """Devolve CSV modelo para download."""
+        from flask import Response
+        csv_texto = gerar_modelo_csv()
+        return Response(
+            csv_texto,
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment; filename=modelo_pregacoes.csv"},
+        )
 
     @app.post("/api/estudos/diagnosticar")
     @auth.require_auth

@@ -363,3 +363,84 @@ void main() {
     });
   });
 }
+
+  group('Pregacao (S4)', () {
+    test('ComandoPregacao valores corretos', () {
+      expect(ComandoPregacao.listar.valor, 'PREGACAO_LISTAR');
+      expect(ComandoPregacao.obter.valor, 'PREGACAO_OBTER');
+      expect(ComandoPregacao.criar.valor, 'PREGACAO_CRIAR');
+      expect(ComandoPregacao.atualizar.valor, 'PREGACAO_ATUALIZAR');
+      expect(ComandoPregacao.deletar.valor, 'PREGACAO_DELETAR');
+    });
+
+    test('payload completo do servidor', () {
+      final p = Pregacao.fromJson(const {
+        'id': 42,
+        'data': '2026-10-25',
+        'horario': '19:00',
+        'pregador': 'Pr. Joao',
+        'igreja': 'Igreja Central',
+        'texto_base': 'Joao 3:16',
+        'tema': 'O Amor de Deus',
+        'versao': 3,
+        'criado_em': 1790000000.0,
+        'atualizado_em': 1790000001.0,
+      });
+      expect(p.id, 42);
+      expect(p.data, '2026-10-25');
+      expect(p.horario, '19:00');
+      expect(p.pregador, 'Pr. Joao');
+      expect(p.igreja, 'Igreja Central');
+      expect(p.textoBase, 'Joao 3:16');
+      expect(p.tema, 'O Amor de Deus');
+      expect(p.versao, 3);
+      expect(p.criadoEm, closeTo(1790000000.0, 0.001));
+      expect(p.atualizadoEm, closeTo(1790000001.0, 0.001));
+      expect(p.rotulo, '2026-10-25 19:00  Pr. Joao / Igreja Central');
+    });
+
+    test('toJson so inclui campos necessarios para criar/atualizar', () {
+      final p = Pregacao(
+        id: 1,
+        data: '2026-10-25',
+        horario: '19:00',
+        pregador: 'Pr. A',
+        igreja: 'Igreja B',
+        textoBase: 'Texto',
+        tema: 'Tema',
+        versao: 2,
+      );
+      final json = p.toJson();
+      expect(json['id'], 1);
+      expect(json['data'], '2026-10-25');
+      expect(json['horario'], '19:00');
+      expect(json['pregador'], 'Pr. A');
+      expect(json['igreja'], 'Igreja B');
+      expect(json['texto_base'], 'Texto');
+      expect(json['tema'], 'Tema');
+      expect(json['versao'], 2);
+      // criado_em e atualizado_em nao vao no toJson (so leitura)
+      expect(json.containsKey('criado_em'), isFalse);
+    });
+
+    test('payload malformado (campos ausentes) nao quebra', () {
+      final p = Pregacao.fromJson(const {});
+      expect(p.id, 0);
+      expect(p.data, '');
+      expect(p.versao, 1);
+      expect(p.rotulo, '  / ');
+    });
+
+    test('aceita int, double ou String nos numericos', () {
+      final a = Pregacao.fromJson({'id': 1, 'versao': 2});
+      final b = Pregacao.fromJson({'id': 1.0, 'versao': 2.0});
+      final c = Pregacao.fromJson({'id': '5', 'versao': '3'});
+      expect(a.id, 1);
+      expect(a.versao, 2);
+      expect(b.id, 1);
+      expect(b.versao, 2);
+      expect(c.id, 5);
+      expect(c.versao, 3);
+    });
+  });
+}

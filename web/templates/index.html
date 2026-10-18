@@ -304,6 +304,65 @@
          usuario final nunca as enxerga.</p>
     </section>
 
+    <!-- ===== PROGRAMACAO DE PREGACOES (S4) ===== -->
+    <section class="card">
+      <div class="card-title">PROGRAMACAO DE PREGACOES</div>
+      <div class="btn-row">
+        <button id="btnAddPregacao" class="btn btn-primary btn-sm" type="button">NOVA PREGACAO</button>
+        <button id="btnImportPregacao" class="btn btn-ghost btn-sm" type="button">IMPORTAR CSV/XLSX</button>
+        <a id="btnDownloadModelo" class="btn btn-ghost btn-sm" type="button" download="modelo_pregacoes.csv">BAIXAR MODELO</a>
+      </div>
+      <div id="pregacaoMsg" class="muted"></div>
+      <ul id="pregacoesList" class="notiff"></ul>
+
+      <!-- Modal nova/edita pregacao -->
+      <div id="pregacaoOverlay" class="overlay hidden">
+        <div class="overlay-card wide">
+          <h2 id="pregacaoOverlayTitle">NOVA PREGACAO</h2>
+          <form id="pregacaoForm">
+            <input type="hidden" name="id" id="pregacaoId">
+            <label>Data (AAAA-MM-DD)
+              <input name="data" type="date" required>
+            </label>
+            <label>Horario (HH:MM)
+              <input name="horario" type="time" step="60" required>
+            </label>
+            <label>Pregador
+              <input name="pregador" type="text" maxlength="80" required>
+            </label>
+            <label>Igreja
+              <input name="igreja" type="text" maxlength="80" required>
+            </label>
+            <label>Texto base (referencia biblica)
+              <input name="texto_base" type="text" maxlength="120" placeholder="ex: Joao 3:16">
+            </label>
+            <label>Tema
+              <input name="tema" type="text" maxlength="120" placeholder="ex: O Amor de Deus">
+            </label>
+            <div class="btn-row">
+              <button type="button" id="pregacaoCancel" class="btn btn-ghost">CANCELAR</button>
+              <button type="submit" class="btn btn-primary">SALVAR</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Modal importacao -->
+      <div id="importOverlay" class="overlay hidden">
+        <div class="overlay-card wide">
+          <h2>IMPORTAR PROGRAMACAO (CSV/XLSX)</h2>
+          <p class="hint">Colunas: data, horario, pregador, igreja, texto_base, tema</p>
+          <input type="file" id="importFile" accept=".csv,.xlsx,.xls">
+          <div id="importPreview" class="hint" style="display:none"></div>
+          <div id="importMsg" class="muted"></div>
+          <div class="btn-row">
+            <button type="button" id="importCancel" class="btn btn-ghost">CANCELAR</button>
+            <button type="button" id="importConfirm" class="btn btn-primary" disabled>CONFIRMAR GRAVACAO</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="card" id="netCard">
       <div class="card-title">REDE</div>
 

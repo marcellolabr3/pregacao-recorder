@@ -371,3 +371,86 @@ class ProgressoJob {
     return 'pendente';
   }
 }
+
+/// Comando para gerenciar programacao de pregacoes (S4).
+/// O agente recebe, valida (admin) e executa no SQLite local.
+/// Payloads usam o mesmo contrato de versao otimista do servidor.
+enum ComandoPregacao {
+  listar('PREGACAO_LISTAR'),
+  obter('PREGACAO_OBTER'),
+  criar('PREGACAO_CRIAR'),
+  atualizar('PREGACAO_ATUALIZAR'),
+  deletar('PREGACAO_DELETAR');
+
+  final String valor;
+  const ComandoPregacao(this.valor);
+}
+
+/// Pregacao (metadados da programacao) - espelha a tabela SQLite.
+/// Versao otimista: atualizar/deletar so sucedem se versao bater.
+class Pregacao {
+  final int id;
+  final String data;
+  final String horario;
+  final String pregador;
+  final String igreja;
+  final String textoBase;
+  final String tema;
+  final int versao;
+  final double criadoEm;
+  final double atualizadoEm;
+
+  const Pregacao({
+    this.id = 0,
+    this.data = '',
+    this.horario = '',
+    this.pregador = '',
+    this.igreja = '',
+    this.textoBase = '',
+    this.tema = '',
+    this.versao = 1,
+    this.criadoEm = 0,
+    this.atualizadoEm = 0,
+  });
+
+  factory Pregacao.fromJson(Map<String, dynamic> json) {
+    int inteiro(dynamic v) {
+      if (v is int) return v;
+      if (v is double) return v.toInt();
+      if (v is String) return int.tryParse(v) ?? 0;
+      return 0;
+    }
+    double real(dynamic v) {
+      if (v is double) return v;
+      if (v is int) return v.toDouble();
+      if (v is String) return double.tryParse(v) ?? 0;
+      return 0;
+    }
+
+    return Pregacao(
+      id: inteiro(json['id']),
+      data: json['data'] as String? ?? '',
+      horario: json['horario'] as String? ?? '',
+      pregador: json['pregador'] as String? ?? '',
+      igreja: json['igreja'] as String? ?? '',
+      textoBase: json['texto_base'] as String? ?? '',
+      tema: json['tema'] as String? ?? '',
+      versao: inteiro(json['versao']),
+      criadoEm: real(json['criado_em']),
+      atualizadoEm: real(json['atualizado_em']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'data': data,
+    'horario': horario,
+    'pregador': pregador,
+    'igreja': igreja,
+    'texto_base': textoBase,
+    'tema': tema,
+    'versao': versao,
+  };
+
+  String get rotulo => '$data $horario  $pregador / $igreja';
+}

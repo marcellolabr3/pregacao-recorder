@@ -70,6 +70,23 @@ CREATE TABLE IF NOT EXISTS jobs (
     finished_at    REAL
 );
 
+-- S4: programacao de pregacoes (metadados unicos, no PC, refletidos no celular)
+CREATE TABLE IF NOT EXISTS pregacoes (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    data           TEXT NOT NULL,           -- AAAA-MM-DD
+    horario        TEXT NOT NULL,           -- HH:MM
+    pregador       TEXT NOT NULL,
+    igreja         TEXT NOT NULL,
+    texto_base     TEXT,                    -- referencia biblica
+    tema           TEXT,                    -- tema da pregacao
+    criado_em      REAL NOT NULL,
+    atualizado_em  REAL NOT NULL,
+    versao         INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pregacoes_data_horario
+    ON pregacoes(data, horario);
+
 CREATE TABLE IF NOT EXISTS events (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     ts       REAL NOT NULL,
@@ -463,6 +480,119 @@ class Database:
                 "ORDER BY updated_at DESC LIMIT 1"
             ).fetchone()
         return str(row["motivo"]) if row else ""
+
+    # -- programacao de pregacoes (S4) ------------------------------------
+    def create_pregacao(
+        self,
+        data: str,
+        horario: str,
+        pregador: str,
+        igreja: str,
+        texto_base: str = "",
+        tema: str = "",
+    ) -> int:
+        """Insere uma nova pregacao. Retorna o id (PK). Levanta sqlite3.IntegrityError
+        se ja existir mesma data+horario (index unico)."""
+        agora = time.time()
+        with self.connection() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO pregacoes (data, horario, pregador, igreja, texto_base, tema,
+                                       criado_em, atualizado_em, versao)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+                """,
+                (data, horario, pregador, igreja, texto_base, tema, agora, agora),
+            )
+            return cur.lastrowid
+
+    def get_pregacao(self, pregacao_id: int) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM pregacoes WHERE id = ?", (pregacao_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_pregacao_por_data_horario(
+        self, data: str, horario: str
+    ) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM pregacoes WHERE data = ? AND horario = ?",
+                (data, horario),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_pregacoes(
+        self, data_de: Optional[str] = None, data_ate: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        sql = "SELECT * FROM pregacoes"
+        params = []
+        if data_de or data_ate:
+            sql += " WHERE"
+            if data_de:
+                sql += " data >= ?"
+                params.append(data_de)
+            if data_ate:
+                if data_de:
+                    sql += " AND"
+                sql += " data <= ?"
+                params.append(data_ate)
+        sql += " ORDER BY data DESC, horario DESC"
+        with self.connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_pregacao(self, pregacao_id: int, **fields: Any) -> bool:
+        """Atualiza campos da pregacao. Incrementa versao automaticamente
+        para evitar sobrescrita concorrente (celular/PC)."""
+        if not fields:
+            return False
+        # so campos validos
+        permitidos = {"data", "horario", "pregador", "igreja", "texto_base", "tema"}
+        campos = {k: v for k, v in fields.items() if k in permitidos}
+        if not campos:
+            return False
+        agora = time.time()
+        campos["atualizado_em"] = agora
+        # versao otimista: o WHERE checa a versao atual
+        with self.connection() as conn:
+            cur = conn.execute(
+                "SELECT versao FROM pregacoes WHERE id = ?", (pregacao_id,)
+            ).fetchone()
+            if not cur:
+                return False
+            versao_atual = cur["versao"]
+            campos["versao"] = versao_atual + 1
+            set_clause = ", ".join(f"{k} = :{k}" for k in campos)
+            cur = conn.execute(
+                f"UPDATE pregacoes SET {set_clause} WHERE id = :_id AND versao = :_versao",
+                {"_id": pregacao_id, "_versao": versao_atual, **campos},
+            )
+            return cur.rowcount > 0
+
+    def delete_pregacao(self, pregacao_id: int) -> bool:
+        with self.connection() as conn:
+            cur = conn.execute(
+                "DELETE FROM pregacoes WHERE id = ?", (pregacao_id,)
+            )
+            return cur.rowcount > 0
+
+    def snapshot_pregacao_para_job(self, data: str, horario: str) -> Optional[Dict[str, Any]]:
+        """Converte a pregacao em dict JSON para gravar no jobs.metadados
+        (congelamento no momento do estudo)."""
+        p = self.get_pregacao_por_data_horario(data, horario)
+        if not p:
+            return None
+        return {
+            "pregacao_id": p["id"],
+            "data": p["data"],
+            "horario": p["horario"],
+            "pregador": p["pregador"],
+            "igreja": p["igreja"],
+            "texto_base": p["texto_base"],
+            "tema": p["tema"],
+            "versao": p["versao"],
+        }
 
     # -- notificacoes / log de eventos -----------------------------------
     def add_event(self, level: str, kind: str, message: str, payload: Any = None) -> None:

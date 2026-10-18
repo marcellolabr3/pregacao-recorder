@@ -744,9 +744,210 @@
         + (srcLabel[d.source] !== undefined ? srcLabel[d.source] : d.source);
 
       loadNetwork();
+    loadPregacoes();
     };
     if (data) apply(data);
     else api("/api/config").then(apply).catch(function (e) { toast(e.message, "error"); });
+  }
+
+  // ================================================================
+  // S4: PROGRAMACAO DE PREGACOES (CRUD + IMPORTACAO)
+  // ================================================================
+  var _pregacoesCache = []; // cache local para importacao
+
+  function loadPregacoes() {
+    api("/api/pregacoes").then(function (r) {
+      _pregacoesCache = r.pregacoes || [];
+      renderPregacoes();
+    }).catch(function (e) {
+      toast(e.message, "error");
+    });
+  }
+
+  function renderPregacoes() {
+    var list = $("pregacoesList");
+    if (!list) return;
+    if (!_pregacoesCache.length) {
+      list.innerHTML = "<li class='muted'>Nenhuma pregacao cadastrada</li>";
+      return;
+    }
+    list.innerHTML = "";
+    _pregacoesCache.forEach(function (p) {
+      var li = document.createElement("li");
+      li.innerHTML =
+        "<strong>" + p.data + " " + p.horario + "</strong>  " +
+        esc(p.pregador) + " / " + esc(p.igreja) +
+        (p.texto_base ? " · " + esc(p.texto_base) : "") +
+        (p.tema ? " · " + esc(p.tema) : "");
+      var btns = document.createElement("div");
+      btns.style.marginTop = "4px";
+      var editar = document.createElement("button");
+      editar.className = "btn btn-ghost btn-sm";
+      editar.type = "button";
+      editar.textContent = "EDITAR";
+      editar.onclick = function () { openPregacaoModal(p); };
+      var excluir = document.createElement("button");
+      excluir.className = "btn btn-ghost btn-sm";
+      excluir.type = "button";
+      excluir.textContent = "EXCLUIR";
+      excluir.style.color = "var(--red2)";
+      excluir.style.borderColor = "var(--red2)";
+      excluir.onclick = function () {
+        if (!confirm("Excluir pregacao de " + p.data + " " + p.horario + "?")) return;
+        api("/api/pregacoes/" + p.id, "DELETE").then(function () {
+          toast("Pregacao excluida", "success");
+          loadPregacoes();
+        }).catch(function (e) { toast(e.message, "error"); });
+      };
+      btns.appendChild(editar);
+      btns.appendChild(excluir);
+      li.appendChild(btns);
+      list.appendChild(li);
+    });
+  }
+
+  function openPregacaoModal(p) {
+    var overlay = $("pregacaoOverlay");
+    var form = $("pregacaoForm");
+    var title = $("pregacaoOverlayTitle");
+    form.reset();
+    if (p) {
+      title.textContent = "EDITAR PREGACAO";
+      $("pregacaoId").value = p.id;
+      form.elements["data"].value = p.data;
+      form.elements["horario"].value = p.horario;
+      form.elements["pregador"].value = p.pregador;
+      form.elements["igreja"].value = p.igreja;
+      form.elements["texto_base"].value = p.texto_base || "";
+      form.elements["tema"].value = p.tema || "";
+    } else {
+      title.textContent = "NOVA PREGACAO";
+      $("pregacaoId").value = "";
+      var hoje = new Date();
+      var dataPadrao = hoje.getFullYear() + "-" +
+        String(hoje.getMonth() + 1).padStart(2, "0") + "-" +
+        String(hoje.getDate()).padStart(2, "0");
+      form.elements["data"].value = dataPadrao;
+      form.elements["horario"].value = "19:00";
+    }
+    overlay.classList.remove("hidden");
+    setTimeout(function () { form.elements["pregador"].focus(); }, 60);
+  }
+
+  function closePregacaoModal() {
+    $("pregacaoOverlay").classList.add("hidden");
+    $("pregacaoForm").reset();
+  }
+
+  function savePregacao(ev) {
+    ev.preventDefault();
+    var form = $("pregacaoForm");
+    var id = form.elements["id"].value;
+    var payload = {
+      data: form.elements["data"].value,
+      horario: form.elements["horario"].value,
+      pregador: form.elements["pregador"].value.trim(),
+      igreja: form.elements["igreja"].value.trim(),
+      texto_base: form.elements["texto_base"].value.trim(),
+      tema: form.elements["tema"].value.trim(),
+    };
+    var url = id ? "/api/pregacoes/" + id : "/api/pregacoes";
+    var method = id ? "PUT" : "POST";
+    var msg = $("pregacaoMsg");
+    msg.textContent = "salvando...";
+    api(url, method, payload).then(function () {
+      msg.textContent = "";
+      toast(id ? "Pregacao atualizada" : "Pregacao criada", "success");
+      closePregacaoModal();
+      loadPregacoes();
+    }).catch(function (e) {
+      msg.textContent = e.message;
+      toast(e.message, "error");
+    });
+  }
+
+  // ----- IMPORTACAO CSV/XLSX -----
+  function openImportModal() {
+    $("importOverlay").classList.remove("hidden");
+    $("importFile").value = "";
+    $("importPreview").style.display = "none";
+    $("importPreview").textContent = "";
+    $("importMsg").textContent = "";
+    $("importConfirm").disabled = true;
+  }
+
+  function closeImportModal() {
+    $("importOverlay").classList.add("hidden");
+  }
+
+  function previewImport(ev) {
+    var file = ev.target.files[0];
+    if (!file) return;
+    var formData = new FormData();
+    formData.append("arquivo", file);
+    var msg = $("importMsg");
+    msg.textContent = "lendo...";
+    fetch("/api/importacao/previa", {
+      method: "POST", body: formData, credentials: "same-origin"
+    }).then(function (resp) {
+      return resp.json().catch(function () { return {}; }).then(function (data) {
+        if (!resp.ok) {
+          msg.textContent = data.message || "falha na leitura";
+          throw new Error(data.message);
+        }
+        var v = data.validos || [];
+        var e = data.erros || [];
+        var d = data.duplicatas || [];
+        var partes = [];
+        if (v.length) partes.push(v.length + " valido(s)");
+        if (e.length) partes.push(e.length + " erro(s)");
+        if (d.length) partes.push(d.length + " duplicata(s)");
+        msg.textContent = partes.join(" · ") || "vazio";
+        if (v.length) {
+          var linhas = v.slice(0, 5).map(function (p) {
+            return p.data + " " + p.horario + " · " + p.pregador + " / " + p.igreja;
+          }).join("\n");
+          if (v.length > 5) linhas += "\n... e mais " + (v.length - 5);
+          $("importPreview").textContent = "Validos:\n" + linhas;
+          $("importPreview").style.display = "block";
+        }
+        if (e.length || d.length) {
+          _pregacoesCache = v; // guarda para confirmar
+          $("importConfirm").disabled = false;
+        } else {
+          _pregacoesCache = v;
+          $("importConfirm").disabled = v.length === 0;
+        }
+      });
+    }).catch(function () {});
+  }
+
+  function confirmImport() {
+    if (!_pregacoesCache.length) return;
+    var msg = $("importMsg");
+    msg.textContent = "gravando...";
+    api("/api/importacao/confirmar", "POST", { validos: _pregacoesCache })
+      .then(function () {
+        msg.textContent = "";
+        toast("Importacao concluida", "success");
+        closeImportModal();
+        loadPregacoes();
+      }).catch(function (e) {
+        msg.textContent = e.message;
+        toast(e.message, "error");
+      });
+  }
+
+  function downloadModelo() {
+    // o link ja aponta para /api/importacao/modelo via atributo download
+    // mas forca o fetch se o navegador nao respeitar
+    api("/api/importacao/modelo").then(function (blob) {
+      // Response blob handling for browsers that ignore download attr on <a>
+      var url = window.URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = "modelo_pregacoes.csv"; a.click();
+      window.URL.revokeObjectURL(url);
+    }).catch(function () {});
   }
 
   function saveConfig(ev) {
@@ -1321,6 +1522,19 @@
       api("/api/drive/test", "POST").then(function (r) {
         toast("Conexao OK - pasta acessivel", "success");
       }).catch(function (e) { toast(e.message, "error"); });
+    });
+
+    // PREGACOES (S4)
+    $("btnAddPregacao").addEventListener("click", function () { openPregacaoModal(null); });
+    $("pregacaoForm").addEventListener("submit", savePregacao);
+    $("pregacaoCancel").addEventListener("click", closePregacaoModal);
+    $("btnImportPregacao").addEventListener("click", openImportModal);
+    $("importCancel").addEventListener("click", closeImportModal);
+    $("importFile").addEventListener("change", previewImport);
+    $("importConfirm").addEventListener("click", confirmImport);
+    $("btnDownloadModelo").addEventListener("click", function (ev) {
+      ev.preventDefault();
+      downloadModelo();
     });
 
     $("btnNlmCheck").addEventListener("click", function () {

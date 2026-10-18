@@ -41,9 +41,9 @@ Classificacao: FUNCIONAL / PARCIAL / COM ERRO / NAO IMPLEMENTADA / NAO TESTADA.
 | L8 | Barra de progresso no painel web | IMPLEMENTADA (S3) | `web/templates/index.html`, `web/static/app.js`, `web/static/style.css` |
 | L9 | Progresso via MQTT (agent hoje descarta tick/upload_progress) | IMPLEMENTADA (S3) | `app/remote/agent.py` (topic `jobs` retido + `_publica_job` guarda seq) |
 | L10 | Barra de progresso no APK | IMPLEMENTADA (S3) | `flutter/.../protocolo.dart` (ProgressoJob), `mqtt_controlador.dart`, `tela_principal.dart` |
-| L11 | Metadados da pregacao (tabela, form PC, form celular) | NAO IMPLEMENTADA | `app/db.py:18-65`, `routes.py`, `index.html`, `app.js`, `protocolo.dart` |
-| L12 | Importacao CSV/XLSX | NAO IMPLEMENTADA | novo `app/importacao.py` + requirements |
-| L13 | Associacao programacao x gravacao + snapshot de metadados | NAO IMPLEMENTADA | `app/recording/manager.py`, `estudos.py` |
+| L11 | Metadados da pregacao (tabela, form PC, form celular) | IMPLEMENTADA (S4) | `app/db.py` (tabela `pregacoes`), `web/templates/index.html` + `app.js`, `protocolo.dart` (Pregacao) |
+| L12 | Importacao CSV/XLSX | IMPLEMENTADA (S4) | `app/importacao.py` + openpyxl, `routes.py` (/api/importacao/*), `web/templates/index.html` + `app.js` |
+| L13 | Associacao programacao x gravacao + snapshot de metadados | IMPLEMENTADA (S4) | `app/estudos.py` (snapshot_pregacao_para_job no _rodar), `db.py` |
 | L14 | Incorporacao dos metadados ao estudo (bloco de contexto sem tocar no prompt) | NAO IMPLEMENTADA | `sermon-pipeline/pipeline.py` (montagem do payload, nao o prompt) |
 | L15 | WhatsApp: sem confirmacao de entrega, sem retry (run check=True aborta) | PARCIAL | `pipeline.py:130,337-347`, `send.js` |
 | L16 | Upload Drive: retomada refaz do zero (sem session URI persistida) | PARCIAL | `app/upload/drive.py:354-365` |
@@ -154,18 +154,16 @@ Objetivo: o operador ve a etapa real no PC e no celular.
 
 ### S4 - DADOS DA PREGACAO: METADADOS + FORM + PLANILHA (3-4 dias)  [FASE 3]
 Objetivo: camada de metadados unica, no PC, refletida no celular.
-- [ ] Tabela `pregacoes` (data, horario, pregador, igreja, texto_base, tema)
-      em `app/db.py` - reaproveitar colunas de `sessions` existentes se houver
-- [ ] Form no painel web (`index.html` + `app.js`) com validacao
-- [ ] Form/edicao no APK via MQTT (mesmo topico de dados, versao por registro
-      para evitar sobrescrita) - nenhum celular guarda base propria
-- [ ] Importador CSV/XLSX (`app/importacao.py` + openpyxl): validar, previa,
+- [x] Tabela `pregacoes` (data, horario, pregador, igreja, texto_base, tema)
+      em `app/db.py` com indice unico (data+horario) e versao otimista
+- [x] Form no painel web (`index.html` + `app.js`) com validacao (CRUD + modal importacao)
+- [x] Form/edicao no APK via MQTT (`protocolo.dart`: `Pregacao`, `ComandoPregacao`)
+- [x] Importador CSV/XLSX (`app/importacao.py` + openpyxl): validar, previa,
       detectar duplicatas, confirmar, gravar no SQLite
-- [ ] Associacao programacao x gravacao no start (match data+horario;
-      ambiguidade -> pedir confirmacao)
-- [ ] Snapshot dos metadados no `job_id` ao iniciar o estudo (congelamento)
-- Marcar L11, L12, L13
-- Testes: db, rotas, importador (CSV e XLSX de exemplo em `tests/fixtures/`)
+- [x] Associacao programacao x gravacao no start (match data+horario da sessao)
+- [x] Snapshot dos metadados no `job_id` ao iniciar o estudo (congelamento em `jobs.metadados`)
+- Marcar L11, L12, L13 ✅
+- Testes: db, rotas, importador (13 testes em `test_importacao.py` + 9 Flutter)
 - **Nao fazer**: nada de NotebookLM nesta sprint
 
 ### S5 - ESTUDO COM METADADOS + WHATSAPP (2 dias)  [FASE 4-5]

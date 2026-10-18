@@ -37,9 +37,10 @@ Os testes usam um diretorio temporario (`PREGACAO_HOME`) - **nao** mexem em
 | `tests/test_main.py` | instancia unica do servidor (S0) |
 | `tests/test_silencio.py` | silencio no Windows (`CREATE_NO_WINDOW` em todo subprocess) e limpeza/rotacao dos logs do estudo (7 testes) |
 | `tests/test_jobs.py` | job manager persistente (S2): fila/estados no SQLite, transicoes com guarda, recuperacao no boot, acordamento de PENDENTE, enfileirar duplo, **barra/progresso/drenagem/seq honesta** (24 testes) |
-| `flutter/pregacao_controle/test/protocolo_test.dart` | protocolo Dart puro: topicos, comandos, estado, ack, evento, **ProgressoJob + topic jobs retido** (9 testes) |
+| `tests/test_importacao.py` | importacao CSV/XLSX + CRUD pregacoes + snapshot metadados (13 testes) |
+| `flutter/pregacao_controle/test/protocolo_test.dart` | protocolo Dart puro: topicos, comandos, estado, ack, evento, **ProgressoJob + topic jobs retido + Pregacao** (22 testes) |
 
-Total: **338 testes** (317 + 8 jobs + 4 agent + 9 Flutter).
+Total: **360 testes** (338 + 13 importacao + 9 Flutter Pregacao).
 
 ### Smoke test do servidor ligado
 

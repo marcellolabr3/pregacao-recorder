@@ -31,6 +31,7 @@
 # verdade e o banco; a memoria guarda apenas o cache de saude da sessao.
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -989,10 +990,35 @@ def _rodar(job: Dict[str, Any]) -> None:
         f"Gerando estudo de {Path(caminho).name} (NotebookLM)...",
         level="info",
     )
+    # snapshot dos metadados da pregacao (S4): associa a programacao
+    # do dia/horario da gravacao. Usa o started_at da sessao se houver,
+    # senao o horario atual. O snapshot congela os dados no job.metadados.
+    metadados = None
+    sess = _sessao_do_job(job)
+    if sess and sess.get("started_at"):
+        try:
+            dt = datetime.fromtimestamp(sess["started_at"])
+            data = dt.strftime("%Y-%m-%d")
+            horario = dt.strftime("%H:%M")
+            metadados = db.snapshot_pregacao_para_job(data, horario)
+        except Exception:  # noqa: BLE001 - snapshot falhou nao quebra o estudo
+            log.debug("snapshot de metadados falhou", exc_info=True)
+    if not metadados:
+        # fallback: horario atual (ex.: job criado manualmente sem sessao)
+        try:
+            agora = datetime.now()
+            metadados = db.snapshot_pregacao_para_job(
+                agora.strftime("%Y-%m-%d"), agora.strftime("%H:%M")
+            )
+        except Exception:  # noqa: BLE001
+            pass
     # prova gravada ANTES do disparo: se o processo morrer no meio, o
     # boot sabe o que rodava e onde olhar (etapa/resultado persistidos).
     # NOTEBOOKLM = etapa 4 da cadeia (os passos 3/4 do pipeline)
-    db.update_job(job_id, etapa="NOTEBOOKLM", resultado=str(arquivo_log))
+    update_campos = {"etapa": "NOTEBOOKLM", "resultado": str(arquivo_log)}
+    if metadados:
+        update_campos["metadados"] = json.dumps(metadados, ensure_ascii=False)
+    db.update_job(job_id, **update_campos)
     job = dict(job, etapa="NOTEBOOKLM", resultado=str(arquivo_log))
     _publicar_job(job, "NOTEBOOKLM")
     visto = {"envio": False, "pulado": False}
