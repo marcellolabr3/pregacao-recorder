@@ -1,8 +1,9 @@
 # Windows - instalacao e operacao
 
-Este guia descreve a instalacao manual atual. O instalador completo para outros
-PCs ainda sera desenvolvido: task [PR-DIST-001](TASK_DISTRIBUICAO_WINDOWS.md),
-com sprints e criterios de aceite em [SPRINTS.md](SPRINTS.md).
+Este guia descreve a instalacao manual atual. O instalador para uso pessoal em
+outro PC esta planejado na task [PR-DIST-001](TASK_DISTRIBUICAO_WINDOWS.md):
+tres sprints para empacotar, instalar/configurar e testar as funcionalidades atuais.
+Indice e criterios de aceite em [SPRINTS.md](SPRINTS.md).
 
 ## Requisitos
 

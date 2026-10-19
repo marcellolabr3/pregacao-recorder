@@ -43,14 +43,18 @@
 
 ## Task atual e proximo passo
 
-- Usuario pediu plano para exportar/instalar em outros PCs Windows.
-- Task `PR-DIST-001`: `docs/TASK_DISTRIBUICAO_WINDOWS.md`; indice em `docs/SPRINTS.md`.
-- Oito sprints planejadas, nenhuma implementada: 1 inventario/build; 2 correcoes;
-  3 runtime/caminhos; 4 instalador/assistente; 5 resiliencia; 6 backup/update;
-  7 homologacao/release; 8 funcionalidades restantes.
-- Primeiro instalador candidato na 4; liberacao homologada ate a 7. A 8 e evolucao funcional.
-- Proximo passo exato: PR-DIST-001.1.1 a 1.6, inventariar/versionar pipeline e provar
-  dependencias/empacotamento em ambiente limpo. Depois executar sprint 2.
-- D01-D15 e C01-C16 continuam pendentes conforme mapeamento da task; nao marcar
-  persistencia de job como checkpoint nem modelos Flutter como formulario pronto.
-- Documento de planejamento criado; nao ha instalador novo ou garantia E2E pronta.
+- Usuario simplificou: somente ele usara em outro PC Windows, com todas as funcoes atuais.
+- Task `PR-DIST-001`: `docs/TASK_DISTRIBUICAO_WINDOWS.md`; indice `docs/SPRINTS.md`.
+- Plano anterior de oito sprints foi substituido por tres, nenhuma iniciada:
+  1 pacote/dependencias/caminhos; 2 instalador/configuracao/ajustes; 3 teste no destino.
+- Usar pasta gravavel por usuario, launcher/CONFIG e APK atuais; mesmas contas/servicos.
+- Nao implementar atualizador, CI, migrador, novo assistente, novos recursos Flutter,
+  checkpoints ou refatoracoes gerais como condicao desta instalacao pessoal.
+- Manter G01/G02 como ajustes pequenos de login/inicio; outros achados so entram se
+  impedirem uso das funcoes atuais no pacote ou forem regressoes. Auditoria preservada.
+- Nao copiar .venv com remendos nem publicar credenciais; incluir runtimes/pacotes,
+  acertar caminhos e fazer novos logins no destino quando necessario.
+- Historico/gravacoes antigos nao precisam de migrador; dados do PC original preservados.
+- MQTT: ID novo se ambos os PCs puderem operar; preservar antigo somente em substituicao.
+- Proximo passo exato: PR-DIST-001.1.1 a 1.4, montar pacote completo de teste.
+- Somente planejamento atualizado; nao ha instalador novo nem prova E2E no outro PC.
