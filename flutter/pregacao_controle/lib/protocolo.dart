@@ -414,11 +414,11 @@ class Pregacao {
   });
 
   factory Pregacao.fromJson(Map<String, dynamic> json) {
-    int inteiro(dynamic v) {
+    int inteiro(dynamic v, {int padrao = 0}) {
       if (v is int) return v;
       if (v is double) return v.toInt();
-      if (v is String) return int.tryParse(v) ?? 0;
-      return 0;
+      if (v is String) return int.tryParse(v) ?? padrao;
+      return padrao;
     }
     double real(dynamic v) {
       if (v is double) return v;
@@ -435,7 +435,7 @@ class Pregacao {
       igreja: json['igreja'] as String? ?? '',
       textoBase: json['texto_base'] as String? ?? '',
       tema: json['tema'] as String? ?? '',
-      versao: inteiro(json['versao']),
+      versao: inteiro(json['versao'], padrao: 1),
       criadoEm: real(json['criado_em']),
       atualizadoEm: real(json['atualizado_em']),
     );

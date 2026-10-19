@@ -362,7 +362,6 @@ void main() {
       });
     });
   });
-}
 
   group('Pregacao (S4)', () {
     test('ComandoPregacao valores corretos', () {
@@ -428,7 +427,9 @@ void main() {
       expect(p.id, 0);
       expect(p.data, '');
       expect(p.versao, 1);
-      expect(p.rotulo, '  / ');
+      // template '$data $horario  $pregador / $igreja' com tudo vazio:
+      // 1 espaco + 2 espacos + ' / ' = 4 espacos, barra, espaco
+      expect(p.rotulo, '    / ');
     });
 
     test('aceita int, double ou String nos numericos', () {
