@@ -5,6 +5,13 @@ outro PC esta planejado na task [PR-DIST-001](TASK_DISTRIBUICAO_WINDOWS.md):
 tres sprints para empacotar, instalar/configurar e testar as funcionalidades atuais.
 Indice e criterios de aceite em [SPRINTS.md](SPRINTS.md).
 
+## Pacote pessoal de teste
+
+A sprint 1 gerou ZIP com runtimes proprios, sem contas ou dados do PC original.
+Para gerar/extrair/verificar, seguir [packaging/README.md](../packaging/README.md).
+O instalador `.exe` e configuracao pessoal ficam na sprint 2; a validacao no PC
+destino fica na sprint 3. As instrucoes abaixo continuam sendo a instalacao manual.
+
 ## Requisitos
 
 Windows 10/11, usuario logado, Python 3.11+, FFmpeg no PATH e interface de audio.

@@ -35,12 +35,14 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from . import bundled_runtime
 from .config import config
 from .db import db
 from .logging_setup import get
@@ -140,16 +142,30 @@ def _nlm_programa(pasta: str) -> str:
     """Caminho do executavel do CLI.
 
     "estudos.notebooklm" no config tem prioridade (e e o que os testes e a
-    maquina da igreja podem usar); o padrao e o proprio venv do
-    sermon-pipeline, que e exatamente onde o "notebooklm login" interativo
-    grava - mesmo perfil para o manual e o automatico.
+    maquina da igreja podem usar). No pacote, o CLI e um modulo do Python
+    privado; fora dele, o padrao continua sendo o venv do sermon-pipeline.
+    Este caminho tambem serve ao diagnostico de existencia do programa.
     """
     explicito = _cfg("notebooklm")
     if explicito:
         return explicito
+    if bundled_runtime.is_bundled():
+        return sys.executable
     base = Path(pasta) / ".venv" / ("Scripts" if os.name == "nt" else "bin")
     nome = "notebooklm.exe" if os.name == "nt" else "notebooklm"
     return str(base / nome)
+
+
+def _nlm_prefixo(pasta: str, programa: Optional[str] = None) -> list[str]:
+    """CLI do pacote sem depender de launchers .exe ou de uma .venv."""
+    prog = programa or _nlm_programa(pasta)
+    if not _cfg("notebooklm") and bundled_runtime.is_bundled():
+        return [prog, "-m", "notebooklm"]
+    return [prog]
+
+
+def _nlm_navegador() -> str:
+    return _cfg("browser") or ("chromium" if bundled_runtime.is_bundled() else "msedge")
 
 
 def _programa_existe(prog: str) -> bool:
@@ -238,7 +254,7 @@ def verificar_saude(force: bool = False) -> str:
         return _definir("desconhecido", "notebooklm nao encontrado")
 
     codigo, texto = _executar_nlm(
-        [prog, "auth", "check", "--test", "--passive"], Path(pasta), 60
+        _nlm_prefixo(pasta, prog) + ["auth", "check", "--test", "--passive"], Path(pasta), 60
     )
     estado = _classificar(codigo, texto)
     if texto and estado != "ok":
@@ -274,15 +290,16 @@ def _renovar_sessao() -> bool:
         return False
     _ultima_renovacao = agora
 
-    navegador = (_cfg("browser") or "msedge").lower()
+    navegador = _nlm_navegador().lower()
     navegador = "edge" if navegador in ("msedge", "edge") else navegador
+    prefixo = _nlm_prefixo(pasta, prog)
     tentativas = [
-        [prog, "auth", "refresh", "--browser-cookies", navegador, "--verify"],
-        [prog, "auth", "refresh", "--allow-headless", "--verify"],
+        ["auth", "refresh", "--browser-cookies", navegador, "--verify"],
+        ["auth", "refresh", "--allow-headless", "--verify"],
     ]
     for args in tentativas:
-        codigo, texto = _executar_nlm(args, Path(pasta), 300)
-        log.info("auth refresh %s: codigo %s", args[3], codigo)
+        codigo, texto = _executar_nlm(prefixo + args, Path(pasta), 300)
+        log.info("auth refresh %s: codigo %s", args[2], codigo)
         if texto.strip():
             log.info("auth refresh saida: %s", texto.strip()[:400])
         if codigo == 0:
@@ -431,8 +448,9 @@ def _executar_login(pasta: str, prog: str, navegador: str) -> None:
                 arquivo.replace(anterior)
             # --fresh so afeta o navegador dedicado do CLI. Nao apaga o
             # storage salvo; evita aceitar o SID antigo e fechar imediatamente.
-            comando = [prog, "login", "--browser", navegador, "--fresh",
-                       "--browser-timeout", "600"]
+            comando = _nlm_prefixo(pasta, prog) + [
+                "login", "--browser", navegador, "--fresh", "--browser-timeout", "600"
+            ]
             if prog.lower().endswith((".bat", ".cmd")):
                 comando = ["cmd", "/c"] + comando
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
@@ -456,7 +474,7 @@ def _executar_login(pasta: str, prog: str, navegador: str) -> None:
                 _login.update(estado="verificando", detalhe="Conferindo a nova sessao do NotebookLM...")
             # Salvar cookies/retornar zero no login nao comprova autenticacao.
             codigo, texto = _executar_nlm(
-                [prog, "auth", "check", "--test", "--passive"], Path(pasta), 60
+                _nlm_prefixo(pasta, prog) + ["auth", "check", "--test", "--passive"], Path(pasta), 60
             )
             estado = _classificar(codigo, texto)
             _definir(estado, _DETALHE[estado])
@@ -491,7 +509,7 @@ def reconectar() -> Dict[str, Any]:
     prog = _nlm_programa(pasta)
     if not _programa_existe(prog):
         raise ValueError("notebooklm nao encontrado - confira estudos.pasta")
-    navegador = _cfg("browser") or "msedge"
+    navegador = _nlm_navegador()
     with _trava_login:
         if _login["em_andamento"]:
             return {"lancado": False, "navegador": navegador,
@@ -533,7 +551,7 @@ def _keepalive() -> None:
         return
     _ultima_renovacao = agora
     codigo, texto = _executar_nlm(
-        [prog, "auth", "refresh", "--verify"], Path(pasta), 120
+        _nlm_prefixo(pasta, prog) + ["auth", "refresh", "--verify"], Path(pasta), 120
     )
     log.info("keepalive (auth refresh --verify): codigo %s", codigo)
     if codigo != 0 and texto.strip():

@@ -1,6 +1,6 @@
 # PR-DIST-001 - Instalar meu Pregacao Recorder em outro PC
 
-Estado: planejada; implementacao nao iniciada. Escopo simplificado pelo usuario em 19/10/2026.
+Estado: sprint 1 implementada em ZIP de teste; aceite em Windows limpo/destino pendente. Escopo pessoal confirmado em 19/10/2026.
 Uso pessoal, Windows 10/11 x64. Este plano substitui integralmente o plano anterior de oito sprints.
 
 ## Objetivo
@@ -35,10 +35,10 @@ checkpoints, retomada por etapa ou funcionalidades que hoje estao incompletas.
 
 ## Sprint 1 - Montar o pacote completo
 
-- [ ] PR-DIST-001.1.1 Reunir gravador/web/agente e somente os arquivos do pipeline usados pelo programa; preservar prompt e registrar versoes/componentes incluidos.
-- [ ] PR-DIST-001.1.2 Incluir runtimes e dependencias nas versoes compativeis: Python, FFmpeg, NotebookLM/Playwright/navegador, PDF, Node/WhatsApp e `openpyxl`. Corrigir manifestos incompletos; gerar pacote sem instalar ferramentas manualmente no destino.
-- [ ] PR-DIST-001.1.3 Resolver caminhos a partir da pasta instalada, incluindo executaveis, defaults, assets e pastas do pipeline. Nao depender de `D:\Dev`, pasta pessoal ou PATH do PC original.
-- [ ] PR-DIST-001.1.4 Preparar instalador privado sem `.env`, tokens, cookies, QRs, banco ou gravacoes reais nos artefatos enviados ao GitHub.
+- [x] PR-DIST-001.1.1 Reunir gravador/web/agente e somente os arquivos do pipeline usados pelo programa; preservar prompt e registrar versoes/componentes incluidos.
+- [x] PR-DIST-001.1.2 Incluir runtimes e dependencias nas versoes compativeis: Python, FFmpeg, NotebookLM/Playwright/navegador, PDF, Node/WhatsApp e `openpyxl`. Corrigir manifestos incompletos; gerar pacote sem instalar ferramentas manualmente no destino.
+- [x] PR-DIST-001.1.3 Resolver caminhos a partir da pasta instalada, incluindo executaveis, defaults, assets e pastas do pipeline. Nao depender de `D:\Dev`, pasta pessoal ou PATH do PC original.
+- [x] PR-DIST-001.1.4 Preparar instalador privado sem `.env`, tokens, cookies, QRs, banco ou gravacoes reais nos artefatos enviados ao GitHub.
 
 Detalhes ja identificados: manifesto externo declara `notebooklm`, mas o ambiente
 observado usa `notebooklm-py`; `openpyxl` falta no manifesto do gravador. O pipeline
@@ -48,6 +48,16 @@ gravadores/bandejas antigos do pipeline nem ferramentas sem uso nesse caminho.
 
 Aceite: em ambiente Windows limpo, os componentes locais funcionam com os
 runtimes do pacote, sem Python/Node/FFmpeg/Git/SDK previamente instalados.
+
+## Resultado implementado da sprint 1 (19/10/2026)
+
+- Pipeline minimo incorporado em `vendor/sermon-pipeline/`, com prompt identico e configuracao publica de exemplo; fonte externa e dados reais preservados.
+- Montador local em `packaging/build_bundle.py`; Python 3.11.9 privado, 63 distribuicoes Python com hashes, Node 24.18.0, FFmpeg/ffprobe e Chromium incluidos.
+- Launcher reconhece o pacote; caminhos/perfil/CLI NotebookLM usam os componentes locais. Desenvolvimento continua usando `.venv` e configuracao existentes.
+- ZIP local em `dist-pacote/PregacaoRecorder-sprint1-20261019T142634742522Z.zip` (cerca de 479 MiB); raiz interna curta `PregacaoRecorder/`. Artefato/cache ignorados pelo Git.
+- 350 testes passaram em copia isolada. Smoke real: imports de origem privada, PDF, XLSX, Chromium offline, NotebookLM --version, dependencias Node locais, DirectShow e MP3 sintetico/ffprobe; diagnostico sem escrita.
+- Allowlist/varredura sem configuracao pessoal, cookies, tokens, banco ou gravacoes. ZIP corrigido extraido em caminho com espacos, acentos e &: smoke completo repetido com sucesso.
+- Instrucoes: [packaging/README.md](../packaging/README.md). O pacote e de teste; `.exe`, configuracao pessoal e G01/G02 ficam na sprint 2; Windows limpo, audio e contas reais no destino continuam na sprint 3.
 
 ## Sprint 2 - Instalar e configurar para meu uso
 
@@ -92,6 +102,6 @@ Arquivos envolvidos: `app/launcher.py`, `app/paths.py`, `app/config.py`,
 `app/estudos.py`, resolucao de ferramentas de audio, manifests e arquivos do
 pipeline; novos arquivos de empacotamento e testes apenas onde necessario.
 
-Proximo passo: sprint 1, reunir os componentes e dependencias atuais em um pacote
-instalavel de teste; em seguida executar as sprints 2 e 3. Nenhum instalador foi
-criado ou teste no PC destino realizado por esta revisao de planejamento.
+Proximo passo: sprint 2, criar o instalador `.exe` a partir do pacote e preparar
+configuracao pessoal/ajustes de inicio e login. O aceite final depende da sprint 3;
+a existencia do ZIP e do smoke local nao comprova funcionamento no outro PC.

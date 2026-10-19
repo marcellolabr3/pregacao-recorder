@@ -1,0 +1,8 @@
+{
+  "drive_remote": "gdrive",
+  "drive_folder": "pregacoes",
+  "whatsapp_number": "",
+  "source_wait_timeout": 1200,
+  "report_timeout": 1800,
+  "report_language": "pt_BR"
+}

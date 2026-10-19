@@ -1,0 +1,12 @@
+{
+  "component": "sermon-pipeline",
+  "source_snapshot_sha256": {
+    "pipeline.py": "b3944867b677c6499c5c69df6991f329233af258655723947be5fdc0228e56d8",
+    "prompt.txt": "4be0d86f3aff56b745ac08a23713feaad21b4961c03f83b299cc74fd0b3bd6cd",
+    "whatsapp/send.js": "206a178bebaad4a7805ba6c6d23ae470cf79d9f9f79b98177043635eedba5577",
+    "package.json": "d3fb29f51eee9b4b9fadbebbc7f0879066444683cbcee4dbcbc8c1b1f611ebba",
+    "package-lock.json": "fad71aaa489bfcb6ab5e123c8e5f7d314698a593248a67a75a70e69e8c3901f3"
+  },
+  "notebooklm_distribution": "notebooklm-py",
+  "notes": "Somente fontes publicaveis. Configuracao e autenticacao locais nao copiadas. Pipeline adaptado a runtimes e dados do pacote."
+}

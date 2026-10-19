@@ -2,12 +2,11 @@
 
 ## Suite Python
 
-Revalidacao independente em 19/10/2026: **309 testes passaram em 16,41 s** em copia
-temporaria contendo somente fontes, testes e configuracao padrao. Credenciais,
-gravacoes e banco reais nao foram copiados. Testes exclusivos da plataforma
-retirada foram removidos; cobertura ativa foi adaptada e ampliada para Windows.
-O total inclui 25 testes do novo iniciador unico (`tests/test_launcher.py`).
-Inclui tambem 16 casos do login monitorado (`tests/test_nlm_login.py`).
+Sprint 1 em 19/10/2026: **350 testes passaram** em copia temporaria
+com somente fontes, testes, defaults, empacotamento e vendor publico. Nenhuma
+credencial, banco, gravacao ou ambiente instalado real foi copiado. A base anterior
+tinha 309 testes; as novas regressoes cobrem runtime, CLI NotebookLM, vendor e
+allowlist/ZIP (incluindo raiz curta contra limite de caminhos Windows).
 
 Para repetir com o venv preparado:
 
@@ -94,3 +93,30 @@ corrigidas nesta consolidacao; ver `../CONTEXTO_AUDITORIA_PRODUTO.md`.
 Os 309 testes verdes nao provam ausencia dessas falhas. Playwright/smoke Windows
 acima sao evidencias anteriores e nao foram repetidos nesta revisao. Nenhuma
 acao real de captura, login, upload, envio ou reinicio de servicos foi executada.
+
+## Pacote pessoal - sprint 1
+
+- Build real com Python embeddable 3.11.9, dependencias Python fixadas com SHA256,
+  Node/FFmpeg/ffprobe privados, npm ci pelo lock e Chromium sem perfil.
+- Smoke com PATH isolado: imports Python conferidos sob o runtime, PDF valido,
+  ciclo XLSX, Chromium offline e CLI NotebookLM --version.
+- Dependencias WhatsApp carregadas e require.resolve conferido dentro do pacote;
+  NODE_PATH/NODE_OPTIONS externos removidos. Nenhuma conexao WhatsApp iniciada.
+- FFmpeg executado com suporte DirectShow; MP3 de silencio sintetico gerado e
+  validado pelo ffprobe, sem captura de microfone/mesa.
+- --verificar passou sem criar config, banco ou logs; avisos de contas/destino
+  ainda nao configurados sao esperados no pacote novo.
+- 7.575 arquivos inventariados; fontes do app conferidas contra o pacote.
+  Allowlist/varredura dos componentes do produto nao encontrou valores secretos
+  locais nem copiou configuracao, banco, cookies, auth, QR ou gravacoes reais.
+- A primeira extracao revelou MAX_PATH por raiz longa; ZIP foi corrigido para
+  raiz fixa PregacaoRecorder/ e recebeu regressao. ZIP/SHA256 e extracao completa
+  em caminho com espacos, acentos e & passaram; smoke completo repetido nessa copia.
+- Entrada CMD corrigida para resolver a raiz antes de mudar o diretorio;
+  Verificar Pacote.cmd passou na copia com espacos/acentos/& sem escrever config.
+- Artefato e cache locais ignorados pelo Git; instrucoes em ../packaging/README.md.
+
+Limites desta sprint: nao reiniciou a instalacao em uso, nao renovou sessoes,
+nao capturou audio real nem fez upload/envio. Windows limpo/outro PC e operacoes
+com contas reais seguem na sprint 3. Instalador `.exe`, G01/G02 e configuracao
+pessoal seguem na sprint 2. Smoke nao comprova login Google ou entrega WhatsApp.

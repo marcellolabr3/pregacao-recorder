@@ -73,7 +73,7 @@ def scenario(tmp_path, monkeypatch):
     monkeypatch.setattr(estudos.subprocess, "run", unexpected)
     return SimpleNamespace(pipeline=pipeline, program=program, db=database,
                            tasks=tasks, notifications=notifications,
-                           workers=workers, monkeypatch=monkeypatch)
+                           workers=workers, monkeypatch=monkeypatch, values=values)
 
 
 def waiting_job(scenario):
@@ -362,3 +362,115 @@ def test_endpoint_exige_admin_e_nao_multiplica_login(scenario, monkeypatch):
         assert first.get_json()["lancado"] is True
         assert second.get_json()["lancado"] is False
         assert len(scenario.tasks) == 1
+
+
+# O pacote inclui NotebookLM como modulo do Python privado, sem .venv/launchers.
+def _runtime_embutido(scenario):
+    scenario.values.pop("estudos.notebooklm")
+    scenario.values.pop("estudos.browser")
+    scenario.monkeypatch.setattr(estudos.bundled_runtime, "is_bundled", lambda: True)
+    return [estudos.sys.executable, "-m", "notebooklm"]
+
+
+def test_cli_fora_do_pacote_preserva_venv_mesmo_com_env_bundled(scenario):
+    scenario.values.pop("estudos.notebooklm")
+    scenario.values.pop("estudos.browser")
+    scenario.monkeypatch.setenv("PREGACAO_BUNDLED_ROOT", str(scenario.pipeline))
+    # Uma variavel de ambiente sozinha nao transforma fontes em pacote valido.
+    assert estudos.bundled_runtime.is_bundled() is False
+    directory = "Scripts" if os.name == "nt" else "bin"
+    filename = "notebooklm.exe" if os.name == "nt" else "notebooklm"
+    program = str(scenario.pipeline / ".venv" / directory / filename)
+    assert estudos._nlm_programa(str(scenario.pipeline)) == program
+    assert estudos._nlm_prefixo(str(scenario.pipeline)) == [program]
+    assert estudos._nlm_navegador() == "msedge"
+
+
+def test_probe_no_pacote_usa_modulo_sem_venv(scenario):
+    prefix = _runtime_embutido(scenario)
+    probes = []
+
+    def probe(command, cwd, timeout):
+        probes.append((command, cwd, timeout))
+        return 0, "all checks passed"
+
+    scenario.monkeypatch.setattr(estudos, "_executar_nlm", probe)
+    assert not (scenario.pipeline / ".venv").exists()
+    assert estudos._nlm_programa(str(scenario.pipeline)) == estudos.sys.executable
+    assert estudos._programa_existe(estudos._nlm_programa(str(scenario.pipeline)))
+    assert estudos.verificar_saude(force=True) == "ok"
+    assert probes == [(prefix + ["auth", "check", "--test", "--passive"],
+                       scenario.pipeline, 60)]
+
+
+def test_login_no_pacote_usa_chromium_e_confirma_com_mesmo_modulo(scenario):
+    prefix = _runtime_embutido(scenario)
+    before = waiting_job(scenario)
+    cli = fake_login(scenario)
+    result = estudos.reconectar()
+    assert result["navegador"] == "chromium"
+    assert scenario.db.get_job(before["job_id"]) == before
+    scenario.tasks[0].run()
+    command, options = cli.spawned[0]
+    assert command == prefix + ["login", "--browser", "chromium", "--fresh",
+                                "--browser-timeout", "600"]
+    assert Path(options["cwd"]) == scenario.pipeline
+    assert cli.probes == [(prefix + ["auth", "check", "--test", "--passive"],
+                           scenario.pipeline, 60)]
+    assert estudos.status()["login"]["estado"] == "concluido"
+    assert scenario.db.get_job(before["job_id"])["estado"] == "PENDENTE"
+
+
+@pytest.mark.parametrize("browser,cookie_browser", [(None, "chromium"), ("msedge", "edge")])
+def test_refresh_no_pacote_preserva_as_duas_tentativas_e_browser_explicito(
+    scenario, browser, cookie_browser
+):
+    prefix = _runtime_embutido(scenario)
+    if browser:
+        scenario.values["estudos.browser"] = browser
+    calls = []
+
+    def refresh(command, cwd, timeout):
+        calls.append((command, cwd, timeout))
+        return (1, "") if len(calls) == 1 else (0, "sessao renovada")
+
+    scenario.monkeypatch.setattr(estudos, "_executar_nlm", refresh)
+    assert estudos._renovar_sessao() is True
+    assert calls == [
+        (prefix + ["auth", "refresh", "--browser-cookies", cookie_browser, "--verify"],
+         scenario.pipeline, 300),
+        (prefix + ["auth", "refresh", "--allow-headless", "--verify"],
+         scenario.pipeline, 300),
+    ]
+
+
+def test_keepalive_no_pacote_usa_modulo_e_respeita_cadencia(scenario):
+    prefix = _runtime_embutido(scenario)
+    calls = []
+
+    def refresh(command, cwd, timeout):
+        calls.append((command, cwd, timeout))
+        return 0, "sessao confirmada"
+
+    scenario.monkeypatch.setattr(estudos, "_executar_nlm", refresh)
+    estudos._keepalive()
+    estudos._keepalive()
+    assert calls == [(prefix + ["auth", "refresh", "--verify"], scenario.pipeline, 120)]
+
+
+@pytest.mark.parametrize("extension", [".exe", ".cmd"])
+def test_override_cli_e_browser_no_pacote_continua_explicito(scenario, extension):
+    scenario.monkeypatch.setattr(estudos.bundled_runtime, "is_bundled", lambda: True)
+    program = scenario.pipeline / ("meu-notebooklm" + extension)
+    program.write_text("", encoding="utf-8")
+    scenario.values["estudos.notebooklm"] = str(program)
+    scenario.values["estudos.browser"] = "msedge"
+    assert estudos._nlm_programa(str(scenario.pipeline)) == str(program)
+    assert estudos._nlm_prefixo(str(scenario.pipeline)) == [str(program)]
+    cli = fake_login(scenario)
+    assert estudos.reconectar()["navegador"] == "msedge"
+    scenario.tasks[0].run()
+    prefix = ["cmd", "/c", str(program)] if extension == ".cmd" else [str(program)]
+    assert cli.spawned[0][0] == prefix + ["login", "--browser", "msedge", "--fresh",
+                                        "--browser-timeout", "600"]
+    assert cli.probes[0][0] == [str(program), "auth", "check", "--test", "--passive"]

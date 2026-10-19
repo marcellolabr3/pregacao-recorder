@@ -309,10 +309,25 @@ def main(argv=None) -> int:
     modes.add_argument("--somente-agente", action="store_true", help="inicia somente o controle remoto")
     parser.add_argument("--sem-navegador", action="store_true", help="inicia sem abrir o painel")
     parser.add_argument("--service", choices=MODULES, help=argparse.SUPPRESS)
+    parser.add_argument("--cli", nargs=argparse.REMAINDER, default=None, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parent.parent
+    from . import bundled_runtime
+
+    try:
+        package = bundled_runtime.prepare_environment(create_config=not args.verificar, recorder_root=root)
+    except (OSError, ValueError):
+        print("[ERRO] Nao foi possivel preparar a configuracao do pacote local.")
+        return 1
     home = Path(os.environ.get("PREGACAO_HOME") or root).resolve()
     os.environ["PREGACAO_HOME"] = str(home)
+    if args.cli is not None:
+        sys.argv = ["pregacao"] + args.cli
+        try:
+            runpy.run_module("app.cli", run_name="__main__", alter_sys=True)
+        except SystemExit as exc:
+            return exc.code if isinstance(exc.code, int) else (1 if exc.code else 0)
+        return 0
     if args.service:
         # Nao entregar os argumentos privados ao argparse do servico original.
         sys.argv = [MODULES[args.service]]
@@ -322,13 +337,17 @@ def main(argv=None) -> int:
 
         load_env(home / ".env")
         cfg = Config(home)
+        if package and args.verificar and not (home / "config" / "config.json").exists():
+            for key, value in bundled_runtime.configuration_defaults(package).items():
+                cfg.set(key, value)
     except (OSError, ValueError):
         print("[ERRO] Nao foi possivel ler a configuracao local. Confira permissoes e formato JSON.")
         return 1
     env = dict(os.environ)
     # Equivale ao PATH/ambiente do activate.bat, usando o Python explicito.
-    env["PATH"] = str(Path(sys.executable).parent) + os.pathsep + env.get("PATH", "")
-    env["VIRTUAL_ENV"] = sys.prefix
+    if package is None:
+        env["PATH"] = str(Path(sys.executable).parent) + os.pathsep + env.get("PATH", "")
+        env["VIRTUAL_ENV"] = sys.prefix
     if args.verificar:
         return diagnostic(cfg, env)
     log = None

@@ -38,3 +38,7 @@ node_modules/
 .vscode/
 .idea/
 site/
+
+/.bundle-cache/
+
+/dist-pacote/

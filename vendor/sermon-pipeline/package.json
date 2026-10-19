@@ -1,0 +1,18 @@
+{
+  "name": "sermon-pipeline",
+  "version": "1.0.0",
+  "description": "Componente de estudos do Pregacao Recorder; WhatsApp via Baileys.",
+  "keywords": [],
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "baileys": "7.0.0-rc14",
+    "pino": "10.4.0",
+    "qrcode": "1.5.4",
+    "qrcode-terminal": "0.12.0"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
+}
