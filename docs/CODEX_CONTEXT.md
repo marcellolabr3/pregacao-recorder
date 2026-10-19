@@ -22,6 +22,7 @@
 
 ## Estado implementado da sprint 1 (19/10/2026)
 
+- Implementacao da sprint 1 publicada no GitHub no commit `868cf83`.
 - Task pessoal PR-DIST-001 em `docs/TASK_DISTRIBUICAO_WINDOWS.md`; tres sprints, sem recursos novos.
 - `packaging/build_bundle.py` monta ZIP com fontes por allowlist e manifesto/hash de 7.575 arquivos.
 - Runtime privado: Python embeddable 3.11.9, 63 distribuicoes Python fixadas com hashes,
@@ -29,9 +30,12 @@
 - `app/bundled_runtime.py` prepara caminhos/perfil/config inicial apenas no pacote;
   `app/estudos.py` usa python -m notebooklm e Chromium nesse modo. Dev preservado.
 - `.env`, config pessoal, banco, auth/QR/cookies e gravacoes excluidos do pacote.
-- ZIP local: `dist-pacote/PregacaoRecorder-sprint1-20261019T142634742522Z.zip` (~479 MiB).
-- `.bundle-cache/` e `dist-pacote/` ignorados; raiz curta do ZIP: PregacaoRecorder/.
+- ZIP local: `dist-pacote/PregacaoRecorder-sprint1-20261019T142634742522Z.zip` (478,8 MiB); checksum no arquivo `.sha256` ao lado.
+- `.bundle-cache/` e `dist-pacote/` ignorados; ZIP/runtimes sao locais, nao enviados ao GitHub.
+- Raiz curta do ZIP: PregacaoRecorder/.
+- ZIP montado antes do commit; `source_revision=576f1c2-dirty`; integridade rastreada pelos hashes.
 - Entrada do ZIP: Iniciar Pregacao.cmd; diagnostico: Verificar Pacote.cmd.
+- CMD testado na copia extraida: raiz resolvida antes de mudar diretorio; diagnostico sem escrita.
 - Instrucoes de build/uso em `packaging/README.md`; instalador .exe ainda nao criado.
 - 350 testes passaram em copia isolada. Smoke local com PATH isolado passou:
   imports, PDF, XLSX, Chromium offline, CLI, Node local, dshow e MP3 sintetico/ffprobe.
@@ -43,7 +47,9 @@
 ## Pendencias e proximo passo
 
 - Aceite em Windows limpo ainda pendente; isolamento/extracao local passaram.
-- Sprint 2: instalador .exe/atalho, configurar mesmas contas/audio/destino e ajustes G01/G02.
+- Proximo passo exato: PR-DIST-001.2.1, criar instalador .exe/atalho em `%LOCALAPPDATA%\PregacaoRecorder`.
+- Depois PR-DIST-001.2.2 a 2.5: contas/audio/destino, MQTT e ajustes G01/G02, preservando dados.
+- ZIP ainda sem configuracao pessoal/segredo preparado; isso pertence a sprint 2.
 - G01: corrida login/pipeline herdada. G02: identidade de PID entre copias. Nao corrigidos na sprint 1.
 - Config inicial salva caminhos absolutos; extrair no destino definitivo antes do primeiro uso.
 - Sprint 3: Windows limpo e PC destino, audio real, Drive/NotebookLM/PDF/WhatsApp e celular atual.
