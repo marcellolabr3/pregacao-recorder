@@ -25,7 +25,7 @@
 - Inicializacao consolidada: `iniciar-tudo.bat` chama `app/launcher.py` com o Python
   explicito da `.venv`; verifica dependencias/FFmpeg/porta, espera a API e abre navegador.
 - Gravador/agente seguem separados, sem consoles extras; falha MQTT nao encerra gravador.
-- Trava de inicializacao serializa cliques e confere PID/identidade antes de reutilizar.
+- Trava de inicializacao serializa cliques; identidade por PID/modulo/Python ainda tem limite entre copias (G02).
 - Retirados 2 BATs separados e 8 BATs antigos de SSD; preservados `gradlew.bat`,
   `scripts/pregacao.cmd` e migrador manual `_instalador/ajustar_caminhos.py` (nao executar automaticamente).
 - Opcoes: `--verificar`, `--sem-navegador`, `--somente-gravador`, `--somente-agente`.
@@ -49,11 +49,21 @@
 - Servidor atualizado apos confirmar ociosidade: API/status com login inativo e
   2 estudos em espera; integracoes/pregacoes/modelo retornaram 200 e HTML usa nlm2.
 
+## Revisao independente do repositorio (19/10/2026)
+
+- Base `5c9549f` confirmada em `origin/main`; 309 testes repetidos em copia isolada (16,41 s).
+- Sintaxe Python/JS e XML Android validos; varredura dos 69 arquivos incluidos/alterados sem credenciais detectadas.
+- Sem captura, login, upload, envio, reinicio de servicos ou build mobile nesta revisao.
+- Reproducoes simuladas identificaram G01/G02; detalhes e G03 na auditoria. Testes verdes nao cobrem essas lacunas.
+
 ## Pendencias e proximo passo
 
-1. Atualizar pagina e usar RENOVAR LOGIN para entrar novamente
-   na conta Google no PC; dois estudos em espera preservados ate validar a sessao.
-2. Checkpoints do pipeline, retry WhatsApp, metadados no estudo/PDF, formulario
-   Flutter e validacao/importacao permanecem fora desta retirada (auditoria C/D).
-3. Audio real, dois celulares, reconexao e reinicio durante processamento ainda precisam E2E.
-4. Fontes Kotlin legadas preservadas sem Wi-Fi; APK instalado nao foi atualizado.
+1. Proximo passo: corrigir G01 (login pode iniciar apos a guarda e concorrer com pipeline)
+   e G02 (PID nao confirma pasta/home da instalacao), com regressoes isoladas.
+2. Depois, atualizar pagina e renovar login Google no PC. Ultimo estado registrado
+   na sessao anterior: dois estudos em espera; nao reconsultado nesta revisao.
+3. Checkpoints do pipeline, retry WhatsApp, metadados no estudo/PDF, formulario
+   Flutter e validacao/importacao continuam pendentes (auditoria C/D).
+4. Audio real, dois celulares, reconexao e reinicio durante processamento precisam E2E.
+5. Fonte Kotlin legada sem Wi-Fi; APK instalado nao atualizado. G03: texto ainda promete
+   fallback de disco, mas destino indisponivel bloqueia captura sem troca automatica.

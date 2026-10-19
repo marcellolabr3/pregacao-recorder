@@ -2,7 +2,7 @@
 
 ## Suite Python
 
-Resultado atual em 19/10/2026: **309 testes passaram em 18,21 s** em copia
+Revalidacao independente em 19/10/2026: **309 testes passaram em 16,41 s** em copia
 temporaria contendo somente fontes, testes e configuracao padrao. Credenciais,
 gravacoes e banco reais nao foram copiados. Testes exclusivos da plataforma
 retirada foram removidos; cobertura ativa foi adaptada e ampliada para Windows.
@@ -32,7 +32,7 @@ do projeto. Nao executar scripts de teste ativo contra o servidor real por engan
 - Formularios HTML independentes e campos associados ao formulario correto.
 - Nova captura recusada quando destino esta indisponivel.
 
-## Navegador
+## Navegador (evidencias da sessao anterior)
 
 Chromium/Playwright headless, APIs simuladas e nenhuma acao no servidor real:
 boot, CONFIG, area avancada, abrir/fechar cadastro e salvar avancadas passaram.
@@ -78,3 +78,19 @@ Nao foram executados Flutter test/build nem build da fonte Kotlin legada.
 O conteudo de rede removido da fonte nao atualiza APK ja instalado.
 Provas de captura na mesa, dois celulares, queda de conexao e reinicio controlado
 continuam no `CHECKLIST.md`. Dependencias do pipeline externo nao foram modificadas.
+
+## Revisao independente para consolidacao no GitHub
+
+Codigo base `5c9549f`: suite repetida com Python 3.11.9/pytest 9.1.1 em copia
+contendo apenas `app/`, `tests/`, `web/`, `config/default.json` e `pytest.ini`.
+Nenhuma configuracao real, credencial, banco ou gravacao foi copiada. Foram
+validados por parse 56 arquivos Python, sintaxe JS e XML/recursos Android.
+Credenciais locais e padroes de tokens/chaves foram comparados com os 69 arquivos
+incluidos/alterados no commit sem exibir valores; nenhum achado nessa varredura.
+
+Limitacoes encontradas por inspecao e simulacoes: corrida login/pipeline (G01),
+identidade entre instalacoes (G02) e texto legado de fallback (G03). Elas nao foram
+corrigidas nesta consolidacao; ver `../CONTEXTO_AUDITORIA_PRODUTO.md`.
+Os 309 testes verdes nao provam ausencia dessas falhas. Playwright/smoke Windows
+acima sao evidencias anteriores e nao foram repetidos nesta revisao. Nenhuma
+acao real de captura, login, upload, envio ou reinicio de servicos foi executada.

@@ -43,7 +43,7 @@ Preencher a coluna **Decisao** com `MANTER`, `REMOVER`, `CORRIGIR`, `CONCLUIR` o
 
 As classificacoes distinguem: observacao na instancia aberta; defeito reproduzido; evidencia de codigo; pendencia documental; sugestao de simplificacao. Ausencia de teste real nao significa que a funcionalidade esteja quebrada.
 
-## Validacao realizada
+## Validacao da auditoria inicial (historica)
 
 - Leitura de codigo, documentacao e configuracoes pertinentes, sem registrar valores secretos.
 - Consultas GET ao servidor `http://127.0.0.1:8080` e abertura em navegador automatizado, sem iniciar gravacao ou envio.
@@ -196,6 +196,25 @@ Pipeline configurado na auditoria: `C:\Users\Aska\Documents\Default Project\serm
 
 ## Proximo passo recomendado
 
-Atualizar a pagina e usar RENOVAR LOGIN para concluir a entrada na conta Google no PC. Conferir a sessao confirmada e a retomada dos estudos preservados. Depois, revisar os itens C/D pendentes pelos IDs. Estado atual em docs/CODEX_CONTEXT.md; retirada em docs/REMOCAO_RASPBERRY.md.
+Corrigir as lacunas G01/G02 identificadas na revisao independente abaixo, com regressoes isoladas. Depois, renovar o login Google no PC e conferir a retomada dos estudos preservados. Revisar os itens C/D pendentes pelos IDs. Estado atual em docs/CODEX_CONTEXT.md; retirada em docs/REMOCAO_RASPBERRY.md.
 
 Nao reiniciar servicos, apagar legados, alterar credenciais, renovar login ou executar correcoes apenas por ler este documento. Consultar o codigo e o estado atual antes de implementar, pois esta auditoria representa o momento indicado no inicio.
+
+## G. Revisao independente do commit consolidado (19/10/2026)
+
+Base revisada: `5c9549f`, confirmada no GitHub em `main`. Esta revisao nao
+alterou codigo, dados, credenciais, servicos ou pipeline externo. Os resultados
+da auditoria inicial acima sao historicos; a suite atual repetida tem 309 testes.
+
+| ID | Achado e evidencia | Efeito/limite | Estado |
+|---|---|---|---|
+| G01 | `app/estudos.py:1039` libera `_trava_login` antes de `Popen` em `:1128`. Clique depois da guarda permite login e pipeline simultaneos. Reproducao com mocks e pasta temporaria, sem CLI real. | A cobertura atual verifica clique durante pre-flight, mas nao depois da guarda. Pode disputar a sessao NotebookLM. | Pendente: coordenar login e execucao do pipeline; adicionar regressao isolada. |
+| G02 | `app/launcher.py:112-121` aceita interpretador base/modulo esperado sem confirmar pasta do projeto ou `PREGACAO_HOME`. Reproduzido com PID e linha de comando simulados. | Um PID de outra copia usando o mesmo Python base pode ser aceito; nenhum encerramento de processo foi observado ou executado. | Pendente: vincular identidade a instalacao/home e testar duas copias. |
+| G03 | `android/app/src/main/res/values/strings.xml:58` ainda apresenta o disco do PC como alternativa quando o externo some. Comentarios em Kotlin e JS repetem a regra antiga. | O backend bloqueia captura quando o destino esta indisponivel, sem troca automatica. Fonte Kotlin e legada; nenhum APK novo foi gerado. | Pendente: alinhar texto/comentarios ao comportamento Windows. |
+
+Verificacao repetida nesta revisao: 309 testes Python passaram em 16,41 s em copia
+isolada; sintaxe Python/JavaScript, XML Android e referencias de recursos validos.
+A varredura dos 69 arquivos incluidos/alterados no commit nao detectou credenciais
+locais nem padroes de chaves privadas/tokens. Arquivos locais sensiveis permanecem
+ignorados e fora do commit. Essa varredura nao certifica todo o historico do Git.
+Nao houve captura, login, upload, envio WhatsApp/MQTT, reinicio de servicos ou build mobile.
