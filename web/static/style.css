@@ -247,26 +247,6 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 .tag.ok{background:rgba(63,185,80,.15);color:var(--green2);border:1px solid var(--green2)}
 .tag.pend{background:rgba(210,153,34,.15);color:var(--amber);border:1px solid var(--amber)}
 
-/* ---------- rede (avancado) ---------- */
-.subhead{margin-top:16px;padding-top:10px;border-top:1px solid var(--line);
-  font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
-  font-weight:700}
-.net-summary{justify-content:flex-start;gap:14px}
-.net-summary dd{font-size:.92rem}
-.st-ok{color:var(--green2)}
-.st-bad{color:var(--red2)}
-.st-warn{color:var(--amber)}
-.wifilist{list-style:none;margin:10px 0 0;padding:0;max-height:220px;overflow-y:auto;
-  border:1px solid var(--line);border-radius:10px}
-.wifilist li{display:flex;align-items:center;gap:8px;padding:9px 11px;
-  border-bottom:1px solid var(--line);font-size:.85rem;cursor:pointer}
-.wifilist li:last-child{border-bottom:0}
-.wifilist li:hover{background:var(--panel2)}
-.wifilist li.selected{background:rgba(56,139,253,.14);box-shadow:inset 3px 0 0 var(--blue)}
-.wifilist .ssid{font-weight:600;flex:1;min-width:0;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}
-.wifilist .sig{color:var(--muted);font-size:.75rem;text-align:right}
-.wifilist .inuse{color:var(--green2);font-weight:700}
 .notiff{list-style:none;margin:8px 0 0;padding:0}
 .notiff li{font-size:.82rem;padding:6px 0;border-bottom:1px solid var(--line);
   word-break:break-all}

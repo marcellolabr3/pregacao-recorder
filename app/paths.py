@@ -1,6 +1,6 @@
 """Diretorios do pregacao-recorder.
 
-Todos os caminhos derivam de ``PREGACAO_HOME`` (padrao: /opt/pregacao-recorder).
+Todos os caminhos derivam de ``PREGACAO_HOME`` (padrao: pasta do projeto).
 Isso permite rodar os testes e o modo de desenvolvimento em qualquer maquina.
 """
 from __future__ import annotations
@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 def home() -> Path:
-    return Path(os.environ.get("PREGACAO_HOME", "/opt/pregacao-recorder")).resolve()
+    return Path(os.environ.get("PREGACAO_HOME") or Path(__file__).resolve().parent.parent).resolve()
 
 
 def app_dir() -> Path:
@@ -37,12 +37,8 @@ def scripts_dir() -> Path:
     return home() / "scripts"
 
 
-def systemd_dir() -> Path:
-    return home() / "systemd"
-
-
 def data_dir() -> Path:
-    """Banco SQLite e demais dados volateis (nao vai para o microSD se preferir)."""
+    """Banco SQLite persistente e dados locais."""
     return home() / "data"
 
 

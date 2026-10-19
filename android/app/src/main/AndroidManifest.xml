@@ -29,12 +29,6 @@
             android:parentActivityName=".MainActivity" />
 
         <activity
-            android:name=".WifiActivity"
-            android:exported="false"
-            android:label="@string/wifi_titulo"
-            android:parentActivityName=".MainActivity" />
-
-        <activity
             android:name=".DriveActivity"
             android:exported="false"
             android:label="@string/drive_titulo"

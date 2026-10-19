@@ -1,79 +1,111 @@
-# Windows - PC da igreja
+# Windows - instalacao e operacao
 
-O `pregacao-recorder` roda em Windows 10/11 com duas pecas ja adaptadas:
+## Requisitos
 
-* captura de audio via **ffmpeg/DirectShow** (o `arecord` e so Linux);
-* **agente MQTT** do controle remoto (`app/remote/agent.py`), o mesmo do Linux.
+Windows 10/11, usuario logado, Python 3.11+, FFmpeg no PATH e interface de audio.
+O FFmpeg faz captura DirectShow e consolidacao; e necessario mesmo para gravar WAV.
 
-O restante (interface web, fila de upload, banco, eventos) e Python puro e
-roda igual. As telas de Wi-Fi/rede do sistema sao do Raspberry e nao
-funcionam no Windows (inofensivas; o PC usa a rede da casa normalmente).
+## Preparar
 
-## 1. Requisitos
+Na raiz do projeto, no PowerShell:
 
-| O que | Como instalar |
-|---|---|
-| Windows 10/11, sempre **logado** | - |
-| Python 3.11+ | `winget install Python.Python.3.12` (ou python.org) |
-| ffmpeg | `winget install Gyan.FFmpeg` (abra um PowerShell novo depois) |
-| Microfone/mesa ligada | teste com o gravador de som do Windows |
-
-## 2. Instalacao
-
-1. Copie a pasta do projeto para o PC (ex.: `D:\Dev\pregacao-recorder`);
-2. Abra PowerShell **dentro** da pasta:
-
-   ```powershell
-   python -m venv .venv
-   .venv\Scripts\pip install -r requirements.txt
-   ```
-
-3. Copie `.env.example` para `.env` e preencha seguindo `docs/EMQX.md`:
-   bloco REMOTO (host EMQX, usuario/senha do PC, `PREGACAO_OPERATOR_TOKEN`)
-   e **`PREGACAO_DEVICE_ID=pregacao-igreja-01`** (obrigatorio no Windows:
-   sem ele o codigo usa o hostname e o app fica OFFLINE).
-
-## 3. Rodar
-
-| Bat | O que sobe |
-|---|---|
-| **`iniciar-tudo.bat`** | agente MQTT (janela minimizada) + gravador - use este |
-| `iniciar-gravador.bat` | so interface (`http://127.0.0.1:8080`) e captura |
-| `iniciar-agente.bat` | so o agente (testes/validacao) |
-
-Depois de abrir, confira:
-
-1. `http://127.0.0.1:8080` abre a interface do gravador;
-2. no log do agente: `[REMOTE] conectado a ...` (sem isso o celular fica OFFLINE);
-3. celular: badge **ONLINE** e estado PRONTO/GRAVANDO em tempo real.
-
-**Uma instancia so**: se dois agentes rodarem ao mesmo tempo, um derruba o
-outro (mesmo client ID) e o app pisca OFFLINE/ONLINE. Feche janelas duplicadas.
-
-## 4. Automatico ao ligar
-
-```
-schtasks /create /tn "Pregacao" /tr "\"D:\Dev\pregacao-recorder\iniciar-tudo.bat\"" /sc onlogon /rl highest
+```powershell
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-O usuario precisa estar logado (o PC da igreja fica direto no desktop).
-Dica: Plano de energia -> nunca desligar tela/disco.
+Nao sobrescrever um `.env` existente. Preencher apenas durante a instalacao inicial:
+PINs opcionais, segredo de sessao, credenciais OAuth e MQTT conforme os guias.
+Nenhuma migracao de banco ou de pasta e exigida pela retirada da plataforma antiga.
+O home padrao e a pasta do projeto; `PREGACAO_HOME` continua suportado.
 
-## 5. Audio (DirectShow)
+## Iniciar
 
-* **Auto (padrao)**: o sistema escolhe a primeira interface, preferindo USB;
-* **Fixar**: interface web -> Configuracoes -> audio (ou `audio.device` no
-  config) com o nome EXATO, ex.: `Microfone (Mesa de Som USB)`;
-* Listar nomes: `ffmpeg -list_devices true -f dshow -i dummy` (use a parte
-  marcada com `(audio)`).
+Abrir `iniciar-tudo.bat`. Ele usa o Python da `.venv`, verifica dependencias,
+FFmpeg e disponibilidade da porta, inicia gravador e agente MQTT como processos
+separados e ocultos e abre o navegador quando a API estiver pronta. Painel padrao:
+`http://127.0.0.1:8080`; PIN, porta configurada e `PREGACAO_HOME` continuam validos.
+Cliques repetidos reutilizam os processos existentes. Falha do agente nao encerra
+o gravador. Em caso de erro, a janela mostra a orientacao e aguarda uma tecla.
 
-## 6. Problemas comuns
+As opcoes usam o mesmo arquivo; executar no PowerShell, na pasta do projeto:
 
-| Sintoma | Causa / solucao |
-|---|---|
-| `captura indisponivel ... ffmpeg nao encontrado` | `winget install Gyan.FFmpeg` e abra PowerShell novo |
-| `[REMOTE] conexao recusada (rc=134)` | senha errada no `.env` |
-| Celular OFFLINE | agente fechado? token errado no celular? EMQX -> Monitor -> Connections mostra `Estudo-DNMS`? |
-| App pisca OFFLINE/ONLINE | duas instancias do agente - feche duplicadas |
-| Aviso `/proc/mounts` no log | modulo de armazenamento do Linux; inofensivo no Windows |
-| Upload do Drive | credenciais OAuth continuam o mesmo fluxo local (`credentials.json`) |
+```powershell
+.\iniciar-tudo.bat --verificar
+.\iniciar-tudo.bat --sem-navegador
+.\iniciar-tudo.bat --somente-gravador
+.\iniciar-tudo.bat --somente-agente
+```
+
+`--somente-agente` nao abre o navegador; o agente aguarda a API se ela estiver fora do ar.
+Os BATs separados de gravador/agente e os diagnosticos antigos de SSD foram
+substituidos por essas opcoes. Atalhos existentes para `iniciar-tudo.bat` continuam validos.
+
+Para iniciar com o Windows, criar atalho para `iniciar-tudo.bat --sem-navegador`
+na pasta `shell:startup`. O usuario precisa entrar na sessao. Antes de reiniciar
+processos, conferir que nao ha captura, conversao, upload ou estudo executando.
+
+## Audio e armazenamento
+
+Selecionar interface em CONFIG > CONFIGURACOES AVANCADAS > AUDIO. A deteccao usa
+FFmpeg/DirectShow e prefere USB. O padrao e PCM 16 bits durante a captura.
+A pasta padrao fica em `recordings/`. A lista de destinos inclui o destino atual,
+a pasta padrao e discos locais fixos/removiveis. Para pasta personalizada, usar
+o assistente inicial ou API `/api/storage` com PIN administrativo.
+Disco indisponivel impede nova gravacao; nao existe troca automatica para outro volume.
+
+## Diagnostico
+
+`iniciar-tudo.bat --verificar` consulta requisitos sem iniciar os servicos: imports
+essenciais do gravador, FFmpeg/ffprobe e disponibilidade de Node/rclone, presenca dos
+credenciais do Drive (painel, arquivo ou ambiente), token e caminhos configurados do pipeline externo. Nao
+exibe segredos nem confirma logins, entrega pelo WhatsApp ou todas as dependencias
+do pipeline. Requisitos opcionais ausentes devem ser avaliados conforme as
+integracoes usadas.
+
+Para acompanhar uma instancia em execucao:
+
+```powershell
+scripts\pregacao.cmd status
+scripts\pregacao.cmd doctor
+scripts\pregacao.cmd logs -n 80
+scripts\pregacao.cmd logs -f
+```
+
+`doctor` consulta pastas, FFmpeg, interface, credenciais e API local. `check` captura
+2 segundos para medir sinal; executar somente quando quiser testar audio.
+`start`/`stop` da CLI controlam uma gravacao real.
+
+Os logs de inicializacao ficam em `logs/inicializacao.log`, `logs/inicio-gravador.log`
+e `logs/inicio-agente.log`. Os servicos continuam usando `logs/pregacao.log` e
+`logs/pregacao-agente.log`. O script `_instalador/ajustar_caminhos.py` e uma ferramenta
+manual de migracao antiga: altera caminhos e nao e executado pelo iniciador.
+
+## Atualizar
+
+Fechar gravador/agente somente quando ociosos; guardar backup; atualizar fontes e
+reinstalar dependencias se necessario. Preservar `.env`, `config/config.json`, tokens,
+`data/`, `recordings/` e `recovery/`. Reabrir `iniciar-tudo.bat` e atualizar o navegador.
+O pipeline externo possui instalacao/dependencias separadas.
+
+## Arquivos da melhoria de inicializacao (19/10/2026)
+
+Criados: `app/launcher.py`, `tests/test_launcher.py`.
+
+Alterados: `iniciar-tudo.bat`, `app/api/routes.py` (orientacao exibida),
+`app/remote/agent.py` (documentacao), `README.md`, `GUIA-USUARIO.md`,
+`docs/WINDOWS.md`, `docs/AGENTE.md`, `docs/TESTES.md`, `docs/CODEX_CONTEXT.md`.
+
+Removidos:
+
+- `iniciar-gravador.bat`
+- `iniciar-agente.bat`
+- `_instalador/subir-painel-teste.bat`
+- `_instalador/testar-agente-ssd.bat`
+- `_instalador/verificar-deps-pregacao.bat`
+- `_instalador/verificar-deps-sermon.bat`
+- `_instalador/verificar-identidade.bat`
+- `_instalador/verificar-playwright.bat`
+- `_instalador/verificar-runtimes.bat`
+- `_instalador/verificar-tudo.bat`

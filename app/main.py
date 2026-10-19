@@ -2,7 +2,7 @@
 
 Sequencia de subida:
 
-    boot -> systemd -> Recording Service -> Web API -> Interface web
+    iniciar-tudo.bat -> gravador e agente -> API -> interface web
 """
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ def build() -> Tuple[Any, Any, Any]:
         return render_template("index.html", device_name=config.get("device_name", "Pulpito"))
 
     register_routes(app, manager, uploader)
-    log.info("aplicacao pronta; interface em http://<ip-do-pi>:%d", config.port)
+    log.info("aplicacao pronta; interface em http://127.0.0.1:%d", config.port)
     return app, manager, uploader
 
 

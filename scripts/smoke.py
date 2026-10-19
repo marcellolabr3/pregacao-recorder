@@ -72,7 +72,7 @@ iniciada = s == 200
 check("start: 409 sem audio ou 200 com audio", s in (200, 409),
       str(d.get("message")))
 if iniciada:
-    time.sleep(2.5)  # deixa o arecord escrever o primeiro segmento
+    time.sleep(2.5)  # deixa o FFmpeg escrever o primeiro segmento
     s1, d1 = call("POST", "/api/stop")
     check("stop da gravacao de teste -> 200", s1 == 200, str(d1.get("message")))
 

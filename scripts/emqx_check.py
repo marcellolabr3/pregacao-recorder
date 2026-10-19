@@ -5,7 +5,7 @@ executa STATUS -> START -> START (precisa ser idempotente) -> STOP, imprimindo
 o ack de cada um. Sai com codigo != 0 se algo falhar.
 
 Credenciais NUNCA ficam aqui: sao lidas do ambiente ou de um arquivo .env
-(por padrao /opt/pregacao-recorder/.env).
+(por padrao .env na raiz do projeto).
 
 Uso:
     python scripts/emqx_check.py                 # ciclo completo
@@ -15,13 +15,14 @@ Uso:
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import json
 import os
 import ssl
 import sys
 import time
 
-DEFAULT_ENV = "/opt/pregacao-recorder/.env"
+DEFAULT_ENV = str(Path(__file__).resolve().parent.parent / ".env")
 
 
 def load_env(path: str) -> None:

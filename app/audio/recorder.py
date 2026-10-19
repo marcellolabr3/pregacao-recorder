@@ -3,8 +3,7 @@
 O processo de captura e mantido vivo escrevendo PCM puro no stdout; o
 processo Python quebra esse fluxo em segmentos WAV de ``segment_seconds``.
 
-Backends: ``arecord`` (ALSA) no Linux/Raspberry e ``ffmpeg`` (DirectShow)
-no Windows - o restante do modulo nao muda, o contrato e o mesmo.
+Backend: FFmpeg/DirectShow no Windows; segmentos WAV preservam a recuperacao.
 
 Beneficios:
   * sem buracos entre segmentos (o fluxo e continuo);
@@ -114,21 +113,7 @@ class SegmentRecorder:
             log.exception("erro no callback de evento")
 
     def _comando_captura(self) -> Optional[List[str]]:
-        """Comando do backend de captura do sistema.
-
-        ``arecord`` no Linux (o original) ou ``ffmpeg``/DirectShow no Windows;
-        ``None`` quando nao ha ferramenta nenhuma instalada.
-        """
-        if shutil.which("arecord"):
-            return [
-                "arecord", "-q",
-                "-D", self.device,
-                "-f", self.sample_fmt,
-                "-r", str(self.sample_rate),
-                "-c", str(self.channels),
-                "-t", "raw",
-                "-",
-            ]
+        """Captura PCM pelo FFmpeg/DirectShow do Windows."""
         if shutil.which("ffmpeg"):
             return [
                 "ffmpeg", "-hide_banner", "-loglevel", "error",
@@ -146,8 +131,8 @@ class SegmentRecorder:
         cmd = self._comando_captura()
         if cmd is None:
             self.error = (
-                "captura indisponivel: arecord (Linux) ou ffmpeg "
-                "(Windows: winget install Gyan.FFmpeg) nao encontrado"
+                "captura indisponivel: ffmpeg "
+                "(winget install Gyan.FFmpeg) nao encontrado"
             )
             return None
         extra = (

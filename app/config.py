@@ -27,21 +27,9 @@ def sanitize_device_id(value: str) -> str:
 
 
 def _generated_device_id() -> str:
-    """Identificador unico e estavel gerado no proprio aparelho.
-
-    Usa o machine-id do Debian/Raspbian (unico por placa, nao muda com reboot).
-    Fallback: hostname; por ultimo, um valor fixo (ambiente de desenvolvimento).
-    """
-    try:
-        machine = Path("/etc/machine-id")
-        if machine.exists():
-            raw = machine.read_text(encoding="utf-8").strip()
-            if raw:
-                return sanitize_device_id(f"pregacao-{raw[:6]}")
-    except OSError:  # pragma: no cover - so em SO sem /etc/machine-id
-        pass
+    """Identificador estavel do PC a partir do hostname."""
     host = socket.gethostname().strip()
-    if host and host.lower() not in ("localhost", "pregacao-pi"):
+    if host and host.lower() != "localhost":
         return sanitize_device_id(host)
     return "pregacao-local"
 
@@ -105,6 +93,11 @@ class Config:
                 except (ValueError, OSError):
                     user = {}
             self._values = _deep_merge(self._defaults, user)
+            # Chaves de AP/Wi-Fi antigas nao voltam a aparecer na API nem sao usadas.
+            network = self._values.get("network", {})
+            if isinstance(network, dict):
+                self._values["network"] = {k: v for k, v in network.items()
+                                           if k in ("check_host", "check_port", "retry_seconds")}
 
     # ------------------------------------------------------------------
     def get(self, dotted: str, default: Any = None) -> Any:
@@ -149,7 +142,7 @@ class Config:
 
         Ordem de precedencia: ``PREGACAO_DEVICE_ID`` (`.env`) -> ``device_id``
         do config.json (CONFIGURACOES AVANCADAS) -> valor gerado a partir do
-        machine-id. O resultado e sempre sanitizado para ``[A-Za-z0-9_-]``.
+        hostname. O resultado e sempre sanitizado para ``[A-Za-z0-9_-]``.
         """
         raw = (
             os.environ.get("PREGACAO_DEVICE_ID", "").strip()

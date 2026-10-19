@@ -1,5 +1,5 @@
 // Protocolo MQTT do controle remoto - o mesmo contrato do agente do
-// Raspberry (docs/AGENTE.md). Tudo sob `pregacao/<device_id>/`:
+// PC (docs/AGENTE.md). Tudo sob `pregacao/<device_id>/`:
 //
 //   cmd     app -> agente   {"cmd":"START","req_id":"...","ts":179...}
 //   ack     agente -> app   resposta correlacionada pelo req_id

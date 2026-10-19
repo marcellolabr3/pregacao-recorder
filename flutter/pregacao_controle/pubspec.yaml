@@ -35,7 +35,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
-  # MQTT sobre TLS (o mesmo protocolo do agente do Raspberry)
+  # MQTT sobre TLS (o mesmo protocolo do agente do PC)
   mqtt_client: ^10.5.0
   # token/armazenamento protegido: Keystore no Android, Keychain no iOS
   flutter_secure_storage: ^9.2.2

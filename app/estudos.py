@@ -50,6 +50,21 @@ log = get("estudos")
 
 _evento = threading.Event()
 _trabalhador: Optional[threading.Thread] = None
+_trava_trabalhador = threading.Lock()
+
+# Um login interativo por vez. O CLI de login e os checks/refreshs usam
+# o mesmo perfil; nao podem escrever/consultar uma captura pela metade.
+_trava_nlm = threading.RLock()
+_trava_login = threading.RLock()
+_login_thread: Optional[threading.Thread] = None
+_login = {
+    "em_andamento": False,
+    "estado": "inativo",
+    "detalhe": "",
+    "iniciado_em": 0.0,
+    "finalizado_em": 0.0,
+    "retomados": 0,
+}
 
 # saude da sessao do NotebookLM, cache em memoria: o painel le este bloco
 # sem rodar nada; a verificacao de verdade acontece no disparo, no botao
@@ -152,16 +167,17 @@ def _executar_nlm(args, cwd: Path, timeout: int):
         comando = ["cmd", "/c"] + comando
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     try:
-        proc = subprocess.run(
-            comando,
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            creationflags=flags,
-        )
+        with _trava_nlm:
+            proc = subprocess.run(
+                comando,
+                cwd=str(cwd),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                creationflags=flags,
+            )
         return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
     except subprocess.TimeoutExpired:
         return None, "timeout"
@@ -191,6 +207,12 @@ def _definir(estado: str, detalhe: str) -> str:
         _saude["estado"] = estado
         _saude["detalhe"] = detalhe
         _saude["verificado_em"] = time.time()
+    if estado == "ok":
+        with _trava_login:
+            # Um diagnostico/checagem posterior pode confirmar a sessao
+            # apos uma falha de login; o card nao deve conservar esse erro.
+            if not _login["em_andamento"] and _login["estado"] == "erro":
+                _login.update(estado="concluido", detalhe="Sessao do NotebookLM confirmada.", finalizado_em=time.time())
     return estado
 
 
@@ -200,6 +222,9 @@ def verificar_saude(force: bool = False) -> str:
     Sem "force" usa o resultado recente (custo zero para quem consulta
     a tela). O comando e somente leitura: nunca renova credencial sozinho.
     """
+    if _login_ativo():
+        # O worker preserva o job em espera enquanto o usuario faz login.
+        return "auth"
     pasta = _cfg("pasta")
     if not pasta:
         return "desconhecido"
@@ -237,6 +262,8 @@ def _renovar_sessao() -> bool:
     a espera - nada de segurar cookie na mao nem de tentar para sempre.
     """
     global _ultima_renovacao
+    if _login_ativo():
+        return False
     pasta = _cfg("pasta")
     prog = _nlm_programa(pasta)
     if not pasta or not _programa_existe(prog):
@@ -326,6 +353,7 @@ def status() -> Dict[str, Any]:
             "aguardando": 0,
             "motivo": "",
             "fila": fila,
+            "login": _status_login(),
             # a barra da cadeia nao depende do recurso estar ligado: o
             # estado da ULTIMA gravacao/estudo continua sendo a verdade
             "job": _job_publico(),
@@ -339,6 +367,7 @@ def status() -> Dict[str, Any]:
         "aguardando": pendentes,
         "motivo": motivo,
         "fila": fila,
+        "login": _status_login(),
         "job": _job_publico(),
         "barra": barra(),
     }
@@ -348,7 +377,7 @@ def diagnosticar() -> Dict[str, Any]:
     """Botao DIAGNOSTICAR: verificacao fresca +, se a sessao estiver
     expirada, UMA renovacao oficial na hora. Retoma o que estiver em
     espera quando a sessao voltar."""
-    if not ligado():
+    if not ligado() or _login_ativo():
         return status()
     estado = verificar_saude(force=True)
     renovada = False
@@ -371,15 +400,91 @@ def diagnosticar() -> Dict[str, Any]:
     return resultado
 
 
-def reconectar() -> Dict[str, Any]:
-    """Botao RENOVAR LOGIN: abre o login do NotebookLM em janela propria
-    (o login acontece uma unica vez, no navegador).
+def _status_login() -> Dict[str, Any]:
+    with _trava_login:
+        return dict(_login)
 
-    A saida do comando vai para um arquivo de log: a janela de console
-    pode fechar sozinha quando o comando termina rapido, e sem o arquivo
-    uma falha (por exemplo, Edge de perfil travado em uso) fica
-    diagnosticavel apenas pelo terminal.
-    """
+
+def _login_ativo() -> bool:
+    with _trava_login:
+        return bool(_login["em_andamento"])
+
+
+def _falha_login(detalhe: str) -> None:
+    with _trava_login:
+        _login.update(em_andamento=False, estado="erro", detalhe=detalhe,
+                      finalizado_em=time.time(), retomados=0)
+
+
+def _executar_login(pasta: str, prog: str, navegador: str) -> None:
+    """Mantem o perfil livre de refreshs ate confirmar a nova sessao."""
+    try:
+        with _trava_nlm:
+            logs = Path(pasta) / "logs"
+            logs.mkdir(parents=True, exist_ok=True)
+            arquivo = logs / "login_nlm.log"
+            # Rotacionar ANTES de abrir o arquivo do processo (Windows).
+            if arquivo.exists() and arquivo.stat().st_size > 2 * 1024 * 1024:
+                anterior = logs / "login_nlm.log.1"
+                if anterior.exists():
+                    anterior.unlink()
+                arquivo.replace(anterior)
+            # --fresh so afeta o navegador dedicado do CLI. Nao apaga o
+            # storage salvo; evita aceitar o SID antigo e fechar imediatamente.
+            comando = [prog, "login", "--browser", navegador, "--fresh",
+                       "--browser-timeout", "600"]
+            if prog.lower().endswith((".bat", ".cmd")):
+                comando = ["cmd", "/c"] + comando
+            flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            with open(arquivo, "a", encoding="utf-8") as fh:
+                fh.write(f"# login {datetime.now().isoformat(timespec='seconds')} (browser={navegador})\n")
+                fh.flush()
+                proc = subprocess.Popen(
+                    comando, cwd=pasta, stdin=subprocess.DEVNULL, stdout=fh,
+                    stderr=subprocess.STDOUT, creationflags=flags,
+                )
+                with _trava_login:
+                    _login.update(estado="aguardando", detalhe="Entre na sua conta Google na janela do NotebookLM no PC. Aguarde a confirmacao aqui.")
+                # O navegador e headed. Nao ha prompt de terminal: o CLI
+                # detecta a entrada automaticamente, com prazo de 10 minutos.
+                codigo = proc.wait()
+            if codigo != 0:
+                _falha_login("Login cancelado ou nao concluido. Clique em RENOVAR LOGIN e conclua a entrada na conta no navegador do PC.")
+                log.warning("login NotebookLM encerrou com codigo %s", codigo)
+                return
+            with _trava_login:
+                _login.update(estado="verificando", detalhe="Conferindo a nova sessao do NotebookLM...")
+            # Salvar cookies/retornar zero no login nao comprova autenticacao.
+            codigo, texto = _executar_nlm(
+                [prog, "auth", "check", "--test", "--passive"], Path(pasta), 60
+            )
+            estado = _classificar(codigo, texto)
+            _definir(estado, _DETALHE[estado])
+            if estado != "ok":
+                detalhe = "O navegador encerrou, mas a sessao nao foi confirmada. "
+                detalhe += ("Confira a internet e use DIAGNOSTICAR SESSAO." if estado == "rede" else
+                            "Clique em RENOVAR LOGIN e entre novamente na conta com acesso ao NotebookLM.")
+                _falha_login(detalhe)
+                log.warning("login concluido sem sessao confirmada (estado=%s)", estado)
+                return
+            # Liberar a guarda antes de acordar o worker; seu pre-flight deve
+            # enxergar a sessao nova. A trava impede um novo clique neste meio.
+            with _trava_login:
+                _login.update(em_andamento=False, estado="concluido", detalhe="Sessao do NotebookLM confirmada.", finalizado_em=time.time())
+                retomados = _retomar_pendentes() if ligado() else 0
+                _login["retomados"] = retomados
+                if ligado() and db.job_contagens().get("PENDENTE"):
+                    _iniciar()
+                    _evento.set()
+            log.info("login NotebookLM confirmado; %s estudo(s) retomado(s)", retomados)
+    except Exception:  # o resultado fica visivel, sem expor a saida privada do CLI
+        log.exception("falha ao executar login NotebookLM")
+        _falha_login("Nao foi possivel concluir o login. Tente novamente; detalhes no log de login do NotebookLM.")
+
+
+def reconectar() -> Dict[str, Any]:
+    """Inicia e acompanha uma nova entrada, sem bloquear a API ou duplicar janelas."""
+    global _login_thread
     if not ligado():
         raise ValueError("estudo automatico nao configurado neste equipamento")
     pasta = _cfg("pasta")
@@ -387,39 +492,21 @@ def reconectar() -> Dict[str, Any]:
     if not _programa_existe(prog):
         raise ValueError("notebooklm nao encontrado - confira estudos.pasta")
     navegador = _cfg("browser") or "msedge"
-    comando = [prog, "login", "--browser", navegador]
-    if prog.lower().endswith((".bat", ".cmd")):
-        comando = ["cmd", "/c"] + comando
-    logs = Path(pasta) / "logs"
-    logs.mkdir(parents=True, exist_ok=True)
-    arquivo = logs / "login_nlm.log"
-    flags = subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
-    with open(arquivo, "a", encoding="utf-8") as fh:
-        fh.write(
-            f"# login {datetime.now().isoformat(timespec='seconds')} "
-            f"(browser={navegador})\n"
-        )
-        fh.flush()
-        subprocess.Popen(
-            comando,
-            cwd=pasta,
-            stdout=fh,
-            stderr=subprocess.STDOUT,
-            creationflags=flags,
-        )
-    # rotacao: cada login abre o arquivo em append; sem teto ele cresce
-    # para sempre
-    if arquivo.stat().st_size > 2 * 1024 * 1024:
-        anterior = logs / "login_nlm.log.1"
-        if anterior.exists():
-            anterior.unlink()
-        arquivo.replace(anterior)
-    log.info(
-        "janela de login do NotebookLM aberta (browser=%s, log=%s)",
-        navegador,
-        arquivo.name,
-    )
-    return {"lancado": True, "navegador": navegador}
+    with _trava_login:
+        if _login["em_andamento"]:
+            return {"lancado": False, "navegador": navegador,
+                    "em_andamento": True, "login": dict(_login)}
+        _login.update(em_andamento=True, estado="abrindo", detalhe="Abrindo uma nova janela para entrar na conta Google do NotebookLM...",
+                      iniciado_em=time.time(), finalizado_em=0.0, retomados=0)
+        _login_thread = threading.Thread(target=_executar_login, args=(pasta, prog, navegador),
+                                         name="notebooklm-login", daemon=True)
+        try:
+            _login_thread.start()
+        except Exception:
+            _falha_login("Nao foi possivel abrir a janela de login. Tente novamente.")
+            raise
+        return {"lancado": True, "navegador": navegador,
+                "em_andamento": bool(_login["em_andamento"]), "login": dict(_login)}
 
 
 def _keepalive() -> None:
@@ -435,6 +522,8 @@ def _keepalive() -> None:
     verificacao de saude.
     """
     global _ultima_renovacao
+    if _login_ativo():
+        return
     pasta = _cfg("pasta")
     prog = _nlm_programa(pasta)
     if not pasta or not _programa_existe(prog):
@@ -563,7 +652,7 @@ def _vigia_loop() -> None:
             intervalo = 1200.0
         time.sleep(max(60.0, intervalo))
         try:
-            if not ligado():
+            if not ligado() or _login_ativo():
                 continue
             estado = verificar_saude(force=True)
             if estado == "ok":
@@ -864,10 +953,11 @@ def enfileirar(caminho: str) -> None:
 
 def _iniciar() -> None:
     global _trabalhador
-    if _trabalhador is not None and _trabalhador.is_alive():
-        return
-    _trabalhador = threading.Thread(target=_loop, name="estudos", daemon=True)
-    _trabalhador.start()
+    with _trava_trabalhador:
+        if _trabalhador is not None and _trabalhador.is_alive():
+            return
+        _trabalhador = threading.Thread(target=_loop, name="estudos", daemon=True)
+        _trabalhador.start()
 
 
 def _loop() -> None:
@@ -946,28 +1036,37 @@ def _rodar(job: Dict[str, Any]) -> None:
         if _renovar_sessao():
             _definir("ok", "sessao renovada automaticamente")
             estado = "ok"
-    if estado == "auth":
-        _aguardar(job_id, "autenticacao expirada")
-        _publicar_job(
-            dict(job, estado="AGUARDANDO_INTERVENCAO", motivo="autenticacao expirada"),
-            "PRE-FLIGHT",
-            descricao="Em espera: autenticacao do NotebookLM expirada",
-            estado="AGUARDANDO_INTERVENCAO",
-            level="warning",
-        )
-        return
-    if estado == "rede":
-        # sem conexao o pipeline tambem quebraria: guarda o MP3 e o
-        # periodo de saude devolve o job quando a rede voltar
-        _aguardar(job_id, "sem rede")
-        _publicar_job(
-            dict(job, estado="AGUARDANDO_INTERVENCAO", motivo="sem rede"),
-            "PRE-FLIGHT",
-            descricao="Em espera: sem rede",
-            estado="AGUARDANDO_INTERVENCAO",
-            level="warning",
-        )
-        return
+    with _trava_login:
+        if _login["em_andamento"]:
+            estado = "auth"
+        # O login pode ter acabado entre o pre-flight e esta transicao.
+        # Nao deixar um job novo em espera DEPOIS da retomada do monitor.
+        if estado in ("auth", "rede") and not _login["em_andamento"] and _login["estado"] == "concluido":
+            with _trava_saude:
+                if _saude["estado"] == "ok":
+                    estado = "ok"
+        if estado == "auth":
+            _aguardar(job_id, "autenticacao expirada")
+            _publicar_job(
+                dict(job, estado="AGUARDANDO_INTERVENCAO", motivo="autenticacao expirada"),
+                "PRE-FLIGHT",
+                descricao="Em espera: autenticacao do NotebookLM expirada",
+                estado="AGUARDANDO_INTERVENCAO",
+                level="warning",
+            )
+            return
+        if estado == "rede":
+            # sem conexao o pipeline tambem quebraria: guarda o MP3 e o
+            # periodo de saude devolve o job quando a rede voltar
+            _aguardar(job_id, "sem rede")
+            _publicar_job(
+                dict(job, estado="AGUARDANDO_INTERVENCAO", motivo="sem rede"),
+                "PRE-FLIGHT",
+                descricao="Em espera: sem rede",
+                estado="AGUARDANDO_INTERVENCAO",
+                level="warning",
+            )
+            return
     if estado == "ok":
         # sessao confirmada agora: aproveita para retomar o que ficou
         # em espera por uma falha anterior (roda depois deste job)

@@ -19,7 +19,6 @@
     <string name="btn_encerrar">ENCERRAR GRAVACAO</string>
     <string name="btn_aguarde">AGUARDE…</string>
     <string name="btn_config">Configuracoes</string>
-    <string name="btn_wifi">Redes Wi-Fi do equipamento</string>
     <string name="btn_drive">Google Drive</string>
     <string name="btn_storage">Onde gravar</string>
     <string name="tempo_zero">00:00:00</string>
@@ -54,23 +53,9 @@
     <string name="cfg_falta_aparelho">Falta o ID do aparelho.</string>
 
     <!-- redes wi-fi do EQUIPAMENTO (o celular so pede; quem conecta e o Pi) -->
-    <string name="wifi_titulo">Redes Wi-Fi do equipamento</string>
-    <string name="wifi_cabecalho">ESTAS SAO AS REDES QUE O EQUIPAMENTO ENXERGA\nO Wi-Fi do celular nao muda nada aqui.</string>
-    <string name="wifi_sem_config">Toque em Configuracoes para conectar no equipamento.</string>
-    <string name="wifi_procurando">Procurando as redes do equipamento…</string>
-    <string name="wifi_procurar">PROCURAR DE NOVO</string>
-    <string name="wifi_nenhuma">Nenhuma rede encontrada.</string>
-    <string name="wifi_achadas">Redes encontradas: %1$d. Toque em uma para o equipamento conectar.</string>
-    <string name="wifi_conectando">Conectando o equipamento em %1$s…</string>
-    <string name="wifi_conectado">Equipamento conectado em %1$s.</string>
-    <string name="wifi_senha">Senha da rede</string>
-    <string name="wifi_senha_msg">A senha vai direto para o equipamento e nao fica salva no celular.</string>
-    <string name="wifi_conectar">CONECTAR</string>
-    <string name="wifi_cancelar">CANCELAR</string>
-
-    <!-- onde gravar: SSD externo x cartao SD -->
+    <!-- onde gravar: SSD externo x disco do PC -->
     <string name="storage_titulo">Onde gravar</string>
-    <string name="storage_cabecalho">ESTES SAO OS DESTINOS QUE O EQUIPAMENTO ENXERGA\nEscolha onde as gravacoes devem ser salvas. O cartao SD\nsempre aparece: e o colchao quando o disco externo some.</string>
+    <string name="storage_cabecalho">ESTES SAO OS DESTINOS QUE O EQUIPAMENTO ENXERGA\nEscolha onde as gravacoes devem ser salvas. O disco do PC\nsempre aparece: e o colchao quando o disco externo some.</string>
     <string name="storage_carregando">Lendo os destinos do equipamento…</string>
     <string name="storage_sem_config">Toque em Configuracoes para conectar no equipamento.</string>
     <string name="storage_nenhuma">Nenhum destino encontrado.</string>
@@ -85,7 +70,7 @@
     <string name="storage_sem_espaco">espaco livre desconhecido</string>
     <string name="storage_gravando_em">Gravando em: %1$s</string>
 
-    <!-- google drive: espelho do painel do Raspberry -->
+    <!-- google drive: espelho do painel do PC -->
     <string name="drive_titulo">Google Drive</string>
     <string name="drive_cabecalho">As gravacoes sobem sozinhas para o Google Drive.\nA conta e conectada AQUI e o segredo fica no equipamento -\no celular nunca ve a senha do Google.</string>
     <string name="drive_verificando">Verificando a conta do equipamento…</string>
@@ -95,7 +80,7 @@
     <string name="drive_conectado">Conectado: %1$s</string>
     <string name="drive_sem_conta">Nenhuma conta conectada.</string>
     <string name="drive_sem_configuracao">O Google Drive ainda nao foi configurado neste equipamento.</string>
-    <string name="drive_sem_biblioteca">As bibliotecas do Google nao estao instaladas no Raspberry.</string>
+    <string name="drive_sem_biblioteca">As bibliotecas do Google nao estao instaladas no PC.</string>
     <string name="drive_abrindo">Abrindo o navegador para voce autorizar…</string>
     <string name="drive_aguardando">Aguardando a confirmacao do Google. Conclua la e volte para esta tela.</string>
     <string name="drive_conectado_ok">Conta conectada com sucesso.</string>

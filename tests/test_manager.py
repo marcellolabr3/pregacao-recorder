@@ -73,6 +73,15 @@ def test_start_blocked_while_already_recording(manager, fresh_state):
         manager.start()
 
 
+def test_disco_indisponivel_impede_captura_e_nao_cria_sessao(manager, monkeypatch, fresh_state):
+    from app.recording import manager as module
+    monkeypatch.setattr(module.audio_device, "detect", lambda *_: {"hw": "USB", "card": -1, "selected_by": "config"})
+    monkeypatch.setattr(module.destinos, "aviso", lambda *_: "Destino indisponivel")
+    with pytest.raises(ManagerError, match="Destino indisponivel"):
+        manager.start()
+    assert manager.recorder is None
+
+
 def test_stop_without_recorder_is_safe(manager, fresh_state):
     state_machine.set(State.RECORDING, force=True, session_id="x")
     with pytest.raises(ManagerError):
@@ -138,7 +147,7 @@ def test_empty_recording_is_discarded_not_error(manager, database, recordings_ro
     sid = "vazia"
     session_dir = recordings_root / ".sessions" / sid
     session_dir.mkdir(parents=True)
-    (session_dir / "segment_0001.wav").write_bytes(b"")  # arecord nao deu tempo
+    (session_dir / "segment_0001.wav").write_bytes(b"")  # captura nao produziu dados
     database.create_session(
         {"id": sid, "started_at": time.time(), "state": "RECORDING",
          "sample_rate": 44100, "channels": 2}

@@ -1,53 +1,5 @@
-"""Parsing da saida real do `arecord -l` (ALSA).
-
-Regressao: a regex original nao aceitava espaco dentro do ultimo colchete
-(`... device 0: USB Audio [USB Audio]`), fazendo o sistema achar que NAO ha
-interface de audio mesmo com a placa conectada.
-"""
+"""Parsing e selecao de dispositivos FFmpeg/DirectShow."""
 from app.audio import device
-
-REAL_ALSA = """**** List of CAPTURE Hardware Devices ****
-card 0: PCH [HDA Intel PCH], device 0: ALC295 Analog [ALC295 Analog]
-card 1: Device [USB Audio Device], device 0: USB Audio [USB Audio]
-  Subdevices: 1/1
-  Subdevice #0: subdevice #0
-"""
-
-
-def _patch(monkeypatch, output):
-    monkeypatch.setattr(device.shutil, "which", lambda _n: "/usr/bin/arecord")
-    monkeypatch.setattr(device, "_run", lambda _cmd, timeout=10: output)
-
-
-def test_list_devices_parses_real_alsa_output(monkeypatch):
-    _patch(monkeypatch, REAL_ALSA)
-    devs = device.list_devices()
-    assert [d["hw"] for d in devs] == ["hw:0,0", "hw:1,0"]
-    assert devs[1]["usb"] is True
-    assert devs[1]["card_id"] == "Device"
-    assert devs[1]["name"] == "USB Audio Device"
-
-
-def test_detect_prefers_usb_interface(monkeypatch):
-    _patch(monkeypatch, REAL_ALSA)
-    det = device.detect("auto")
-    assert det["hw"] == "hw:1,0"
-    assert det["selected_by"] == "auto-usb"
-
-
-def test_detect_without_arecord_reports_no_device(monkeypatch):
-    monkeypatch.setattr(device.shutil, "which", lambda _n: None)
-    assert device.list_devices() == []
-    det = device.detect("auto")
-    assert det["card"] == -1
-
-
-def test_configured_device_is_used_when_present(monkeypatch):
-    _patch(monkeypatch, REAL_ALSA)
-    det = device.detect("hw:0,0")
-    assert det["hw"] == "hw:0,0"
-    assert det["selected_by"] == "config"
-
 
 # ------------------------------------------------------------------ dshow
 # Windows (ffmpeg/DirectShow): saida real de `ffmpeg -list_devices true -f dshow`.

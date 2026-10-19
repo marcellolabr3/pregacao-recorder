@@ -42,13 +42,13 @@ def _which_stub(presentes):
     return lambda nome: f"/usr/bin/{nome}" if nome in presentes else None
 
 
-def test_comando_prefere_arecord_quando_existe(tmp_path: Path, monkeypatch):
+def test_comando_usa_directshow_mesmo_com_ferramenta_legada_no_path(tmp_path: Path, monkeypatch):
     from app.audio import recorder as rec_mod
 
     monkeypatch.setattr(rec_mod.shutil, "which", _which_stub({"arecord", "ffmpeg"}))
     rec = SegmentRecorder(session_dir=tmp_path, device="hw:1,0")
     cmd = rec._comando_captura()
-    assert cmd[0] == "arecord"
+    assert cmd[0] == "ffmpeg"
 
 
 def test_comando_usa_ffmpeg_dshow_quando_so_tem_ffmpeg(tmp_path: Path, monkeypatch):

@@ -8,6 +8,7 @@ para parar nao corrompe nada.
 from __future__ import annotations
 
 import json
+import pytest
 import time
 from types import SimpleNamespace
 
@@ -63,18 +64,16 @@ STORAGE_FAKE = {
 
 class FakeApi:
     def __init__(self, snapshot=None, status_code=200, start_code=200,
-                 stop_code=200, scan_code=200, connect_code=200,
+                 stop_code=200, connect_code=200,
                  finish_code=200, ssd_montado=True):
         self.snapshot = base_snapshot() if snapshot is None else snapshot
         self.status_code = status_code
         self.start_code = start_code
         self.stop_code = stop_code
-        self.scan_code = scan_code
         self.connect_code = connect_code
         self.finish_code = finish_code
         self.ssd_montado = ssd_montado
         self.calls = []
-        self.connect_calls = []
         self.finish_calls = []
         self.set_calls = []
 
@@ -90,33 +89,6 @@ class FakeApi:
         self.calls.append("stop")
         return self.stop_code, {"state": State.IDLE}
 
-    def wifi_scan(self):
-        self.calls.append("wifi_scan")
-        if self.scan_code != 200:
-            return self.scan_code, {
-                "error": "sem_networkmanager",
-                "message": "NetworkManager indisponivel neste sistema",
-            }
-        return self.scan_code, {
-            "networks": [{"ssid": "Igreja", "signal": 82, "secure": True}],
-            "count": 1,
-        }
-
-    def wifi_connect(self, ssid, password=None):
-        self.calls.append("wifi_connect")
-        self.connect_calls.append((ssid, password))
-        if self.connect_code != 200:
-            return self.connect_code, {
-                "error": "wifi_falhou",
-                "message": "senha incorreta",
-            }
-        return self.connect_code, {
-            "ok": True,
-            "ssid": ssid,
-            "message": "conectado",
-        }
-
-    # -- google drive / armazenamento (espelho do painel) ---------------
     def drive_status(self):
         self.calls.append("drive_status")
         return 200, {
@@ -574,95 +546,6 @@ def test_on_message_comando_invalido_responde_erro():
     assert "error" in payload
 
 
-# ---------------------------------------------------------------- wifi remoto
-def test_comandos_de_wifi_fazem_parte_do_protocolo():
-    assert "WIFI_SCAN" in COMMANDS
-    assert "WIFI_CONNECT" in COMMANDS
-
-
-def test_parse_command_preserva_os_argumentos_do_wifi():
-    raw = json.dumps(
-        {"cmd": "WIFI_CONNECT", "req_id": "w1",
-         "ssid": "Igreja", "password": "s3nh4"}
-    )
-    assert parse_command(raw) == {
-        "cmd": "WIFI_CONNECT",
-        "req_id": "w1",
-        "ssid": "Igreja",
-        "password": "s3nh4",
-    }
-
-
-def test_parse_command_sem_argumentos_continua_com_o_contrato_antigo():
-    # ssid vazio nao entra no resultado: os comandos de sempre continuam
-    # respondendo exatamente o que respondiam antes da adicao do Wi-Fi
-    assert parse_command('{"cmd":"STATUS","req_id":"a"}') == {
-        "cmd": "STATUS",
-        "req_id": "a",
-    }
-    assert parse_command('{"cmd":"WIFI_CONNECT","ssid":"   "}') == {
-        "cmd": "WIFI_CONNECT",
-        "req_id": "",
-    }
-
-
-def test_wifi_scan_devolve_a_lista_de_redes():
-    agent, _, api = make_agent()
-    ack = agent.handle_command({"cmd": "WIFI_SCAN", "req_id": "s1"})
-
-    assert ack["ok"] is True
-    assert ack["count"] == 1
-    assert ack["networks"][0]["ssid"] == "Igreja"
-    assert "wifi_scan" in api.calls
-
-
-def test_wifi_scan_com_networkmanager_fora_vira_erro_claro():
-    agent, _, _ = make_agent(api=FakeApi(scan_code=501))
-    ack = agent.handle_command({"cmd": "WIFI_SCAN"})
-
-    assert ack["ok"] is False
-    assert ack["error"] == "NetworkManager indisponivel neste sistema"
-    assert ack["code"] == "sem_networkmanager"
-
-
-def test_wifi_connect_envia_senha_para_a_api():
-    agent, _, api = make_agent()
-    ack = agent.handle_command(
-        {"cmd": "WIFI_CONNECT", "req_id": "c1",
-         "ssid": "Igreja", "password": "s3nh4"}
-    )
-
-    assert ack["ok"] is True
-    assert ack["ssid"] == "Igreja"
-    assert ack["detail"] == "conectado"
-    # a senha vai exatamente como veio do APK
-    assert api.connect_calls == [("Igreja", "s3nh4")]
-
-
-def test_wifi_connect_sem_ssid_nem_chama_a_rede():
-    agent, _, api = make_agent()
-    ack = agent.handle_command({"cmd": "WIFI_CONNECT", "req_id": "c2"})
-
-    assert ack["ok"] is False
-    assert ack["code"] == "ssid_obrigatorio"
-    # o req_id e o cmd continuam no erro: sem eles o APK nao sabe a qual
-    # botao esta respondendo
-    assert ack["req_id"] == "c2"
-    assert ack["cmd"] == "WIFI_CONNECT"
-    assert "wifi_connect" not in api.calls
-
-
-def test_wifi_connect_recusado_pelo_servidor_vira_erro_claro():
-    agent, _, _ = make_agent(api=FakeApi(connect_code=409))
-    ack = agent.handle_command(
-        {"cmd": "WIFI_CONNECT", "ssid": "Igreja", "password": "errada"}
-    )
-
-    assert ack["ok"] is False
-    assert ack["error"] == "senha incorreta"
-    assert ack["code"] == "wifi_falhou"
-
-
 # ------------------------------------------- drive / storage (espelho APK)
 def test_comandos_de_drive_e_storage_fazem_parte_do_protocolo():
     for cmd in ("DRIVE_STATUS", "DRIVE_CONNECT", "DRIVE_FINISH",
@@ -817,7 +700,7 @@ def test_settings_admin_pin_cai_para_o_pin_normal_se_vazio():
 
 # ---------------------------------------------------------------- LocalApi
 def test_local_api_sobe_para_admin_quando_o_servidor_pedir(monkeypatch):
-    """As rotas de rede exigem require_admin: o agente precisa subir a
+    """As rotas de armazenamento exigem require_admin: o agente precisa subir a
     sessao so quando o servidor reclamar, sem misturar isso no _authed."""
     api = LocalApi("http://local", "1234", admin_pin="9999")
     chamadas = []
@@ -830,18 +713,18 @@ def test_local_api_sobe_para_admin_quando_o_servidor_pedir(monkeypatch):
         if path == "/api/admin/login":
             admin["ok"] = True
             return 200, {"ok": True}
-        if path.startswith("/api/network/wifi/scan"):
+        if path == "/api/storage":
             # e o caso real: autenticado, mas ainda nao administrador
             if not admin["ok"]:
                 return 403, {"error": "admin_obrigatorio"}
-            return 200, {"networks": [{"ssid": "X"}], "count": 1}
+            return 200, {"ok": True}
         return 403, {"error": "admin_obrigatorio"}
 
     monkeypatch.setattr(api, "_request", falso_request)
-    status, payload = api.wifi_scan()
+    status, payload = api.storage_set("D:/Pregacoes")
 
     assert status == 200
-    assert payload["count"] == 1
+    assert payload["ok"] is True
     # a ordem importa: is_admin() so vale depois do login comum
     assert ("POST", "/api/login") in chamadas
     assert ("POST", "/api/admin/login") in chamadas
@@ -851,21 +734,21 @@ def test_local_api_nao_sobe_se_o_pin_de_admin_estiver_errado(monkeypatch):
     api = LocalApi("http://local", "1234", admin_pin="errado")
 
     def falso_request(method, path, body=None, timeout=None):
-        if path.startswith("/api/network"):
+        if path == "/api/storage":
             return 403, {"error": "admin_obrigatorio"}
         if path == "/api/admin/login":
             return 401, {"error": "nao_autenticado"}
         return 200, {}
 
     monkeypatch.setattr(api, "_request", falso_request)
-    status, payload = api.wifi_scan()
+    status, payload = api.storage_set("D:/Pregacoes")
 
     # a recusa do servidor chega ao APK tal como veio, sem mascarar
     assert status == 403
     assert payload["error"] == "admin_obrigatorio"
 
 
-def test_local_api_acha_a_rota_de_wifi_com_conectado(monkeypatch):
+def test_local_api_autentica_e_troca_destino_com_admin(monkeypatch):
     """O PIN comum ja autentica, mas nao e administrador: e o caso real."""
     api = LocalApi("http://local", "1234", admin_pin="9999")
     logado = {"comum": False, "admin": False}
@@ -879,20 +762,20 @@ def test_local_api_acha_a_rota_de_wifi_com_conectado(monkeypatch):
         if path == "/api/admin/login":
             logado["admin"] = True
             return 200, {}
-        if path.startswith("/api/network/wifi/connect"):
+        if path == "/api/storage":
             if not logado["comum"]:
                 return 401, {"error": "nao_autenticado"}
             if not logado["admin"]:
                 return 403, {"error": "admin_obrigatorio"}
-            return 200, {"ok": True, "ssid": body["ssid"],
+            return 200, {"ok": True, "path": body["path"],
                          "message": "conectado"}
         return 404, {"error": "nao_existe"}
 
     monkeypatch.setattr(api, "_request", falso_request)
-    status, payload = api.wifi_connect("Igreja", "s3nh4")
+    status, payload = api.storage_set("D:/Pregacoes")
 
     assert status == 200
-    assert payload["ssid"] == "Igreja"
+    assert payload["path"] == "D:/Pregacoes"
     assert logado == {"comum": True, "admin": True}
 
 
@@ -1003,3 +886,12 @@ def test_job_progress_tick_upload_progress_continuam_descartados():
     # O fluxo real: _sse_loop ja filtrou. Aqui so confirmamos a estrutura.
     assert "job_id" not in p_tick
     assert "job_id" not in p_up
+
+
+@pytest.mark.parametrize("command", ["WIFI_SCAN", "WIFI_CONNECT"])
+def test_comandos_retirados_sao_recusados(command):
+    assert "error" in parse_command(command)
+    agent, _, api = make_agent()
+    ack = agent.handle_command({"cmd": command, "req_id": "old"})
+    assert ack["ok"] is False
+    assert not any("wifi" in call for call in api.calls)

@@ -15,8 +15,6 @@ from . import paths
 from .config import config, load_env
 from .logging_setup import setup as setup_logging
 
-SERVICE = "pregacao-recorder.service"
-
 
 def _base_url() -> str:
     return f"http://127.0.0.1:{config.port}"
@@ -36,18 +34,6 @@ def _request(opener, method: str, path: str, payload: Optional[Dict] = None):
         req.add_header("Content-Type", "application/json")
     with opener.open(req, timeout=15) as resp:
         return json.loads(resp.read().decode() or "{}")
-
-
-def _service_action(action: str) -> str:
-    import subprocess
-
-    try:
-        proc = subprocess.run(
-            ["systemctl", action, SERVICE], capture_output=True, text=True, timeout=30
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        return f"erro: {exc}"
-    return (proc.stdout or proc.stderr or "").strip()
 
 
 def _human_bytes(value: float) -> str:
@@ -73,7 +59,7 @@ def cmd_status(_args) -> int:
     except (urllib.error.URLError, OSError) as exc:
         print("SERVICO FORA DO AR")
         print(f"  erro: {exc}")
-        print("  tente: sudo systemctl status pregacao-recorder")
+        print("  inicie com iniciar-tudo.bat e consulte logs/pregacao.log")
         return 2
 
     banner = {
@@ -123,7 +109,7 @@ def cmd_status(_args) -> int:
                   f"duracao={_human_duration(item.get('duration', 0))}  "
                   f"segmentos={item.get('segments')}  "
                   f"tamanho={_human_bytes(item.get('bytes', 0))}")
-        print("      recupere pela interface web: http://<ip-do-pi>/")
+        print("      recupere pela interface web: http://127.0.0.1:8080/")
 
     last = status.get("last_recording")
     if last:
@@ -137,7 +123,7 @@ def cmd_status(_args) -> int:
 
 
 def cmd_check(_args) -> int:
-    """Prova que o Raspberry esta realmente capturando audio."""
+    """Prova que o PC esta realmente capturando audio."""
     from .audio import device as audio_device
 
     setup_logging()
@@ -145,7 +131,7 @@ def cmd_check(_args) -> int:
     print(f"Dispositivo selecionado: {detected.get('hw')} - {detected.get('name')}")
     devices = audio_device.list_devices()
     if not devices:
-        print("NENHUMA interface de audio encontrada pelo ALSA.")
+        print("NENHUMA interface de audio encontrada pelo FFmpeg/DirectShow.")
         print("Veja docs/AUDIO.md para configurar a interface USB.")
         return 1
     print("Interfaces disponiveis:")
@@ -162,11 +148,11 @@ def cmd_check(_args) -> int:
     print(f"  pico     : {level.get('peak')} ({level.get('peak_db')} dBFS)")
     print(f"  rms      : {level.get('rms')}")
     if level.get("silent"):
-        print("\n[SILENCIO] O Raspberry captura, mas nao ha sinal.")
+        print("\n[SILENCIO] O PC captura, mas nao ha sinal.")
         print("  -> Suba o fader do canal na mesa Soundcraft.")
         print("  -> Verifique o cabecalho USB e o canal selecionado (MAIN/L-R).")
         return 1
-    print("\nOK: ha sinal de audio chegando ao Raspberry.")
+    print("\nOK: ha sinal de audio chegando ao PC.")
     return 0
 
 
@@ -196,22 +182,24 @@ def _simple_action(method: str, path: str) -> int:
 
 
 def cmd_logs(args) -> int:
-    import subprocess
-
-    cmd = ["journalctl", "-u", SERVICE, "-n", str(args.lines), "--no-pager"]
-    if args.follow:
-        cmd += ["-f"]
-    try:
-        return subprocess.call(cmd)
-    except OSError:
-        log_file = paths.logs_dir() / "pregacao.log"
-        if not log_file.exists():
-            print("nenhum log encontrado")
-            return 1
-        lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
-        for line in lines[-args.lines:]:
-            print(line)
-        return 0
+    log_file = paths.logs_dir() / "pregacao.log"
+    if not log_file.exists():
+        print("nenhum log encontrado")
+        return 1
+    with log_file.open(encoding="utf-8", errors="replace") as arquivo:
+        for linha in arquivo.readlines()[-max(1, args.lines):]:
+            print(linha, end="")
+        if args.follow:
+            try:
+                while True:
+                    linha = arquivo.readline()
+                    if linha:
+                        print(linha, end="", flush=True)
+                    else:
+                        time.sleep(0.3)
+            except KeyboardInterrupt:
+                pass
+    return 0
 
 
 def cmd_doctor(_args) -> int:
@@ -236,20 +224,18 @@ def cmd_doctor(_args) -> int:
         ("banco", paths.data_dir()),
     ]:
         check(f"{name}: {directory}", directory.exists() and os.access(directory, os.W_OK),
-              "verifique permissoes: sudo chown -R pi:pi " + str(directory))
+              "verifique as permissoes da pasta no Windows")
 
     import shutil as _shutil
 
-    check("arecord (alsa-utils)", bool(_shutil.which("arecord")),
-          "sudo apt install alsa-utils")
-    check("ffmpeg (conversao mp3)", bool(_shutil.which("ffmpeg")),
-          "sudo apt install ffmpeg  (sem ele, o sistema grava WAV)")
+    check("ffmpeg (captura e conversao)", bool(_shutil.which("ffmpeg")),
+          "instale com: winget install Gyan.FFmpeg")
 
     from .audio import device as audio_device
 
     devices = audio_device.list_devices()
     check("interface de audio", bool(devices),
-          "conecte a interface USB e rode: arecord -l")
+          "conecte a interface USB e consulte AUDIO no painel")
 
     check("google drive configurado", config.google_credentials_file.exists(),
           "veja docs/GOOGLE_DRIVE.md")
@@ -264,7 +250,7 @@ def cmd_doctor(_args) -> int:
              else "SEM PIN - abre direto para quem estiver na rede"))
     if not _auth.pin_configured():
         print("        -> para voltar a exigir: defina PREGACAO_PIN "
-              "no arquivo /opt/pregacao-recorder/.env")
+              "no arquivo .env da pasta do projeto")
     print(f"  [{'OK' if _auth.admin_configured() else '--'}] "
           "CONFIGURACOES AVANCADAS: "
           + ("pede PIN de administrador" if _auth.admin_configured()
@@ -302,11 +288,6 @@ def cmd_recovery_list(_args) -> int:
     return 1
 
 
-def cmd_service(args) -> int:
-    print(_service_action(args.action))
-    return 0
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pregacao",
@@ -327,12 +308,6 @@ def build_parser() -> argparse.ArgumentParser:
     logs.add_argument("-n", "--lines", type=int, default=80)
     logs.add_argument("-f", "--follow", action="store_true")
     logs.set_defaults(func=cmd_logs)
-
-    service = sub.add_parser("service", help="controla o servico systemd")
-    service.add_argument(
-        "action", choices=["start", "stop", "restart", "status", "enable", "disable"]
-    )
-    service.set_defaults(func=cmd_service)
 
     return parser
 

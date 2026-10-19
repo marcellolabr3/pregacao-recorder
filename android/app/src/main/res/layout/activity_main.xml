@@ -43,7 +43,7 @@
         </LinearLayout>
 
         <!-- aviso de destino caido: o SSD desconectou e as gravacoes passaram
-             a cair no cartao SD. Fica no topo, antes de tudo, porque e' o
+             a cair no disco do PC. Fica no topo, antes de tudo, porque e' o
              unico problema que o operador precisa ver antes de gravar. -->
         <TextView
             android:id="@+id/txtAvisoArmazenamento"

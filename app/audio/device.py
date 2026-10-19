@@ -1,10 +1,4 @@
-"""Deteccao da interface de audio conectada ao equipamento.
-
-Dois backends, sem mudar o contrato das funcoes:
-
-* ALSA (``arecord``) no Linux/Raspberry - o comportamento original;
-* DirectShow (``ffmpeg``) no Windows - mesmo papel, mesmos campos de saida.
-"""
+"""Deteccao e teste de audio do Windows via FFmpeg/DirectShow."""
 from __future__ import annotations
 
 import os
@@ -20,11 +14,6 @@ from ..logging_setup import get
 _FLAGS_SUBPROCESS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
 log = get("audio.device")
-
-CARD_RE = re.compile(
-    r"^card\s+(\d+):\s*(?P<id>\S+)\s*\[(?P<name>[^\]]+)\],\s*device\s+(\d+):"
-    r"\s*(?P<devname>.*?)\s*\[(?P<dev>[^\]]+)\]"
-)
 
 # Formatos reais da saida de `ffmpeg -list_devices true -f dshow`:
 #   classico :  `[dshow @ 0000...]  "Nome"`       (dentro da secao de audio)
@@ -49,36 +38,7 @@ def _run(cmd: List[str], timeout: int = 10) -> Optional[str]:
 
 
 def _backend() -> str:
-    """Backend de captura: 'alsa' (arecord) no Linux, 'dshow' (ffmpeg) no
-    Windows; vazio quando nao ha ferramenta nenhuma."""
-    if shutil.which("arecord"):
-        return "alsa"
-    if shutil.which("ffmpeg"):
-        return "dshow"
-    return ""
-
-
-def _list_alsa() -> List[Dict[str, Any]]:
-    output = _run(["arecord", "-l"]) or ""
-    devices: List[Dict[str, Any]] = []
-    for line in output.splitlines():
-        match = CARD_RE.match(line.strip())
-        if not match:
-            continue
-        card = int(match.group(1))
-        device_id = match.group("id")
-        name = match.group("name").strip()
-        usb = "usb" in name.lower() or "usb" in device_id.lower()
-        devices.append(
-            {
-                "hw": f"hw:{card},0",
-                "card": card,
-                "card_id": device_id,
-                "name": name,
-                "usb": usb,
-            }
-        )
-    return devices
+    return "dshow" if shutil.which("ffmpeg") else ""
 
 
 def _list_dshow() -> List[Dict[str, Any]]:
@@ -118,20 +78,15 @@ def _list_dshow() -> List[Dict[str, Any]]:
 
 
 def list_devices() -> List[Dict[str, Any]]:
-    """Placas de audio reconhecidas (ALSA no Linux, DirectShow no Windows)."""
-    backend = _backend()
-    if backend == "alsa":
-        return _list_alsa()
-    if backend == "dshow":
-        return _list_dshow()
-    return []
+    """Interfaces de captura do Windows."""
+    return _list_dshow() if _backend() else []
 
 
 def detect(configured: str = "auto") -> Dict[str, Any]:
     """Escolhe o dispositivo de captura.
 
     Ordem:
-      1. valor explicito da configuracao (ex.: ``hw:1,0`` ou ``plughw:1,0``);
+      1. valor explicito da configuracao (ex.: nome da interface no Windows);
       2. primeira placa USB detectada;
       3. primeira placa disponivel;
       4. ``default`` como ultimo recurso.
@@ -159,7 +114,7 @@ def detect(configured: str = "auto") -> Dict[str, Any]:
         log.info("nenhuma placa USB; usando primeira placa: %s", devices[0]["hw"])
         return {**devices[0], "selected_by": "auto-first"}
 
-    log.error("nenhuma interface de audio encontrada (ALSA/ffmpeg)")
+    log.error("nenhuma interface de audio encontrada (FFmpeg/DirectShow)")
     return {
         "hw": "default",
         "card": -1,
@@ -176,7 +131,7 @@ _CACHE_TS = 0.0
 
 def detect_cached(configured: str = "auto", ttl: float = 30.0) -> Dict[str, Any]:
     """``detect()`` com cache curto: a interface quase nunca troca e a
-    deteccao abre um processo (arecord/ffmpeg) - o painel e o agente
+    deteccao abre um processo (ffmpeg) - o painel e o agente
     consultam status a cada poucos segundos."""
     global _CACHE, _CACHE_TS
     chave = (configured or "auto").strip().lower()
@@ -203,18 +158,7 @@ def capture_level(seconds: float = 2.0, device: Optional[str] = None) -> Dict[st
     esta realmente recebendo audio da mesa.
     """
     backend = _backend()
-    if backend == "alsa":
-        cmd = [
-            "arecord", "-q",
-            "-D", device or "default",
-            "-f", "S16_LE",
-            "-r", "44100",
-            "-c", "1",
-            "-d", str(max(1, int(seconds))),
-            "-t", "raw",
-            "-",
-        ]
-    elif backend == "dshow":
+    if backend == "dshow":
         alvo = (device or "").strip()
         if not alvo or alvo == "default":
             alvo = str(detect("auto").get("hw") or "")
@@ -232,7 +176,7 @@ def capture_level(seconds: float = 2.0, device: Optional[str] = None) -> Dict[st
             "pipe:1",
         ]
     else:
-        return {"ok": False, "error": "arecord/ffmpeg nao instalado"}
+        return {"ok": False, "error": "ffmpeg nao instalado"}
     try:
         proc = subprocess.run(
             cmd,

@@ -152,7 +152,7 @@ def test_config_get_hides_credentials_from_regular_user(client, cfg):
     assert data["remote"]["configured"] is False
     assert data["remote"]["enabled"] is False
     assert data["remote"]["operator_token"] == ""
-    assert isinstance(data["remote"]["service"], str)  # CI nao tem systemd
+    assert isinstance(data["remote"]["service"], str)  # nao depende do gerenciador de servicos
 
 
 def test_remote_block_is_admin_only(client):
@@ -339,45 +339,12 @@ def test_stream_nao_declara_header_proibido(client):
 
 
 # --------------------------------------------------------------------------
-# armazenamento: onde gravar (SSD x cartao SD)
+# armazenamento: onde gravar (SSD x pasta do PC)
 # --------------------------------------------------------------------------
 def _norm(caminho) -> str:
     """Caminhos chegam com barra nativa na API e em POSIX no modulo de
     destinos; sem normalizar as comparacoes quebrariam so no Windows."""
     return str(caminho).replace("\\", "/")
-
-
-def _sem_ssd(monkeypatch):
-    """Simula o SSD desconectado: nenhuma montagem externa visivel.
-
-    E o estado que motivou este recurso - e precisa ser deterministico em
-    qualquer maquina de teste (no Windows nao ha /proc/mounts, mas o teste
-    tem de valer tambem se rodar num Linux onde o disco esteja plugado).
-    """
-    from app.storage import destinos
-
-    monkeypatch.setattr(destinos, "externas", lambda: [])
-
-
-def _fs_estavel(monkeypatch):
-    """Faz o diretorio temporario dos testes parecer um disco de verdade.
-
-    O conftest aponta PREGACAO_HOME para ``tempfile.mkdtemp()``, que no Linux
-    fica em /tmp - tmpfs. E o ``escolher`` recusa tmpfs com razao (sumiria no
-    reboot), entao a prova do cartao SD falhava SO no Pi: no Windows o mesmo
-    diretorio e NTFS e o teste passava sozinho.
-
-    Isto nao afrouxa cobertura: a recusa de tmpfs tem teste proprio em
-    ``test_destinos.py`` (``test_escolher_recusa_arquivo_temporario``). Aqui
-    o que se prova e outro - que o padrao do SD e aceito pela rota - e isso
-    so' faz sentido num disco que sobrevive ao reboot.
-    """
-    from app.storage import destinos
-
-    monkeypatch.setattr(destinos, "montagens", lambda: [
-        {"device": "/dev/mmcblk0p2", "mount": "/", "fstype": "ext4", "opts": "rw"},
-        {"device": "/dev/mmcblk0p2", "mount": "/tmp", "fstype": "ext4", "opts": "rw"},
-    ])
 
 
 def test_storage_list_requires_pin(client):
@@ -391,14 +358,14 @@ def test_storage_list_shows_destinations_and_current(client):
     data = client.get("/api/storage").get_json()
 
     assert _norm(data["current"])            # sempre ha um destino ativo
-    assert _norm(data["sd_default"])         # e o colchao do cartao SD
+    assert _norm(data["default_dir"])         # e o colchao da pasta do PC
     assert _norm(data["situacao"]["caminho"]) == _norm(data["current"])
     assert isinstance(data["aviso"], (str, type(None)))
 
     candidatos = [_norm(i["caminho"]) for i in data["items"]]
     assert candidatos
-    # o cartao SD aparece SEMPRE: e o que segura quando o disco externo some
-    assert _norm(data["sd_default"]) in candidatos
+    # a pasta do PC aparece SEMPRE: e o que segura quando o disco externo some
+    assert _norm(data["default_dir"]) in candidatos
     # o destino escolhido tambem, mesmo que o disco tenha sumido
     assert _norm(data["current"]) in candidatos
 
@@ -412,15 +379,9 @@ def test_storage_set_requires_admin_pin(client):
 
 
 def test_storage_set_rejects_unmounted_destination(client, monkeypatch):
-    """SSD fora: recusa trocar.
-
-    Se aceitasse, a pasta /mnt/ssd/pregacoes continuaria existindo na RAIZ do
-    cartao SD e a gravacao cairia la - o usuario acharia que trocou de
-    destino enquanto nada mudou. E exatamente o bug relatado.
-    """
-    _sem_ssd(monkeypatch)
+    """Recusa destino relativo/invalido; nao escolhe outro disco."""
     _admin(client)
-    resp = client.post("/api/storage", json={"path": "/mnt/ssd/pregacoes"})
+    resp = client.post("/api/storage", json={"path": "caminho/relativo/invalido"})
     assert resp.status_code == 422
     assert resp.get_json()["error"] == "destino_invalido"
 
@@ -432,11 +393,10 @@ def test_storage_set_rejects_empty_path(client):
     assert resp.get_json()["error"] == "destino_invalido"
 
 
-def test_storage_set_accepts_sd_default(client, monkeypatch):
-    """O cartao SD e destino valido: e o colchao de seguranca."""
+def test_storage_set_accepts_default_folder(client, monkeypatch):
+    """O pasta padrao do PC e um destino valido."""
     from app.paths import recordings_dir
 
-    _fs_estavel(monkeypatch)
     _admin(client)
     alvo = str(recordings_dir())
     resp = client.post("/api/storage", json={"path": alvo})
@@ -447,10 +407,9 @@ def test_storage_set_accepts_sd_default(client, monkeypatch):
 
 def test_config_rejects_unmounted_destination(client, monkeypatch):
     """A troca via /api/config passa pela mesma validacao dos destinos."""
-    _sem_ssd(monkeypatch)
     _admin(client)
     resp = client.post(
-        "/api/config", json={"storage.recordings_dir": "/mnt/ssd/pregacoes"}
+        "/api/config", json={"storage.recordings_dir": "caminho/relativo/invalido"}
     )
     assert resp.status_code == 422
     assert resp.get_json()["error"] == "config_invalida"
@@ -463,21 +422,20 @@ def test_config_keeps_current_destination_when_disk_is_gone(client, cfg, monkeyp
     o SSD desconectou - o campo seria revalidado, recusado, e nada seria
     salvo. O valor igual ao atual pula a checagem.
     """
-    _sem_ssd(monkeypatch)
-    cfg.set("storage.recordings_dir", "/mnt/ssd/pregacoes")
+    cfg.set("storage.recordings_dir", "caminho/relativo/invalido")
 
     _admin(client)
     resp = client.post(
         "/api/config",
         json={
             "device_name": "Igreja Teste",
-            "storage.recordings_dir": "/mnt/ssd/pregacoes",  # igual ao atual
+            "storage.recordings_dir": "caminho/relativo/invalido",  # igual ao atual
         },
     )
     assert resp.status_code == 200
     assert "device_name" in resp.get_json()["applied"]
     # o destino nao foi tocado nem revalidado
-    assert _norm(cfg.recordings_root) == "/mnt/ssd/pregacoes"
+    assert _norm(cfg.recordings_root) == "caminho/relativo/invalido"
 
 
 # --------------------------------------------------------------------------
@@ -556,3 +514,16 @@ def test_finish_authorization_without_state_keeps_web_flow(monkeypatch):
 
     drive.finish_authorization("codigo-do-google")
     assert trocados == ["codigo-do-google"]
+
+
+@pytest.mark.parametrize("url", ["/api/network/status", "/api/network/wifi/scan", "/api/network/ap/enable", "/api/network/tailscale/status"])
+def test_gestao_de_rede_retirada(client, url):
+    _admin(client)
+    assert client.get(url).status_code == 404
+    assert client.post(url, json={}).status_code == 404
+
+
+@pytest.mark.parametrize("url", ["/api/integracoes", "/api/pregacoes", "/api/importacao/modelo"])
+def test_rotas_atuais_disponiveis_no_backend_atualizado(client, url):
+    _admin(client)
+    assert client.get(url).status_code == 200

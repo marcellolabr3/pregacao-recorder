@@ -12,13 +12,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 5
-        // 1.1 = PINs de volta (170414) e botao sem travar em ERROR/COMPLETED.
-        // 1.2 = tela de redes Wi-Fi do EQUIPAMENTO (WIFI_SCAN/WIFI_CONNECT).
-        // 1.3 = tela de ONDE GRAVAR (SSD x cartao SD), tela de conta Google
-        //       (conector loopback) e menu sempre visivel.
-        // 1.4 = o encaixe das barras do sistema, agora consumindo os insets -
-        //       na 1.3 a action bar continuava por cima do conteudo.
-        // O operador confere esta string na barra superior.
+        // Fonte legada; distribuicao atual usa o projeto Flutter.
         versionName = "1.4"
     }
 

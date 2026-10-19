@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import subprocess
 import time
 from datetime import datetime
 from html import escape
@@ -33,7 +32,6 @@ from ..storage import destinos, layout
 from ..upload import drive
 from ..upload.queue import UploadWorker, internet_available
 from . import auth
-from .network_routes import register_network_routes
 
 log = get("api")
 
@@ -153,25 +151,6 @@ VALIDATION = {
 }
 
 
-# no Windows o systemctl nao existe, mas a flag evita qualquer janela
-_FLAGS_SUBPROCESS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-
-
-def _service_state(unit: str) -> str:
-    """Estado de uma unit do systemd: active / inactive / failed / ..."""
-    try:
-        proc = subprocess.run(
-            ["systemctl", "is-active", unit],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            creationflags=_FLAGS_SUBPROCESS,
-        )
-        return (proc.stdout or "").strip() or "desconhecido"
-    except (OSError, subprocess.SubprocessError):  # pragma: no cover
-        return "desconhecido"
-
-
 def remote_status() -> Dict[str, Any]:
     """Estado do agente de controle remoto (o caminho do APK).
 
@@ -190,7 +169,7 @@ def remote_status() -> Dict[str, Any]:
         "tls": settings.tls,
         "device_id": settings.device_id,
         "operator_token": settings.operator_token,
-        "service": _service_state("pregacao-remote.service"),
+        "service": "active" if _agente_visto_em and time.time() - _agente_visto_em < 180 else "inactive",
     }
 
 
@@ -199,9 +178,7 @@ def system_status(manager: RecordingManager, uploader: UploadWorker) -> Dict[str
     devices = audio_device.list_devices()
     pending = len(base.get("recovery") or [])
     drive_status = drive.status()
-    # o SSD pode ter sido desmontado e o diretorio configurado continuar
-    # existindo dentro do cartao SD - sem este aviso a troca passaria
-    # despercebida (foi exatamente o relatado pelo usuario).
+    # Consulta o volume configurado sem criar pastas ou trocar destino.
     armazenamento = destinos.atual(
         config.recordings_root, paths.recordings_dir()
     )
@@ -259,8 +236,6 @@ def system_status(manager: RecordingManager, uploader: UploadWorker) -> Dict[str
 
 
 def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> None:
-    # rede (Ethernet/Wi-Fi/Access Point/Tailscale) vive em modulo proprio
-    register_network_routes(app)
 
     # batida do agente MQTT em QUALQUER chamada (poll de /api/status,
     # stream SSE, comandos): alimenta o card de saude das integracoes
@@ -519,13 +494,8 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
                     errors.append(f"dispositivo de audio inexistente: {value}")
                     continue
             if key == "storage.recordings_dir" and value:
-                # valida no modulo de destinos: so "criar a pasta" aceitaria
-                # /mnt/ssd/pregacoes mesmo com o SSD desmontado (a pasta
-                # existe na raiz do cartao SD) e o usuario acharia que
-                # trocou de destino.
-                # Valor igual ao atual nao ha o que validar: o form completo
-                # reenvia o campo sempre, e recusar faria o administrador
-                # perder qualquer outra alteracao so porque o disco sumiu.
+                # Valida o volume e a permissao de escrita sem alterar outro destino.
+                # Reenviar o caminho atual nao impede salvar as outras configuracoes.
                 atual_cfg = str(config.get("storage.recordings_dir") or "")
                 if str(value) != atual_cfg:
                     ok, motivo = destinos.escolher(
@@ -583,21 +553,19 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
         return jsonify(result)
 
     # ------------------------------------------------------------------
-    # armazenamento: onde gravar (SSD, cartao SD, ...)
+    # armazenamento: pasta e discos do Windows
     # ------------------------------------------------------------------
     @app.get("/api/storage")
     @auth.require_auth
     def storage_list():
         """Destinos disponiveis e situacao do escolhido.
 
-        A lista e montada aqui (e nao dentro do status) porque ler
-        ``/proc/mounts`` e medir espaço nao pode entrar no fluxo de status,
-        que roda a cada segundo.
+        Enumerar discos e medir espaco fica fora do fluxo SSE de status.
         """
         return jsonify(
             {
                 "current": str(config.recordings_root),
-                "sd_default": str(paths.recordings_dir()),
+                "default_dir": str(paths.recordings_dir()),
                 "situacao": destinos.atual(
                     config.recordings_root, paths.recordings_dir()
                 ),
@@ -698,7 +666,7 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
         """Segundo passo do conector loopback do APK.
 
         O redirect do Google e ``http://localhost:8080/oauth/callback`` - no
-        celular, localhost e o PROPRIO celular, entao o Raspberry nao ouve
+        celular, localhost e o PROPRIO celular, entao o PC nao ouve
         aquele retorno. O navegador captura o codigo e o APK o devolve por
         aqui (pelo agente remoto). O ``state`` acompanha e e conferido contra
         o fluxo aberto, para um codigo de outro pedido nao ser aceito.
@@ -969,7 +937,7 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
                     f"broker {settings.host}:{settings.port} configurado, "
                     "sem batida recente do agente"
                 ),
-                "acao": "abra o iniciar-agente.bat e veja se mostra conectado",
+                "acao": "abra iniciar-tudo.bat e confira logs/pregacao-agente.log",
                 "visto_em": visto,
             }
 

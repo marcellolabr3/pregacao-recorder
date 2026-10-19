@@ -10,10 +10,10 @@ Fluxo (roteiro, secoes 4 e 5):
 
 Decisoes importantes:
 
-* O agente e um processo SEPARADO (``pregacao-remote.service``). Se ele cair,
+* O agente e um processo SEPARADO, iniciado pelo ``iniciar-tudo.bat``. Se ele cair,
   a gravacao, a recuperacao de quedas e o upload continuam: o controle remoto
   NUNCA e requisito para gravar.
-* Toda conexao sai do Raspberry (NAT amigavel): nao ha port forwarding, IP
+* Toda conexao sai do PC (NAT amigavel): nao ha port forwarding, IP
   publico, DDNS nem abertura no roteador da igreja.
 * Os comandos sao executados na API LOCAL ja existente (``/api/start``,
   ``/api/stop``), que ja garante uma unica gravacao por vez (HTTP 409) e ja
@@ -58,7 +58,7 @@ TOPIC_ROOT = "pregacao"
 ONLINE = "online"
 OFFLINE = "offline"
 COMMANDS = (
-    "START", "STOP", "STATUS", "WIFI_SCAN", "WIFI_CONNECT",
+    "START", "STOP", "STATUS",
     # espelho do painel: conta Google e destino de gravacao
     "DRIVE_STATUS", "DRIVE_CONNECT", "DRIVE_FINISH",
     "DRIVE_DISCONNECT", "DRIVE_TEST",
@@ -69,14 +69,12 @@ COMMANDS = (
 # envia o campo "ts" (epoch segundos) junto do req_id e o agente recusa
 # mensagens alem deste desvio - um comando atrasado (fila parada, reenvio
 # tardio) NAO pode executar depois que a situacao mudou. O desvio cobre a
-# diferenca de relogio entre celular e Raspberry (ambos sincronizam por NTP;
+# diferenca de relogio entre celular e PC (ambos sincronizam por NTP;
 # 120 s e folgado). Comandos sem "ts" (APK Kotlin antigo) continuam aceitos.
 COMANDO_TTL_SEGUNDOS = 120
 
-# campos que um comando pode carregar alem do req_id. WIFI_CONNECT leva a rede
-# e a senha; so o que veio no payload e preservado, entao os comandos antigos
-# continuam com exatamente o mesmo contrato de antes.
-ARGS = ("ssid", "password", "code", "state", "path")
+# Argumentos de autorizacao Google e destino de gravacao; nunca senha de rede.
+ARGS = ("code", "state", "path")
 
 # Cabecalho que marca TODAS as chamadas do agente a API local: o painel
 # registra a "ultima vista" e o /api/integracoes so declara o EMQX
@@ -154,8 +152,7 @@ def project_status(snapshot: Dict[str, Any]) -> Dict[str, Any]:
         },
         "drive_connected": bool(drive.get("connected")),
         "network_online": bool(network.get("online")),
-        # onde o equipamento esta gravando DE VERDADE e se o destino escolhido
-        # ainda esta montado (SSD desconectado cai no cartao SD sem aviso)
+        # Destino configurado e aviso caso o volume nao esteja disponivel.
         "recording_dir": str(snapshot.get("recording_dir") or ""),
         "storage_aviso": str(snapshot.get("storage_aviso") or ""),
         "free_mb": int(storage.get("free_mb") or 0),
@@ -312,7 +309,7 @@ class RemoteSettings:
         )
         # PIN das CONFIGURACOES AVANCADAS. As rotas de rede (Wi-Fi) sao
         # @require_admin, entao o agente precisa dele para aceitar um comando
-        # WIFI_* do APK - o PIN comum devolveria 403 admin_obrigatorio.
+        # Alterar o destino exige PIN de administrador.
         # Mesma regra de auth.admin_pin(): vazio cai para o PIN normal.
         self.admin_pin = (
             str(env.get("PREGACAO_ADMIN_PIN", "") or "").strip() or config.pin
@@ -443,18 +440,6 @@ class LocalApi:
 
     def stop(self) -> Tuple[int, Dict[str, Any]]:
         return self._authed("POST", "/api/stop", {})
-
-    def wifi_scan(self) -> Tuple[int, Dict[str, Any]]:
-        return self._admined("GET", "/api/network/wifi/scan?rescan=1")
-
-    def wifi_connect(
-        self, ssid: str, password: Optional[str] = None
-    ) -> Tuple[int, Dict[str, Any]]:
-        return self._admined(
-            "POST",
-            "/api/network/wifi/connect",
-            {"ssid": ssid, "password": password},
-        )
 
     # -- google drive (o conector do APK) --------------------------------
     def drive_status(self) -> Tuple[int, Dict[str, Any]]:
@@ -695,7 +680,7 @@ class RemoteAgent:
             return self._publish(self.topics["state"], payload, retain=True)
 
     # ------------------------------------------------------------------
-    # comandos (START/STOP/STATUS/WIFI_*) -> API local
+    # comandos de gravacao, Drive e armazenamento -> API local
     # ------------------------------------------------------------------
     def handle_command(self, parsed: Dict[str, Any]) -> Dict[str, Any]:
         """Executa o comando na API local e monta o ACK.
@@ -705,16 +690,8 @@ class RemoteAgent:
         mesmo (nada e corrompido). A protecao de verdade continua sendo o
         servidor (HTTP 409) - aqui e so o convenio de resposta.
 
-        WIFI_SCAN e WIFI_CONNECT vao para ``/api/network/wifi/*``, que exige
-        sessao de administrador - por isso o ``LocalApi`` recebe o PIN de
-        admin. Um WIFI_CONNECT sem ``ssid`` e recusado aqui, antes de gastar
-        uma chamada na rede.
-
-        DRIVE_* e STORAGE_* espelham o painel pelo mesmo caminho. O
-        ``DRIVE_CONNECT`` devolve a URL do Google (o APK abre no navegador)
-        e o ``DRIVE_FINISH`` troca o codigo capturado no celular: o redirect
-        ``localhost`` aponta para o aparelho que abre a pagina, entao o
-        Raspberry nunca ouve aquele retorno por HTTP.
+        Alteracoes de armazenamento usam a protecao administrativa da API.
+        O controle pelo celular nao altera a rede do PC.
         """
         cmd = parsed.get("cmd", "")
         ack: Dict[str, Any] = {
@@ -760,17 +737,6 @@ class RemoteAgent:
                     ack["detail"] = "nenhuma gravacao em andamento"
                     return ack
                 code, payload = self.api.stop()
-            elif cmd == "WIFI_SCAN":
-                code, payload = self.api.wifi_scan()
-            elif cmd == "WIFI_CONNECT":  # unico da rede que leva argumento
-                ssid = str(parsed.get("ssid") or "").strip()
-                if not ssid:
-                    ack["error"] = "rede Wi-Fi nao informada"
-                    ack["code"] = "ssid_obrigatorio"
-                    return ack
-                code, payload = self.api.wifi_connect(
-                    ssid, parsed.get("password")
-                )
             # -- espelho do painel: google drive --------------------------
             elif cmd == "DRIVE_STATUS":
                 code, payload = self.api.drive_status()
@@ -809,14 +775,7 @@ class RemoteAgent:
             if 200 <= code < 300:
                 ack["ok"] = True
                 ack["state"] = str(payload.get("state") or ack.get("state") or "")
-                if cmd == "WIFI_SCAN":
-                    redes = payload.get("networks") or []
-                    ack["networks"] = redes
-                    ack["count"] = int(payload.get("count") or len(redes))
-                elif cmd == "WIFI_CONNECT":
-                    ack["ssid"] = str(payload.get("ssid") or "")
-                    ack["detail"] = str(payload.get("message") or "conectado")
-                elif cmd == "DRIVE_CONNECT":
+                if cmd == "DRIVE_CONNECT":
                     ack["url"] = str(payload.get("url") or "")
                     ack["redirect_uri"] = str(payload.get("redirect_uri") or "")
                 elif cmd == "DRIVE_FINISH":

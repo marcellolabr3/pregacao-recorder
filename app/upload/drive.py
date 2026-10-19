@@ -4,9 +4,9 @@ Fluxo de conexao:
   1. administrador coloca o JSON de credenciais OAuth do Google Console em
      ``config/google_credentials.json`` (nao entra no Git);
   2. na interface web: Configuracoes -> Google Drive -> Conectar conta;
-  3. o Raspberry abre um endpoint local ``/oauth`` - o usuario acessa pelo
+  3. o PC abre um endpoint local ``/oauth`` - o usuario acessa pelo
      navegador do celular/PC na rede da igreja e autoriza a conta;
-  4. o token e salvo em ``config/google_token.json`` (permissao 600).
+  4. o token e salvo em ``config/google_token.json`` (arquivo local ignorado pelo Git).
 
 Envio:
   * upload resumivel com barra de progresso;

@@ -4,14 +4,9 @@
   empurra a action bar para tras da barra de status e os itens que ficavam
   no overflow somem junto com ela. Forcados para a barra eles continuam
   visiveis - e e' o caminho que o operador usa para chegar em Configuracoes
-  e em Redes Wi-Fi.
+  no PC.
 -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:id="@+id/acao_wifi"
-        android:icon="@android:drawable/ic_menu_manage"
-        android:showAsAction="always"
-        android:title="@string/btn_wifi" />
     <item
         android:id="@+id/acao_config"
         android:icon="@android:drawable/ic_menu_preferences"

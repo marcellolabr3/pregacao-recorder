@@ -105,7 +105,7 @@
     </div>
 
     <div class="card">
-      <div class="card-title">REDE</div>
+      <div class="card-title">INTERNET</div>
       <div class="big" id="networkState">--</div>
       <div class="muted" id="networkHint">verificando...</div>
     </div>
@@ -191,6 +191,7 @@
         <button id="btnNlmCheck" class="btn btn-ghost" type="button">DIAGNOSTICAR SESSAO</button>
         <button id="btnNlmLogin" class="btn btn-primary" type="button">RENOVAR LOGIN</button>
       </div>
+      <p class="hint" id="cfgNlmLogin" role="status" aria-live="polite" aria-atomic="true">Para renovar o login, entre na sua conta na janela do navegador do PC.</p>
       <p class="hint">A sessao do NotebookLM e separada da conta Google do
          Drive. Se expirar, os estudos ficam em espera (nada se perde) e
          retomam sozinhos apos o login. Apos parar a gravacao, o NotebookLM
@@ -212,7 +213,7 @@
     <button id="btnAdvanced" class="btn btn-ghost btn-block" type="button">
       CONFIGURACOES AVANCADAS
     </button>
-    <p class="hint">Audio, armazenamento, credenciais e rede: somente para o administrador.</p>
+    <p class="hint">Audio, armazenamento e credenciais: somente para o administrador.</p>
   </form>
 </main>
 
@@ -315,6 +316,33 @@
       <div id="pregacaoMsg" class="muted"></div>
       <ul id="pregacoesList" class="notiff"></ul>
 
+    </section>
+
+    <section class="card">
+      <div class="card-title">DIAGNOSTICO E LOGS</div>
+      <div class="row">
+        <label>Servidor de teste de internet
+          <input name="network.check_host" type="text" spellcheck="false">
+        </label>
+        <label>Porta
+          <input name="network.check_port" type="number" min="1" max="65535">
+        </label>
+      </div>
+      <label>Tentar envio novamente a cada (s)
+        <input name="network.retry_seconds" type="number" min="5" max="3600">
+      </label>
+      <button id="btnLoadLogs" class="btn btn-ghost btn-sm" type="button">CARREGAR LOGS</button>
+      <pre id="logsBox" class="logsbox">-</pre>
+    </section>
+
+    <div class="btn-row">
+      <button class="btn btn-primary btn-block" type="submit">SALVAR CONFIGURACOES AVANCADAS</button>
+      <button id="btnAdvancedBack" class="btn btn-ghost btn-block" type="button">VOLTAR</button>
+    </div>
+    <div id="advancedMsg" class="muted"></div>
+  </form>
+</main>
+
       <!-- Modal nova/edita pregacao -->
       <div id="pregacaoOverlay" class="overlay hidden">
         <div class="overlay-card wide">
@@ -361,106 +389,6 @@
           </div>
         </div>
       </div>
-    </section>
-
-    <section class="card" id="netCard">
-      <div class="card-title">REDE</div>
-
-      <dl class="meta net-summary">
-        <div><dt>Internet</dt><dd id="netInternet">--</dd></div>
-        <div class="so-linux"><dt>Ethernet</dt><dd id="netEth">--</dd></div>
-        <div class="so-linux"><dt>Wi-Fi</dt><dd id="netWifi">--</dd></div>
-        <div class="so-linux"><dt>Acesso remoto</dt><dd id="netRemote">--</dd></div>
-      </dl>
-      <div class="btn-row">
-        <button id="btnNetTest" class="btn btn-ghost btn-sm" type="button">TESTAR CONEXAO</button>
-        <button id="btnNetRefresh" class="btn btn-ghost btn-sm" type="button">ATUALIZAR</button>
-      </div>
-      <div class="muted" id="netMsg"></div>
-
-      <div class="subhead so-linux">ETHERNET</div>
-      <dl class="meta so-linux">
-        <div><dt>Status</dt><dd id="netEthState">--</dd></div>
-        <div><dt>IP</dt><dd id="netEthIp">--</dd></div>
-        <div><dt>Gateway</dt><dd id="netEthGw">--</dd></div>
-      </dl>
-
-      <div class="subhead so-linux">WI-FI</div>
-      <dl class="meta so-linux">
-        <div><dt>Rede</dt><dd id="netWifiSsid">--</dd></div>
-        <div><dt>IP</dt><dd id="netWifiIp">--</dd></div>
-        <div><dt>Sinal</dt><dd id="netWifiSignal">--</dd></div>
-        <div><dt>Gateway</dt><dd id="netWifiGw">--</dd></div>
-      </dl>
-      <div class="btn-row so-linux">
-        <button id="btnWifiScan" class="btn btn-ghost btn-sm" type="button">PROCURAR REDES</button>
-        <button id="btnWifiDisconnect" class="btn btn-ghost btn-sm" type="button">DESCONECTAR</button>
-        <button id="btnWifiForget" class="btn btn-ghost btn-sm" type="button">ESQUECER REDE</button>
-      </div>
-      <ul id="wifiList" class="wifilist so-linux"><li class="muted">clique em PROCURAR REDES</li></ul>
-      <label class="so-linux">Senha da rede selecionada
-        <input id="wifiPassword" type="password" autocomplete="new-password"
-               placeholder="(vazio = rede aberta)">
-      </label>
-      <div class="btn-row so-linux">
-        <button id="btnWifiConnect" class="btn btn-primary btn-sm" type="button">CONECTAR</button>
-      </div>
-
-      <div class="subhead so-linux">ACCESS POINT DE CONFIGURACAO</div>
-      <dl class="meta so-linux">
-        <div><dt>Status</dt><dd id="netApState">--</dd></div>
-        <div><dt>Rede</dt><dd id="netApSsid">--</dd></div>
-        <div><dt>IP</dt><dd id="netApIp">--</dd></div>
-      </dl>
-      <div class="btn-row so-linux">
-        <button id="btnApOn" class="btn btn-ghost btn-sm" type="button">ATIVAR MODO DE CONFIGURACAO</button>
-        <button id="btnApOff" class="btn btn-ghost btn-sm" type="button">DESATIVAR</button>
-      </div>
-      <p class="hint so-linux">Sem Ethernet e sem Wi-Fi funcional o equipamento ativa esta
-         rede sozinho, para configurar pelo celular. Senha padrao: <strong>pregacao12345</strong>.</p>
-
-      <div class="subhead so-linux">ACESSO REMOTO (TAILSCALE)</div>
-      <dl class="meta so-linux">
-        <div><dt>Status</dt><dd id="netTsState">--</dd></div>
-        <div><dt>Dispositivo</dt><dd id="netTsName">--</dd></div>
-        <div><dt>IP</dt><dd id="netTsIp">--</dd></div>
-      </dl>
-      <div class="btn-row so-linux">
-        <button id="btnTsLogin" class="btn btn-primary btn-sm" type="button">AUTENTICAR</button>
-        <button id="btnTsTest" class="btn btn-ghost btn-sm" type="button">TESTAR ACESSO REMOTO</button>
-      </div>
-      <a id="netTsLink" class="hidden linkblock so-linux" target="_blank" rel="noopener">abrir o link de autenticacao</a>
-
-      <div class="subhead">ACESSOS DO PAINEL</div>
-      <ul id="netUrls" class="notiff"><li class="muted">--</li></ul>
-      <p class="hint">O painel aceita nome local ou IP da rede. Nenhuma porta e
-         aberta no roteador da igreja.</p>
-    </section>
-
-    <section class="card">
-      <div class="card-title">DIAGNOSTICO E LOGS</div>
-      <div class="row">
-        <label>Servidor de teste de internet
-          <input name="network.check_host" type="text" spellcheck="false">
-        </label>
-        <label>Porta
-          <input name="network.check_port" type="number" min="1" max="65535">
-        </label>
-      </div>
-      <label>Tentar envio novamente a cada (s)
-        <input name="network.retry_seconds" type="number" min="5" max="3600">
-      </label>
-      <button id="btnLoadLogs" class="btn btn-ghost btn-sm" type="button">CARREGAR LOGS</button>
-      <pre id="logsBox" class="logsbox">-</pre>
-    </section>
-
-    <div class="btn-row">
-      <button class="btn btn-primary btn-block" type="submit">SALVAR CONFIGURACOES AVANCADAS</button>
-      <button id="btnAdvancedBack" class="btn btn-ghost btn-block" type="button">VOLTAR</button>
-    </div>
-    <div id="advancedMsg" class="muted"></div>
-  </form>
-</main>
 
 <!-- ============================ CONFIRMACAO ============================ -->
 <div id="confirmOverlay" class="overlay hidden">
@@ -543,6 +471,6 @@
   <span id="clock">--:--</span>
 </footer>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=20261019-nlm2"></script>
 </body>
 </html>

@@ -17,7 +17,7 @@ import java.net.URI
 import java.net.URLDecoder
 
 /**
- * Conectar a conta Google do equipamento, espelhando o painel do Raspberry.
+ * Conectar a conta Google do equipamento, espelhando o painel do PC.
  *
  * Por que existe um servidor local aqui
  * -------------------------------------
@@ -28,7 +28,7 @@ import java.net.URLDecoder
  * e' quem captura `code` e `state` de la.
  *
  * O segredo NUNCA passa por aqui: o APK devolve o codigo ao equipamento
- * (DRIVE_FINISH) e quem troca pelo token e o Raspberry. O `state` acompanha
+ * (DRIVE_FINISH) e quem troca pelo token e o PC. O `state` acompanha
  * para que um codigo de outro pedido nao seja aceito.
  *
  * O servidor e' aberto ANTES de acionar o navegador - se a porta nao estiver

@@ -49,7 +49,8 @@ def _config_falsa(monkeypatch, **chaves):
 def _espera(chamadas, timeout=5.0):
     limite = time.time() + timeout
     while time.time() < limite:
-        if chamadas:
+        concluido = chamadas() if callable(chamadas) else chamadas
+        if concluido:
             return True
         time.sleep(0.02)
     return False
@@ -300,7 +301,7 @@ def test_sessao_expirada_sem_renovacao_preserva_o_job(monkeypatch, tmp_path):
     )
     caminho = str(tmp_path / "pregacao.mp3")
     estudos.enfileirar(caminho)
-    assert _espera(avisos)
+    assert _espera(lambda: "estudo_aguardando_auth" in avisos)
     # o pipeline NUNCA foi disparado e o job fica guardado, com aviso
     assert chamadas == []
     assert "estudo_aguardando_auth" in avisos
@@ -321,7 +322,7 @@ def test_falha_de_rede_tambem_preserva_o_job(monkeypatch, tmp_path):
         lambda cmd, **kw: chamadas.append(cmd) or _Proc(chamadas),
     )
     estudos.enfileirar(str(tmp_path / "pregacao.mp3"))
-    assert _espera(avisos)
+    assert _espera(lambda: "estudo_aguardando_rede" in avisos)
     assert chamadas == []
     assert "estudo_aguardando_rede" in avisos
     assert estudos.status()["motivo"] == "sem rede"
@@ -385,8 +386,9 @@ def test_keepalive_nao_roda_com_sessao_morta(monkeypatch, tmp_path):
     assert not any("refresh" in c for c in nlm)
 
 
-def test_reconectar_abre_login_visivel_com_log(monkeypatch, tmp_path):
+def test_reconectar_agenda_login_monitorado_com_log(monkeypatch, tmp_path):
     pasta, avisos = _cenario(monkeypatch, tmp_path)
+    _respostas_nlm(monkeypatch, check=(1, "Authentication expired"))
     chamadas = {}
 
     def popen(cmd, **kw):
@@ -396,13 +398,16 @@ def test_reconectar_abre_login_visivel_com_log(monkeypatch, tmp_path):
 
     monkeypatch.setattr(estudos.subprocess, "Popen", popen)
     r = estudos.reconectar()
-    assert r == {"lancado": True, "navegador": "msedge"}
-    # comando oficial de login, em janela VISIVEL (o usuario precisa
-    # completar no navegador - nunca CREATE_NO_WINDOW aqui)
+    assert r["lancado"] is True
+    assert r["navegador"] == "msedge"
+    estudos._login_thread.join(timeout=5)
+    assert not estudos._login_thread.is_alive()
+    # Ocultar o console nao altera o navegador headed aberto pelo CLI.
     assert chamadas["cmd"][1:4] == ["login", "--browser", "msedge"]
-    assert chamadas["kw"].get("creationflags", 0) != (
-        estudos.subprocess.CREATE_NO_WINDOW
-    )
+    assert "--fresh" in chamadas["cmd"]
+    assert chamadas["kw"].get("creationflags", 0) == (
+        estudos.subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+    assert estudos.status()["login"]["em_andamento"] is False
     # e a saida fica num log, para uma falha rapida nao sumir com o motivo
     log_nlm = pasta / "logs" / "login_nlm.log"
     assert log_nlm.exists() and "login" in log_nlm.read_text(encoding="utf-8")

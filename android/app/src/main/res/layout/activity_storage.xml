@@ -13,7 +13,7 @@
         android:text="@string/storage_cabecalho"
         android:textSize="13sp" />
 
-    <!-- aviso de destino caido no cartao SD: aparece so quando existe -->
+    <!-- aviso de destino caido no disco do PC: aparece so quando existe -->
     <TextView
         android:id="@+id/txtStorageAviso"
         android:layout_width="match_parent"

@@ -24,7 +24,6 @@ FLAGS_ESPERADAS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 def test_flag_constante_compativel_com_a_plataforma():
     assert consolidate._FLAGS_SUBPROCESS == FLAGS_ESPERADAS
     assert device._FLAGS_SUBPROCESS == FLAGS_ESPERADAS
-    assert routes._FLAGS_SUBPROCESS == FLAGS_ESPERADAS
 
 
 def test_consolidate_ffmpeg_chama_com_flag_de_janela(tmp_path, monkeypatch):
@@ -77,18 +76,6 @@ def test_capture_level_chama_com_flag_de_janela(monkeypatch):
     monkeypatch.setattr(device.subprocess, "run", _fake_run)
     out = device.capture_level(1.0, "Microfone (Fake)")
     assert out["ok"] is True
-    assert chamada["creationflags"] == FLAGS_ESPERADAS
-
-
-def test_service_state_chama_com_flag_de_janela(monkeypatch):
-    chamada = {}
-
-    def _fake_run(cmd, **kwargs):
-        chamada.update(kwargs)
-        return SimpleNamespace(returncode=0, stdout="active\n", stderr="")
-
-    monkeypatch.setattr(routes.subprocess, "run", _fake_run)
-    assert routes._service_state("pregacao") == "active"
     assert chamada["creationflags"] == FLAGS_ESPERADAS
 
 

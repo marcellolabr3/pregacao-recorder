@@ -1,5 +1,5 @@
 /* pregacao-recorder - interface web
-   O NAVEGADOR NUNCA decide se o Raspberry esta gravando.
+   O NAVEGADOR NUNCA decide se o PC esta gravando.
    Ele apenas exibe o estado devolvido pelo servidor (fonte de verdade). */
 
 (function () {
@@ -13,6 +13,9 @@
   var clockOffset = 0;      // servidor - navegador
   var source = null;
   var notifCount = 0;
+  var nlmUltimo = null;
+  var nlmLoginPedido = false;
+  var nlmDiagnostico = false;
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -189,7 +192,7 @@
     }
 
     // destino de gravacao: com o SSD desmontado o diretorio configurado
-    // continua existindo dentro do cartao SD e a gravacao "funciona" la -
+    // continua existindo dentro do pasta do PC e a gravacao "funciona" la -
     // sem este aviso a troca passaria despercebida
     var avisoDestino = status.storage_aviso;
     var elAvisoDestino = $("storageAviso");
@@ -204,20 +207,12 @@
     $("networkState").textContent = online ? "ONLINE" : "OFFLINE";
     $("networkState").style.color = online ? "var(--green2)" : "var(--amber)";
     $("networkHint").textContent = online
-      ? "internet disponivel" : "sem internet - as gravacoes ficam no SSD";
+      ? "internet disponivel" : "sem internet - as gravacoes ficam no PC";
 
     // audio
     var dev = status.device || {};
     $("audioDevice").textContent = dev.hw || "nao detectado";
     $("audioName").textContent = dev.name || "conecte a interface USB";
-
-    // recursos do Raspberry (nmcli/Access Point/Tailscale): no Windows
-    // nao existem - escondidos para o operador nao se perder
-    var soWin = status.platform === "windows";
-    Array.prototype.forEach.call(
-      document.querySelectorAll(".so-linux"),
-      function (el) { el.style.display = soWin ? "none" : ""; }
-    );
 
     // drive
     var drive = status.drive || {};
@@ -259,7 +254,8 @@
       : (ups.last_error ? "ultimo erro: " + ups.last_error : "");
 
     $("deviceName").textContent = status.device_name || "pregacao-recorder";
-    // barra de progresso do estudo (S3)
+    // saude e progresso do estudo acompanham o estado atual do servidor.
+    if (status.estudos) pintaNlm(status.estudos);
     if (status.estudos && status.estudos.barra) {
       pintaProgresso(status.estudos.barra);
     }
@@ -526,7 +522,7 @@
   }
 
   // Preenche o seletor "Onde gravar" com os destinos que ESTAO disponiveis
-  // agora. Ler /proc/mounts e medir espaco e trabalho do servidor - aqui so
+  // agora. Enumerar discos do Windows e medir espaco e trabalho do servidor - aqui so
   // recebemos o resultado pronto de /api/storage. Destino com disco ausente
   // fica visivel (para o usuario entender o aviso) mas marcado como
   // indisponivel, igualzinho o servidor recusa ao salvar.
@@ -535,6 +531,7 @@
     if (!sel) return;
     api("/api/storage").then(function (r) {
       var itens = (r.items || []).slice();
+      selecionado = selecionado || r.current;
       if (selecionado && !itens.some(function (i) { return i.caminho === selecionado; })) {
         itens.unshift({ caminho: selecionado, rotulo: "destino digitado",
                         montado: false, externo: false, disco: {} });
@@ -545,7 +542,7 @@
         var sufixo;
         if (!i.montado) sufixo = "  -  DISCO AUSENTE";
         else if (i.externo) sufixo = "  -  " + (i.rotulo ? i.rotulo + " - " : "") + livre;
-        else sufixo = "  -  cartao SD - " + livre;
+        else sufixo = "  -  " + (i.rotulo || "pasta do PC") + " - " + livre;
         return { value: i.caminho, label: i.caminho + sufixo, disabled: !i.montado };
       }), selecionado);
 
@@ -572,6 +569,10 @@
   function pintaNlm(p) {
     var el = $("cfgNlmState");
     if (!el) return;
+    p = p || {};
+    nlmUltimo = p;
+    var login = p.login || {};
+    var ocupado = nlmLoginPedido || nlmDiagnostico || !!login.em_andamento;
     var mapa = {
       ok: ["● SESSAO ATIVA", "var(--green2)"],
       auth: ["○ SESSAO EXPIRADA", "var(--amber)"],
@@ -579,13 +580,40 @@
       desconhecido: ["○ NAO VERIFICADA", "var(--amber)"]
     };
     var m = mapa[p.estado] || mapa.desconhecido;
-    if (p.aguardando) {
+    var orientacao = "Para renovar o login, entre na sua conta na janela do navegador do PC.";
+    if (nlmLoginPedido || login.em_andamento) {
+      var fases = {
+        abrindo: "ABRINDO LOGIN",
+        aguardando: "AGUARDANDO LOGIN NO PC",
+        verificando: "VERIFICANDO LOGIN"
+      };
+      el.textContent = fases[login.estado] || "ABRINDO LOGIN";
+      el.style.color = "var(--amber)";
+      orientacao = login.estado === "verificando"
+        ? "Login recebido. Aguarde a confirmacao da sessao; o painel atualiza sozinho."
+        : "Entre na sua conta na janela do navegador do PC e conclua o login. O painel confirma quando estiver pronto.";
+    } else if (nlmDiagnostico) {
+      el.textContent = "VERIFICANDO SESSAO";
+      el.style.color = "var(--amber)";
+      orientacao = "Verificando a sessao do NotebookLM. Aguarde o resultado.";
+    } else if (login.estado === "erro") {
+      el.textContent = "LOGIN NAO CONCLUIDO";
+      el.style.color = "var(--red2)";
+      orientacao = login.detalhe || "Nao foi possivel confirmar o login. Tente renovar novamente no navegador do PC.";
+    } else if (p.aguardando) {
       el.textContent = "● AGUARDANDO: " + (p.motivo || "sessao");
       el.style.color = "var(--amber)";
     } else {
       el.textContent = m[0];
       el.style.color = m[1];
     }
+    if (!ocupado && login.estado === "concluido" && p.estado === "ok") {
+      orientacao = "Login confirmado. " + (login.retomados
+        ? login.retomados + " estudo(s) retomado(s)."
+        : "A sessao do NotebookLM esta ativa.");
+    }
+    var mensagem = $("cfgNlmLogin");
+    if (mensagem) mensagem.textContent = orientacao;
     var pend = $("cfgNlmPend");
     if (pend) {
       pend.textContent = p.aguardando
@@ -597,8 +625,8 @@
     var b1 = $("btnNlmCheck");
     var b2 = $("btnNlmLogin");
     var acao = isAdmin ? "" : "none";
-    if (b1) b1.style.display = acao;
-    if (b2) b2.style.display = acao;
+    if (b1) { b1.style.display = acao; b1.disabled = ocupado; }
+    if (b2) { b2.style.display = acao; b2.disabled = ocupado; }
   }
 
   // ---------------------------------------------------------------- saude das integracaoes (S3)
@@ -707,7 +735,7 @@
         : "";
       $("cfgFfmpeg").textContent = data.has_ffmpeg
         ? "ffmpeg disponivel: a gravacao final sera MP3."
-        : "ffmpeg ausente: a gravacao final ficara em WAV (maior, porem compativel).";
+        : "ffmpeg ausente: instale-o para habilitar captura e conversao no Windows.";
 
       form.elements["audio.channels"].value = String(c.audio.channels);
       form.elements["audio.segment_seconds"].value = c.audio.segment_seconds;
@@ -743,8 +771,7 @@
       $("cfgDriveCreds").textContent = "Credenciais: "
         + (srcLabel[d.source] !== undefined ? srcLabel[d.source] : d.source);
 
-      loadNetwork();
-    loadPregacoes();
+      loadPregacoes();
     };
     if (data) apply(data);
     else api("/api/config").then(apply).catch(function (e) { toast(e.message, "error"); });
@@ -1038,210 +1065,6 @@
     else openAdmin();
   }
 
-  // ------------------------------------------------------------- rede
-  var netData = null;      // ultimo status de rede recebido
-  var netSsid = null;      // SSID escolhido na lista de redes
-
-  function netText(id, text, cls) {
-    var el = $(id);
-    if (!el) return;
-    el.textContent = text === undefined || text === null || text === "" ? "--" : text;
-    el.className = cls || "";
-  }
-
-  function sinalLabel(v) {
-    v = Number(v) || 0;
-    if (v >= 70) return "Forte";
-    if (v >= 45) return "Medio";
-    if (v > 0) return "Fraco";
-    return "sem sinal";
-  }
-
-  function renderRemote(r) {
-    r = r || {};
-    var svc = r.service || "";
-    var ativo = svc === "active";
-    netText("remService",
-      !r.configured ? "NAO CONFIGURADO"
-        : (ativo ? "ATIVO" : (svc || "PARADO").toUpperCase()),
-      ativo ? "st-ok" : (r.configured ? "st-warn" : ""));
-    netText("remHost", r.configured
-      ? (r.host + ":" + r.port + (r.tls ? " (TLS)" : " (sem TLS)"))
-      : "sem PREGACAO_REMOTE_HOST no .env");
-    netText("remDeviceId", r.device_id || "--");
-    netText("remToken", r.operator_token
-      || "(defina PREGACAO_OPERATOR_TOKEN no .env)");
-  }
-
-  function loadNetwork() {
-    api("/api/network/status").then(function (data) {
-      netData = data;
-      renderNetwork(data);
-    }).catch(function (e) { netText("netMsg", e.message, "st-bad"); });
-  }
-
-  function renderTailscale(ts) {
-    ts = ts || {};
-    netText("netTsState",
-      ts.connected ? "CONECTADO"
-        : (ts.message || (ts.installed ? "DESCONECTADO" : "NAO INSTALADO")),
-      ts.connected ? "st-ok" : "st-warn");
-    netText("netTsName", ts.hostname || ts.dns_name || "--");
-    netText("netTsIp", ts.ip || "--");
-    var link = $("netTsLink");
-    if (ts.auth_url) {
-      link.href = ts.auth_url;
-      link.textContent = "abrir o link de autenticacao";
-      link.classList.remove("hidden");
-    } else {
-      link.classList.add("hidden");
-    }
-  }
-
-  function renderNetwork(d) {
-    d = d || {};
-    var inet = !!(d.internet && d.internet.connected);
-    var eth = d.ethernet || {};
-    var wifi = d.wifi || {};
-    var ap = d.accessPoint || {};
-    var ts = d.tailscale || {};
-
-    netText("netInternet", inet ? "ONLINE" : "OFFLINE", inet ? "st-ok" : "st-bad");
-    netText("netEth", eth.connected ? "CONECTADO" : "DESCONECTADO",
-            eth.connected ? "st-ok" : "st-bad");
-    netText("netWifi", wifi.connected ? "CONECTADO" : "DESCONECTADO",
-            wifi.connected ? "st-ok" : "st-bad");
-    netText("netRemote", ts.connected ? "CONECTADO"
-            : (ts.installed ? "DESCONECTADO" : "NAO INSTALADO"),
-            ts.connected ? "st-ok" : "st-warn");
-
-    netText("netEthState", eth.state, eth.connected ? "st-ok" : "");
-    netText("netEthIp", eth.ip);
-    netText("netEthGw", eth.gateway);
-
-    netText("netWifiSsid", wifi.connected ? wifi.ssid : "nao conectado",
-            wifi.connected ? "st-ok" : "");
-    netText("netWifiIp", wifi.ip);
-    netText("netWifiSignal", wifi.connected && wifi.signal
-      ? wifi.signal + "% - " + sinalLabel(wifi.signal) +
-        (wifi.security ? " - " + wifi.security : "")
-      : (wifi.available === false ? "interface ausente" : "--"));
-    netText("netWifiGw", wifi.gateway);
-
-    netText("netApState", ap.active ? "ATIVO" : "INATIVO", ap.active ? "st-warn" : "");
-    netText("netApSsid", ap.ssid);
-    netText("netApIp", ap.ip);
-
-    renderTailscale(ts);
-
-    var urls = (d.access && d.access.urls) || [];
-    var ul = $("netUrls");
-    ul.textContent = "";
-    if (!urls.length) {
-      var vazio = document.createElement("li");
-      vazio.className = "muted";
-      vazio.textContent = "nenhum endereco ativo";
-      ul.appendChild(vazio);
-    }
-    urls.forEach(function (u) {
-      var li = document.createElement("li");
-      var a = document.createElement("a");
-      a.href = u.value;
-      a.textContent = u.value;
-      a.className = "linkblock";
-      var nota = document.createElement("div");
-      nota.className = "muted";
-      nota.textContent = u.label + (u.note ? " - " + u.note : "");
-      li.appendChild(a);
-      li.appendChild(nota);
-      ul.appendChild(li);
-    });
-  }
-
-  function renderWifiList(networks, atual) {
-    var ul = $("wifiList");
-    ul.textContent = "";
-    if (!networks || !networks.length) {
-      var li0 = document.createElement("li");
-      li0.className = "muted";
-      li0.textContent = "nenhuma rede encontrada";
-      ul.appendChild(li0);
-      return;
-    }
-    networks.forEach(function (n) {
-      var li = document.createElement("li");
-      li.dataset.ssid = n.ssid;
-      var nome = document.createElement("span");
-      nome.className = "ssid";
-      nome.textContent = n.ssid;
-      var info = document.createElement("span");
-      info.className = "sig";
-      info.textContent = n.signal + "% " + sinalLabel(n.signal) +
-        (n.secure ? " - protegida" : " - aberta");
-      li.appendChild(nome);
-      li.appendChild(info);
-      if (n.in_use) {
-        var uso = document.createElement("span");
-        uso.className = "inuse";
-        uso.textContent = "EM USO";
-        li.appendChild(uso);
-      }
-      li.addEventListener("click", function () { selectWifi(n.ssid); });
-      ul.appendChild(li);
-      if (atual && n.ssid === atual) li.classList.add("selected");
-    });
-  }
-
-  function selectWifi(ssid) {
-    netSsid = ssid;
-    Array.prototype.forEach.call($("wifiList").children, function (li) {
-      li.classList.toggle("selected", li.dataset.ssid === ssid);
-    });
-    var campo = $("wifiPassword");
-    campo.value = "";
-    campo.focus();
-  }
-
-  function netMessage(texto, erro) {
-    var el = $("netMsg");
-    el.textContent = texto || "";
-    el.className = erro ? "st-bad" : "muted";
-  }
-
-  function netOp(path, body, okMsg) {
-    netMessage("aguarde, operando a rede...", false);
-    api(path, "POST", body).then(function (r) {
-      var texto = r.message || okMsg || "operacao concluida";
-      netMessage(texto, false);
-      toast(texto, "success");
-      if (r.status) { netData = r.status; renderNetwork(r.status); }
-      loadNetwork();
-    }).catch(function (e) {
-      netMessage(e.message, true);
-      toast(e.message, "error");
-      loadNetwork();
-    });
-  }
-
-  function pollTailscale() {
-    var n = 0;
-    var timer = setInterval(function () {
-      n++;
-      api("/api/network/tailscale/status").then(function (ts) {
-        renderTailscale(ts);
-        if (ts.connected) {
-          clearInterval(timer);
-          netMessage("Acesso remoto pronto: http://" + ts.ip, false);
-          toast("Tailscale conectado", "success");
-        } else if (n >= 15) {
-          clearInterval(timer);
-          netMessage(ts.message || "autenticacao nao concluida", true);
-        }
-      }).catch(function () { if (n >= 15) clearInterval(timer); });
-    }, 2000);
-  }
-
-  // ------------------------------------------------- assistente 1o acesso
   function showSetup() {
     wizStep = 1;
     $("setupOverlay").classList.remove("hidden");
@@ -1382,80 +1205,6 @@
       }).catch(function (e) { toast(e.message, "error"); });
     });
 
-    // ---- rede (area do administrador) ----
-    $("btnNetRefresh").addEventListener("click", function () {
-      netMessage("atualizando...", false);
-      loadNetwork();
-    });
-    $("btnNetTest").addEventListener("click", function () {
-      netMessage("testando a conexao...", false);
-      api("/api/network/connectivity-test", "POST").then(function (r) {
-        netMessage(r.connected
-          ? "Internet OK via " + r.host + " (" + r.seconds + "s)"
-          : (r.local ? "Sem Internet - o painel continua funcionando na rede local"
-                     : "Sem Internet e sem rede local"),
-          !r.connected);
-      }).catch(function (e) { netMessage(e.message, true); });
-    });
-    $("btnWifiScan").addEventListener("click", function () {
-      netMessage("procurando redes...", false);
-      api("/api/network/wifi/scan?rescan=1").then(function (r) {
-        var atual = netData && netData.wifi && netData.wifi.ssid;
-        renderWifiList(r.networks, atual);
-        netMessage(r.count + " rede(s) encontrada(s)", false);
-      }).catch(function (e) { netMessage(e.message, true); });
-    });
-    $("btnWifiConnect").addEventListener("click", function () {
-      if (!netSsid) { toast("Selecione uma rede na lista", "warning"); return; }
-      var senha = $("wifiPassword").value;
-      var apAtivo = netData && netData.accessPoint && netData.accessPoint.active;
-      if (apAtivo && !window.confirm(
-        "Conectar ao Wi-Fi desligara o Access Point de configuracao. " +
-        "O celular precisara entrar na rede '" + netSsid + "' para voltar " +
-        "ao painel. Continuar?")) return;
-      netOp("/api/network/wifi/connect",
-            { ssid: netSsid, password: senha || null },
-            "Conectado a " + netSsid);
-      $("wifiPassword").value = "";
-    });
-    $("btnWifiDisconnect").addEventListener("click", function () {
-      netOp("/api/network/wifi/disconnect", {}, "Wi-Fi desconectado");
-    });
-    $("btnWifiForget").addEventListener("click", function () {
-      if (!netSsid) { toast("Selecione uma rede na lista", "warning"); return; }
-      if (!window.confirm("Esquecer a rede '" + netSsid +
-                          "'? A senha sera apagada do equipamento.")) return;
-      var alvo = netSsid;
-      netSsid = null;
-      netOp("/api/network/wifi/forget", { ssid: alvo }, "Rede esquecida");
-    });
-    $("btnApOn").addEventListener("click", function () {
-      var ssid = (netData && netData.accessPoint && netData.accessPoint.ssid)
-        || "PREGACAO-PI-XXXX";
-      if (!window.confirm(
-        "Ativar o modo de configuracao Wi-Fi? O equipamento passara a emitir " +
-        "a rede '" + ssid + "' (senha pregacao12345) e, enquanto isso, o " +
-        "Wi-Fi cliente fica desativado.")) return;
-      netOp("/api/network/ap/enable", {}, "Modo de configuracao ativado");
-    });
-    $("btnApOff").addEventListener("click", function () {
-      netOp("/api/network/ap/disable", {}, "Modo de configuracao desativado");
-    });
-    $("btnTsLogin").addEventListener("click", function () {
-      netMessage("iniciando a autenticacao do Tailscale...", false);
-      api("/api/network/tailscale/login", "POST").then(function (r) {
-        netMessage(r.message || "autenticacao iniciada - acompanhe abaixo", false);
-        pollTailscale();
-      }).catch(function (e) { netMessage(e.message, true); });
-    });
-    $("btnTsTest").addEventListener("click", function () {
-      netMessage("testando o acesso remoto...", false);
-      api("/api/network/tailscale/test", "POST").then(function (r) {
-        netMessage(r.message, !r.ok);
-        toast(r.message, r.ok ? "success" : "error");
-      }).catch(function (e) { netMessage(e.message, true); });
-    });
-
     // assistente de primeiro acesso
     $("wizNext").addEventListener("click", wizAdvance);
     $("wizBack").addEventListener("click", function () {
@@ -1538,11 +1287,15 @@
     });
 
     $("btnNlmCheck").addEventListener("click", function () {
-      var el = $("cfgNlmPend");
-      if (el) el.textContent = "verificando...";
+      if (nlmDiagnostico || nlmLoginPedido || this.disabled) return;
+      nlmDiagnostico = true;
+      pintaNlm(nlmUltimo);
       api("/api/estudos/diagnosticar", "POST").then(function (r) {
+        nlmDiagnostico = false;
         pintaNlm(r);
-        if (r.renovada) {
+        if (r.login && r.login.em_andamento) {
+          toast("Conclua o login no navegador do PC e aguarde a confirmacao.", "info");
+        } else if (r.renovada) {
           toast("Sessao renovada automaticamente", "success");
         } else if (r.retomados) {
           toast(r.retomados + " estudo(s) retomado(s)", "success");
@@ -1552,13 +1305,29 @@
           toast("Sessao " + (r.estado || "?") + " - " + (r.detalhe || ""),
             "error");
         }
-      }).catch(function (e) { toast(e.message, "error"); });
+      }).catch(function (e) {
+        nlmDiagnostico = false;
+        pintaNlm(nlmUltimo);
+        toast(e.message, "error");
+      });
     });
     $("btnNlmLogin").addEventListener("click", function () {
-      api("/api/estudos/reconectar", "POST").then(function () {
-        toast("Janela de login aberta - conclua e toque em DIAGNOSTICAR",
-          "success");
-      }).catch(function (e) { toast(e.message, "error"); });
+      if (nlmLoginPedido || nlmDiagnostico || this.disabled) return;
+      nlmLoginPedido = true;
+      pintaNlm(nlmUltimo);
+      api("/api/estudos/reconectar", "POST").then(function (r) {
+        nlmLoginPedido = false;
+        pintaNlm(Object.assign({}, nlmUltimo || {}, { login: r.login || {} }));
+        toast(r.lancado === false
+          ? "Login ja em andamento. Conclua no navegador do PC."
+          : "Abrindo login no PC. Entre na sua conta e aguarde a confirmacao.", "info");
+      }).catch(function (e) {
+        nlmLoginPedido = false;
+        pintaNlm(Object.assign({}, nlmUltimo || {}, {
+          login: { em_andamento: false, estado: "erro", detalhe: e.message }
+        }));
+        toast(e.message, "error");
+      });
     });
   }
 

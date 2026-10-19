@@ -122,10 +122,6 @@ class MainActivity : BaseActivity(), MqttController.Callbacks {
             startActivity(android.content.Intent(this, SettingsActivity::class.java))
             return true
         }
-        if (item.itemId == R.id.acao_wifi) {
-            startActivity(android.content.Intent(this, WifiActivity::class.java))
-            return true
-        }
         if (item.itemId == R.id.acao_storage) {
             startActivity(android.content.Intent(this, StorageActivity::class.java))
             return true
@@ -287,7 +283,7 @@ class MainActivity : BaseActivity(), MqttController.Callbacks {
         startedAt = obj.optDouble("started_at", 0.0)
 
         // o equipamento publica o aviso de destino junto com o estado: e' ele
-        // que revela que as gravacoes estao caindo no cartao SD (SSD solto)
+        // que revela que as gravacoes estao caindo no disco do PC (SSD solto)
         mostrarAvisoArmazenamento(obj.optString("storage_aviso", ""))
 
         if (arquivo.isEmpty()) {

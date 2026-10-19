@@ -13,11 +13,11 @@ import org.json.JSONObject
 import java.util.Locale
 
 /**
- * Onde o equipamento grava: SSD externo ou cartao SD.
+ * Onde o equipamento grava: SSD externo ou disco do PC.
  *
  * Este e' o front do problema relatado - o SSD desconecta e as gravacoes
- * passam a cair no cartao SD sem que ninguem perceba. Aqui o operador ve os
- * destinos que o Raspberry ENXERGA de verdade (o painel le /proc/mounts) e
+ * passam a cair no disco do PC sem que ninguem perceba. Aqui o operador ve os
+ * destinos que o PC ENXERGA de verdade (o painel enumera os discos do Windows) e
  * troca o destino; o equipamento recusa um disco que nao esta montado, para
  * que a troca nunca seja ilusoria.
  *
@@ -185,7 +185,7 @@ class StorageActivity : BaseActivity(), MqttController.Callbacks {
 
     /**
      * O aviso e' o coracao desta tela: ele acende quando o destino escolhido
-     * nao esta mais montado e as gravacoes estao caindo no cartao SD. Sem
+     * nao esta mais montado e as gravacoes estao caindo no disco do PC. Sem
      * ele o operador so descobre tarde.
      */
     private fun mostrarAviso(texto: String) {

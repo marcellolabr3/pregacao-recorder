@@ -1,7 +1,9 @@
 # Segredos (nunca versionar)
 .env
 .env.*
+!.env.example
 CONTEXTO.md
+docs/CODEX_CONTEXT.local.md
 config/google_credentials.json
 config/google_token.json
 config/config.json

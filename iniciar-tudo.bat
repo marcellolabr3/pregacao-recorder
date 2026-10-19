@@ -1,23 +1,22 @@
 @echo off
-REM ============================================================
-REM Pregacao - tudo de uma vez (PC da igreja, Windows)
-REM
-REM Sobe o agente MQTT (janela minimizada) e depois o gravador
-REM (janela principal). Unico atalho necessario no dia a dia.
-REM
-REM Automatico ao ligar o PC (com o usuario ja logado):
-REM   schtasks /create /tn "Pregacao" /tr "\"%~f0\"" /sc onlogon /rl highest
-REM ============================================================
 setlocal
-cd /d "%~dp0"
+REM Unico ponto de entrada. Os servicos continuam independentes.
+pushd "%~dp0"
+if errorlevel 1 exit /b 1
 
-if not exist "iniciar-agente.bat" goto :falta
-if not exist "iniciar-gravador.bat" goto :falta
+if not exist ".venv\Scripts\python.exe" (
+    echo [ERRO] Ambiente Python ausente. Consulte docs\WINDOWS.md.
+    pause
+    popd
+    exit /b 1
+)
 
-start "Pregacao Agente MQTT" /min "%~dp0iniciar-agente.bat"
-start "Pregacao Gravador" /min "%~dp0iniciar-gravador.bat"
-exit /b 0
-
-:falta
-echo [ERRO] iniciar-agente.bat / iniciar-gravador.bat nao encontrados em %~dp0
-pause
+".venv\Scripts\python.exe" -B -m app.launcher %*
+set "RESULTADO=%ERRORLEVEL%"
+if not "%RESULTADO%"=="0" (
+    echo.
+    echo Inicializacao incompleta. Consulte a mensagem acima e a pasta logs.
+    pause
+)
+popd
+exit /b %RESULTADO%

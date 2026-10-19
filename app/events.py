@@ -1,6 +1,6 @@
 """Barra de eventos em memoria (pub/sub) usada pelo SSE da interface web.
 
-Leve o suficiente para um Raspberry Pi 3 B+: nada de threads por cliente,
+Leve o suficiente para um PC: nada de threads por cliente,
 apenas um ``threading.Condition`` e um buffer circular com os ultimos
 eventos (para que um navegador que acaba de conectar ja veja o estado).
 """

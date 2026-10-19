@@ -1,7 +1,7 @@
 """Orquestracao da gravacao: iniciar, finalizar, consolidar, recuperar.
 
 Este e o unico modulo autorizado a transicionar o estado global. A interface
-web apenas pede; quem decide e o Raspberry.
+web apenas pede; quem decide e o PC.
 """
 from __future__ import annotations
 
@@ -21,10 +21,10 @@ from ..db import Database
 from ..logging_setup import get
 from ..notify import notify
 from ..states import State, state_machine
-from ..storage import layout
+from ..storage import destinos, layout
 from ..upload import queue as upload_queue
 from . import consolidate, recovery
-from .. import estudos
+from .. import estudos, paths
 
 log = get("manager")
 
@@ -86,6 +86,11 @@ class RecordingManager:
                     "Nenhuma interface de audio encontrada. "
                     "Verifique a interface USB (veja docs/AUDIO.md)."
                 )
+
+            # Nunca trocar silenciosamente o volume configurado.
+            aviso_destino = destinos.aviso(self.root, paths.recordings_dir())
+            if aviso_destino:
+                raise ManagerError(aviso_destino)
 
             # espaco em disco
             min_free = int(self.cfg.get("storage.min_free_mb", 512))

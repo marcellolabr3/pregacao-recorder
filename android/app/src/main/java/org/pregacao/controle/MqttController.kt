@@ -149,7 +149,7 @@ class MqttController(
      * valor no ack - e o que permite saber qual resposta pertence a qual
      * botao).
      *
-     * `extras` carrega os argumentos: WIFI_CONNECT leva `ssid` e `password`.
+     * `extras` carrega argumentos de Drive e destino de gravacao.
      * O payload e montado por `JSONObject`, e nao com string pronta, porque
      * a senha do Wi-Fi pode ter aspas ou barra invertida e JSON montado na
      * mao quebraria no meio (ou enviaria a senha cortada).
