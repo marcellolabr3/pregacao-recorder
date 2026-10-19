@@ -1,5 +1,9 @@
 # Windows - instalacao e operacao
 
+Este guia descreve a instalacao manual atual. O instalador completo para outros
+PCs ainda sera desenvolvido: task [PR-DIST-001](TASK_DISTRIBUICAO_WINDOWS.md),
+com sprints e criterios de aceite em [SPRINTS.md](SPRINTS.md).
+
 ## Requisitos
 
 Windows 10/11, usuario logado, Python 3.11+, FFmpeg no PATH e interface de audio.
