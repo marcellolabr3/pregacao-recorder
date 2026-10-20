@@ -541,6 +541,23 @@ class Database:
                 (status, message_id, error[:300], time.time(), send_id),
             )
 
+    def pending_whatsapp_sends(self) -> int:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM whatsapp_sends WHERE status = 'PENDENTE'"
+            ).fetchone()
+        return int(row["n"])
+
+    def fail_interrupted_whatsapp_sends(self) -> int:
+        with self.connection() as conn:
+            cur = conn.execute(
+                "UPDATE whatsapp_sends SET status = 'INCERTO_APOS_REINICIO', "
+                "error = 'Processo interrompido; confira o recebimento antes de reenviar', "
+                "updated_at = ? WHERE status = 'PENDENTE'",
+                (time.time(),),
+            )
+            return cur.rowcount
+
     def job_motivo(self) -> str:
         with self.connection() as conn:
             row = conn.execute(

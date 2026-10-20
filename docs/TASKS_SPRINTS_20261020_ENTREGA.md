@@ -24,9 +24,9 @@ Data: 20/10/2026. Escopo: codigo do PC e painel web. Nenhum APK, instalador ou p
 
 ## Sprint 3 — desligamento apos conclusao
 
-- [ ] CONFIG: habilitar e definir atraso em minutos, desabilitado por padrao.
-- [ ] Agendar somente apos encerramento de gravacao, finalizacao, uploads e estudos; cancelar ao comecar nova atividade.
-- [ ] Expor contagem/status e cancelamento manual; testar com comandos Windows simulados.
+- [x] CONFIG: habilitar e definir atraso em minutos, desabilitado por padrao.
+- [x] Agendar somente apos encerramento de gravacao, finalizacao, uploads e estudos; reiniciar contagem ao comecar nova atividade.
+- [x] Expor contagem/status, armar e cancelar manualmente; testar com comandos Windows simulados.
 
 ## Sprint 4 — mapa mental opcional
 

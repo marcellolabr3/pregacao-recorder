@@ -38,5 +38,9 @@
   "web": {
     "host": "0.0.0.0",
     "port": 8080
+  },
+  "power": {
+    "shutdown_after_tasks": false,
+    "shutdown_delay_minutes": 30
   }
 }

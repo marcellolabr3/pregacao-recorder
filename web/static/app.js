@@ -790,6 +790,10 @@
       $("cfgWaResendNumbers").value = waSaved.join("\n");
       loadWaStatus();
       loadWaStudies();
+      var powerCfg = data.power || c.power || {};
+      $("configForm").elements["power.shutdown_after_tasks"].checked = !!powerCfg.shutdown_after_tasks;
+      $("configForm").elements["power.shutdown_delay_minutes"].value = powerCfg.shutdown_delay_minutes || 30;
+      loadPowerStatus();
 
       // card ESTUDO: saude da sessao do NotebookLM (consulta propria,
       // independente do Drive - sao autenticacoes diferentes)
@@ -1113,7 +1117,9 @@
     var payload = {
       "device_name": form.elements["device_name"].value,
       "estudos.ativo": form.elements["estudos.ativo"].checked,
-      "estudos.whatsapp": form.elements["estudos.whatsapp"].value.trim()
+      "estudos.whatsapp": form.elements["estudos.whatsapp"].value.trim(),
+      "power.shutdown_after_tasks": form.elements["power.shutdown_after_tasks"].checked,
+      "power.shutdown_delay_minutes": Number(form.elements["power.shutdown_delay_minutes"].value)
     };
     var msg = $("configMsg");
     msg.textContent = "salvando...";
@@ -1165,6 +1171,28 @@
         ? found.sends.map(function (s) { return "+" + s.recipient + ": " + s.status.replace(/_/g, " "); }).join(" | ")
         : "O reenvio usa o PDF existente e nao refaz o estudo.";
     }).catch(function (e) { $("cfgWaResendStatus").textContent = e.message; });
+  }
+
+  function paintPower(p) {
+    var labels = {
+      desabilitado: "DESLIGAMENTO DESATIVADO",
+      aguardando_atividade: "AGUARDANDO NOVA TAREFA",
+      aguardando_tarefas: "AGUARDANDO TAREFAS TERMINAREM",
+      contagem: "DESLIGAMENTO EM " + Math.ceil((p.remaining_seconds || 0) / 60) + " MIN",
+      desligando: "DESLIGANDO WINDOWS",
+      erro: "FALHA NO DESLIGAMENTO"
+    };
+    $("cfgPowerState").textContent = labels[p.state] || "--";
+    $("cfgPowerDetail").textContent = p.error || (p.busy_reasons || []).join(" · ") ||
+      (p.state === "contagem" ? "A contagem reinicia se uma nova atividade comecar." :
+        "Ative e salve; o desligamento sera armado ao iniciar uma tarefa.");
+    $("btnPowerArm").disabled = !p.enabled;
+    $("btnPowerCancel").disabled = p.state !== "contagem" && p.state !== "aguardando_tarefas";
+  }
+
+  function loadPowerStatus() {
+    api("/api/power/status").then(paintPower)
+      .catch(function (e) { $("cfgPowerDetail").textContent = e.message; });
   }
 
   function saveAdvanced(ev) {
@@ -1374,9 +1402,17 @@
           loadWaStudies();
         }).catch(function (e) { toast(e.message, "error"); });
     });
+    $("btnPowerArm").addEventListener("click", function () {
+      api("/api/power/arm", "POST").then(paintPower)
+        .catch(function (e) { toast(e.message, "error"); });
+    });
+    $("btnPowerCancel").addEventListener("click", function () {
+      api("/api/power/cancel", "POST").then(paintPower)
+        .catch(function (e) { toast(e.message, "error"); });
+    });
     $("cfgWaStudy").addEventListener("change", loadWaStudies);
     setInterval(function () {
-      if (authed && document.body.dataset.view === "config") { loadWaStatus(); loadWaStudies(); }
+      if (authed && document.body.dataset.view === "config") { loadWaStatus(); loadWaStudies(); loadPowerStatus(); }
     }, 5000);
     $("advancedForm").addEventListener("submit", saveAdvanced);
     $("btnAdvanced").addEventListener("click", openAdvanced);

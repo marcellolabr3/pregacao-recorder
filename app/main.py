@@ -153,6 +153,11 @@ def run(host: Optional[str] = None, port: Optional[int] = None) -> Optional[bool
     if not _so_uma_instancia(log):
         return False
     app, manager, uploader = build()
+    from .db import db
+    from .power import controller as power_controller
+
+    db.fail_interrupted_whatsapp_sends()
+    power_controller.start()
     _install_signal_handlers(manager, uploader)
 
     host = host or config.host

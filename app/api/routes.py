@@ -14,7 +14,7 @@ from urllib.parse import quote
 
 from flask import Response, jsonify, request, send_file, stream_with_context
 
-from .. import estudos, notify, paths, whatsapp
+from .. import estudos, notify, paths, power, whatsapp
 from ..audio import device as audio_device
 from ..config import config
 from ..db import db
@@ -152,6 +152,8 @@ COERCE = {
     "setup.completed": bool,
     "estudos.ativo": bool,
     "estudos.whatsapp": str,
+    "power.shutdown_after_tasks": bool,
+    "power.shutdown_delay_minutes": int,
     "estudos.python": str,
     "estudos.pasta": str,
 }
@@ -192,6 +194,7 @@ VALIDATION = {
     "drive.client_secret": lambda v: (not v) or len(v) >= 8,
     # WhatsApp com DDI: so digitos, opcional "+", de 10 a 15 caracteres
     "estudos.whatsapp": lambda v: _valid_whatsapp(v),
+    "power.shutdown_delay_minutes": lambda v: 1 <= v <= 1440,
 }
 
 
@@ -486,6 +489,10 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
                         "ativo": bool(config.get("estudos.ativo", True)),
                         "whatsapp": str(config.get("estudos.whatsapp", "") or ""),
                     },
+                    "power": {
+                        "shutdown_after_tasks": bool(config.get("power.shutdown_after_tasks", False)),
+                        "shutdown_delay_minutes": int(config.get("power.shutdown_delay_minutes", 30)),
+                    },
                     "admin": False,
                 }
             )
@@ -573,6 +580,8 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
         except OSError:
             return _err("Nao foi possivel salvar a configuracao. Confira a permissao da pasta instalada.",
                         500, "config_save_falhou")
+        if any(key.startswith("power.") for key in pending):
+            power.controller.tick()
         applied = list(pending)
         notify.notify(
             "configuracao",
@@ -1327,6 +1336,24 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
         except ValueError as exc:
             return _err(str(exc), 422)
         return jsonify({"queued": len(ids), "send_ids": ids})
+
+    @app.get("/api/power/status")
+    @auth.require_auth
+    def power_status():
+        return jsonify(power.controller.status())
+
+    @app.post("/api/power/arm")
+    @auth.require_auth
+    def power_arm():
+        try:
+            return jsonify(power.controller.arm())
+        except ValueError as exc:
+            return _err(str(exc), 422)
+
+    @app.post("/api/power/cancel")
+    @auth.require_auth
+    def power_cancel():
+        return jsonify(power.controller.cancel())
 
     # vigilancia passiva da sessao (inofensiva quando nao configurado)
     estudos.iniciar()

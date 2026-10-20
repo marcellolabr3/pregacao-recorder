@@ -229,6 +229,22 @@
          alguns minutos.</p>
     </section>
 
+    <section class="card">
+      <div class="card-title">DESLIGAMENTO APOS AS TAREFAS</div>
+      <label><input name="power.shutdown_after_tasks" type="checkbox">
+        Desligar este computador quando gravacao, uploads e estudos terminarem</label>
+      <label>Esperar quantos minutos apos tudo terminar
+        <input name="power.shutdown_delay_minutes" type="number" min="1" max="1440" step="1" value="30">
+      </label>
+      <p class="hint">Se uma nova tarefa comecar, a contagem reinicia depois que ela terminar. Tarefas pendentes de login ou upload impedem o desligamento.</p>
+      <div class="big" id="cfgPowerState">--</div>
+      <p class="hint" id="cfgPowerDetail" role="status"></p>
+      <div class="btn-row">
+        <button id="btnPowerArm" class="btn btn-ghost" type="button">ARMAR PARA AS TAREFAS ATUAIS</button>
+        <button id="btnPowerCancel" class="btn btn-ghost" type="button">CANCELAR CONTAGEM</button>
+      </div>
+    </section>
+
     <!-- ===== SAUDE DAS INTEGRACOES (S3) ===== -->
     <section class="card">
       <div class="card-title">SAUDE DAS INTEGRACOES</div>
