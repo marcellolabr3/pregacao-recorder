@@ -25,7 +25,7 @@
   e resolve o volume por numero de serie, nao por letra. Uma abertura real
   iniciou painel/agente; a segunda nao duplicou PIDs. Painel respondeu em
   127.0.0.1:8080 com estado IDLE e a programacao respondeu. Servicos foram
-  parados depois do smoke para os testes finais; reiniciar ao concluir.
+  parados durante a suite e reiniciados ao final; painel/agente estao ativos.
 - Sprint 2: tarefa `CONCLUIDO` exibe 100% mesmo quando envio opcional foi
   pulado; etapas puladas continuam identificadas. Snapshot MQTT retido se
   corrige na reconexao. Sprint 3: programacao na pagina inicial do PC/APK,
@@ -137,7 +137,6 @@
 3. Gerar APK, pacote publico, instalador generico e atualizador pessoal;
    validar inventarios, checksums e instalacao isolada. Nao publicar contas,
    perfis, banco ou logs.
-4. Reiniciar o laboratorio com ID proprio e validar painel/agente; no outro
-   PC, aplicar o atualizador ao SSD, conferir a limpeza de pastas antigas,
+4. No outro PC, aplicar o atualizador ao SSD, conferir a limpeza de pastas antigas,
    testar dois celulares e o inicio apos logon.
 5. Atualizar README e evidencias, commitar/push a sprint de integracao.
