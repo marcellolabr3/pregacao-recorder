@@ -30,16 +30,18 @@ function fail(msg) {
 async function main() {
   const args = process.argv.slice(2);
   const loginOnly = args[0] === "--login";
-  const [phoneRaw, filePath, ...captionParts] = loginOnly ? [] : args;
-  if (!loginOnly && (!phoneRaw || !filePath)) {
+  const statusOnly = args[0] === "--status";
+  const noOpen = args.includes("--no-open");
+  const [phoneRaw, filePath, ...captionParts] = loginOnly || statusOnly ? [] : args;
+  if (!loginOnly && !statusOnly && (!phoneRaw || !filePath)) {
     console.error("Uso: node send.js <numero com DDI> <arquivo> [legenda]");
     console.error("     node send.js --login   (apenas conectar/QR)");
     process.exit(2);
   }
   const phone = phoneRaw ? phoneRaw.replace(/\D/g, "") : "";
-  if (!loginOnly && phone.length < 10) fail("numero invalido (use DDI+DDD+numero, ex.: 5511999999999)");
+  if (!loginOnly && !statusOnly && phone.length < 10) fail("numero invalido (use DDI+DDD+numero, ex.: 5511999999999)");
   const abs = filePath ? path.resolve(filePath) : "";
-  if (!loginOnly && !fs.existsSync(abs)) fail("arquivo nao encontrado: " + abs);
+  if (!loginOnly && !statusOnly && !fs.existsSync(abs)) fail("arquivo nao encontrado: " + abs);
 
   const caption = captionParts.join(" ");
   const fileName = filePath ? path.basename(abs) : "";
@@ -59,6 +61,9 @@ async function main() {
   const jid = `${phone}@s.whatsapp.net`;
 
   fs.mkdirSync(whatsappDir, { recursive: true });
+  if (!loginOnly && !fs.existsSync(path.join(whatsappDir, "auth", "creds.json"))) {
+    fail("sessao do WhatsApp ausente; conecte pelo QR em CONFIG");
+  }
   const { state, saveCreds } = await useMultiFileAuthState(path.join(whatsappDir, "auth"));
 
   let generation = 0;
@@ -86,6 +91,7 @@ async function main() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
+      if (!loginOnly) fail("sessao do WhatsApp exige novo login; conecte pelo QR em CONFIG");
       try {
         const QRCode = require("qrcode");
         const stale = path.join(whatsappDir, "qr.png");
@@ -96,35 +102,46 @@ async function main() {
         }
         const pngPath = path.join(whatsappDir, `qr_${Date.now()}.png`);
         await QRCode.toFile(pngPath, qr, { width: 640, margin: 2, errorCorrectionLevel: "M" });
-        if (loginOnly) {
+        if (loginOnly && !noOpen) {
           // pareamento manual (--login): abre a imagem para o usuario escanear
           console.log("QR gerado: " + pngPath + " — abrindo a imagem...");
           require("child_process").exec(`start "" "${pngPath}"`);
-        } else {
+        } else if (!loginOnly) {
           // envio automatico: loga o caminho sem abrir janela nenhuma
           console.log("QR gerado (sem abrir janela): " + pngPath);
         }
       } catch (err) {
         console.error("Falha ao gerar PNG do QR: " + err.message);
       }
-      console.log("QR (texto, caso a imagem nao abra):");
-      qrcode.generate(qr, { small: true });
+      if (!noOpen) {
+        console.log("QR (texto, caso a imagem nao abra):");
+        qrcode.generate(qr, { small: true });
+      }
     }
 
     if (connection === "open") {
+      if (statusOnly) {
+        console.log("OK: conexao WhatsApp verificada");
+        done(0);
+        return;
+      }
       if (loginOnly) {
         console.log("OK: WhatsApp conectado. Sessao salva em whatsapp/auth/.");
         done(0);
         return;
       }
       try {
-        await sock.sendMessage(jid, {
+        const message = await sock.sendMessage(jid, {
           document: buffer,
           fileName,
           mimetype,
           caption: caption || undefined,
         });
-        console.log(`OK: arquivo enviado para +${phone} (${fileName})`);
+        if (!message || !message.key || !message.key.id) {
+          throw new Error("WhatsApp nao retornou ID da mensagem");
+        }
+        console.log(`ACEITO:${message.key.id}`);
+        console.log(`OK: arquivo aceito pelo servidor para +${phone} (${fileName}); entrega ao destinatario nao confirmada`);
         done(0);
       } catch (err) {
         console.error("ERRO ao enviar: " + (err && err.message ? err.message : err));

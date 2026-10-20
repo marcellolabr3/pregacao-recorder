@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import quote
 
-from flask import Response, jsonify, request, stream_with_context
+from flask import Response, jsonify, request, send_file, stream_with_context
 
-from .. import estudos, notify, paths
+from .. import estudos, notify, paths, whatsapp
 from ..audio import device as audio_device
 from ..config import config
 from ..db import db
@@ -191,9 +191,16 @@ VALIDATION = {
     "drive.client_id": lambda v: (not v) or v.endswith(".apps.googleusercontent.com"),
     "drive.client_secret": lambda v: (not v) or len(v) >= 8,
     # WhatsApp com DDI: so digitos, opcional "+", de 10 a 15 caracteres
-    "estudos.whatsapp": lambda v: (not v)
-    or (v.replace("+", "").isdigit() and 10 <= len(v.replace("+", "")) <= 15),
+    "estudos.whatsapp": lambda v: _valid_whatsapp(v),
 }
+
+
+def _valid_whatsapp(raw: str) -> bool:
+    try:
+        whatsapp.parse_numbers(raw)
+        return True
+    except ValueError:
+        return False
 
 
 def remote_status() -> Dict[str, Any]:
@@ -976,31 +983,41 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
         }
 
         # --- WhatsApp ---------------------------------------------------
-        numero = str(config.get("estudos.whatsapp", "") or "").strip()
+        wa = whatsapp.status()
+        numeros = wa["recipients"]
         jobs = db.list_jobs(1)
         ultimo = jobs[0] if jobs else None
-        if not numero:
+        if not wa["configured"]:
+            saida["whatsapp"] = {"estado": "erro", "detalhe": "emissor WhatsApp ausente", "acao": "confira a instalacao do pipeline"}
+        elif not numeros:
             saida["whatsapp"] = {
                 "estado": "nao_configurado",
                 "detalhe": "sem numero de destino",
-                "acao": "defina o numero em Estudo automatico",
+                "acao": "defina os numeros em Estudo automatico",
                 "ultimo_finished_at": None,
+            }
+        elif not wa["session_saved"] or wa["result"] == "erro":
+            saida["whatsapp"] = {
+                "estado": "autenticacao_necessaria",
+                "detalhe": "sessao ausente ou conexao falhou nesta instalacao",
+                "acao": "abra CONFIG e conecte o WhatsApp pelo QR",
             }
         elif not ultimo or not ultimo.get("finished_at"):
             saida["whatsapp"] = {
                 "estado": "verificando",
-                "detalhe": "numero configurado, sem envio registrado ainda",
-                "acao": "",
+                "detalhe": "sessao salva; envio ainda nao verificado",
+                "acao": "use Verificar conexao em CONFIG",
                 "ultimo_finished_at": None,
             }
-        elif str(ultimo.get("etapa")) == "FINAL":
+        elif str(ultimo.get("etapa")) in ("FINAL", "FINAL_ACEITO"):
+            evidence = "aceito pelo servidor" if ultimo.get("etapa") == "FINAL_ACEITO" else "solicitado (registro antigo)"
             saida["whatsapp"] = {
-                "estado": "conectado",
-                "detalhe": "ultimo estudo enviado em "
+                "estado": "verificando",
+                "detalhe": "ultimo envio " + evidence + " em "
                 + datetime.fromtimestamp(
                     float(ultimo["finished_at"])
-                ).strftime("%d/%m %H:%M"),
-                "acao": "",
+                ).strftime("%d/%m %H:%M") + "; entrega nao confirmada",
+                "acao": "verifique o recebimento no telefone",
                 "ultimo_finished_at": ultimo.get("finished_at"),
             }
         elif str(ultimo.get("etapa")) == "FINAL_SEM_ENVIO":
@@ -1258,6 +1275,58 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
         except Exception as exc:  # noqa: BLE001
             log.warning("abertura do login do NotebookLM falhou: %s", exc)
             return _err(f"Falha ao abrir o login: {exc}", 502)
+
+    @app.get("/api/whatsapp/status")
+    @auth.require_auth
+    def whatsapp_status():
+        return jsonify(whatsapp.status())
+
+    @app.post("/api/whatsapp/login")
+    @auth.require_auth
+    def whatsapp_login():
+        if not auth.is_admin():
+            return _err("apenas administrador pode conectar WhatsApp", 403, "admin_necessario")
+        try:
+            return jsonify({"started": whatsapp.start_connection("login"), "status": whatsapp.status()})
+        except ValueError as exc:
+            return _err(str(exc), 412)
+
+    @app.post("/api/whatsapp/check")
+    @auth.require_auth
+    def whatsapp_check():
+        if not auth.is_admin():
+            return _err("apenas administrador pode verificar WhatsApp", 403, "admin_necessario")
+        try:
+            return jsonify({"started": whatsapp.start_connection("check"), "status": whatsapp.status()})
+        except ValueError as exc:
+            return _err(str(exc), 412)
+
+    @app.get("/api/whatsapp/qr")
+    @auth.require_auth
+    def whatsapp_qr():
+        if not auth.is_admin():
+            return _err("apenas administrador pode ler o QR", 403, "admin_necessario")
+        path = whatsapp.qr_path()
+        if not path:
+            return _err("QR ainda nao gerado", 404)
+        response = send_file(path, mimetype="image/png")
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.get("/api/estudos/jobs")
+    @auth.require_auth
+    def estudos_jobs():
+        return jsonify({"items": whatsapp.list_studies()})
+
+    @app.post("/api/estudos/jobs/<job_id>/reenviar")
+    @auth.require_auth
+    def estudos_reenviar(job_id: str):
+        body = request.get_json(silent=True) or {}
+        try:
+            ids = whatsapp.resend(job_id, str(body.get("numbers") or config.get("estudos.whatsapp", "") or ""))
+        except ValueError as exc:
+            return _err(str(exc), 422)
+        return jsonify({"queued": len(ids), "send_ids": ids})
 
     # vigilancia passiva da sessao (inofensiva quando nao configurado)
     estudos.iniciar()

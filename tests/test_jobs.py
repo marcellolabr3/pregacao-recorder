@@ -210,7 +210,7 @@ def test_boot_conclui_pelo_log_quando_o_pipeline_terminou(
     assert total == 0
     job = banco.get_job(job["job_id"])
     assert job["estado"] == "CONCLUIDO"
-    assert job["etapa"] == "FINAL"
+    assert job["etapa"] == "FINAL_INCERTO"  # tentativa antiga nao prova aceite
     assert avisos == []
 
 
@@ -262,8 +262,7 @@ def test_enfileirar_nao_duplica_e_conclui_no_banco(monkeypatch, tmp_path):
     monkeypatch.setattr(
         estudos.subprocess,
         "Popen",
-        # o fake grava os marcos do passo 8 no log: a drenagem prova o
-        # envio e o job so termina em FINAL (100%) com essa prova
+        # o fake grava somente a tentativa; sem ID o aceite fica incerto
         lambda cmd, **kw: chamadas.append(cmd)
         or _Proc(0, stdout=kw.get("stdout")),
     )
@@ -283,7 +282,7 @@ def test_enfileirar_nao_duplica_e_conclui_no_banco(monkeypatch, tmp_path):
     assert cont.get("PENDENTE", 0) == 0
     assert cont.get("EXECUTANDO", 0) == 0
     job = estudos.db.list_jobs(1)[0]
-    assert job["etapa"] == "FINAL"
+    assert job["etapa"] == "FINAL_INCERTO"
     assert job["resultado"] and "handoff" in Path(job["resultado"]).name
     # o log de handoff prova o que foi disparado (e serve de marcador
     # de conclusao para a recuperacao no boot)

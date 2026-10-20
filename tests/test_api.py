@@ -83,6 +83,21 @@ def test_critical_operations_require_pin(client):
     assert client.get("/api/recovery").status_code == 401
 
 
+def test_whatsapp_config_lista_destinos_e_reenvio_exige_pdf(client):
+    _login(client)
+    numeros = "5511999999999\n5511888888888"
+    saved = client.post("/api/config", json={"estudos.whatsapp": numeros})
+    assert saved.status_code == 200
+    assert client.get("/api/config").get_json()["estudos"]["whatsapp"] == numeros
+    assert client.get("/api/whatsapp/status").get_json()["recipients"] == [
+        "5511999999999", "5511888888888"
+    ]
+    assert client.post("/api/config", json={"estudos.whatsapp": "5511invalido"}).status_code == 422
+    assert client.post("/api/whatsapp/login").status_code == 403
+    assert client.get("/api/whatsapp/qr").status_code == 403
+    assert client.post("/api/estudos/jobs/inexistente/reenviar", json={"numbers": numeros}).status_code == 422
+
+
 def test_wrong_pin_rejected(client):
     resp = _login(client, "9999")
     assert resp.status_code == 401

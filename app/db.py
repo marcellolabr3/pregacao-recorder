@@ -70,6 +70,25 @@ CREATE TABLE IF NOT EXISTS jobs (
     finished_at    REAL
 );
 
+CREATE TABLE IF NOT EXISTS study_artifacts (
+    job_id          TEXT PRIMARY KEY,
+    pdf_path        TEXT,
+    mind_map_path   TEXT,
+    updated_at      REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS whatsapp_sends (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id          TEXT NOT NULL,
+    recipient       TEXT NOT NULL,
+    status          TEXT NOT NULL,
+    message_id      TEXT,
+    error           TEXT,
+    created_at      REAL NOT NULL,
+    updated_at      REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_sends_job ON whatsapp_sends(job_id, id);
+
 -- S4: programacao de pregacoes (metadados unicos, no PC, refletidos no celular)
 CREATE TABLE IF NOT EXISTS pregacoes (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -470,6 +489,57 @@ class Database:
                 "SELECT estado, COUNT(*) AS n FROM jobs GROUP BY estado"
             ).fetchall()
         return {r["estado"]: r["n"] for r in rows}
+
+    def save_study_artifact(self, job_id: str, **fields: str) -> None:
+        allowed = {key: value for key, value in fields.items()
+                   if key in ("pdf_path", "mind_map_path")}
+        if not allowed:
+            return
+        with self.connection() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO study_artifacts(job_id, updated_at) VALUES (?, ?)",
+                (job_id, time.time()),
+            )
+            sets = ", ".join(f"{key} = :{key}" for key in allowed)
+            conn.execute(
+                f"UPDATE study_artifacts SET {sets}, updated_at = :updated_at WHERE job_id = :job_id",
+                {**allowed, "updated_at": time.time(), "job_id": job_id},
+            )
+
+    def study_artifact(self, job_id: str) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM study_artifacts WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def record_whatsapp_send(self, job_id: str, recipient: str, status: str,
+                             *, message_id: str = "", error: str = "") -> int:
+        now = time.time()
+        with self.connection() as conn:
+            cur = conn.execute(
+                "INSERT INTO whatsapp_sends(job_id, recipient, status, message_id, error, "
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (job_id, recipient, status, message_id, error[:300], now, now),
+            )
+            return int(cur.lastrowid)
+
+    def list_whatsapp_sends(self, job_id: str) -> List[Dict[str, Any]]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM whatsapp_sends WHERE job_id = ? ORDER BY id DESC",
+                (job_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def update_whatsapp_send(self, send_id: int, status: str,
+                             *, message_id: str = "", error: str = "") -> None:
+        with self.connection() as conn:
+            conn.execute(
+                "UPDATE whatsapp_sends SET status = ?, message_id = ?, error = ?, "
+                "updated_at = ? WHERE id = ?",
+                (status, message_id, error[:300], time.time(), send_id),
+            )
 
     def job_motivo(self) -> str:
         with self.connection() as conn:

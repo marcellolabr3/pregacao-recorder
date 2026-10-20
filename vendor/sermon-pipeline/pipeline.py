@@ -290,16 +290,36 @@ print(pdf_path)
 
 
 def step_whatsapp(cfg: dict, pdf_path: Path, title: str, to: str | None, skip: bool) -> None:
-    recipient = (to or cfg.get("whatsapp_number") or "").strip()
+    raw = (to or cfg.get("whatsapp_number") or "").strip()
     if skip:
         log("8. Envio por WhatsApp pulado (--skip-whatsapp)")
         return
-    if not recipient:
+    if not raw:
         log("8. Envio por WhatsApp pulado: defina 'whatsapp_number' em config.json ou use --to <numero>")
         return
-    log(f"8. Enviando PDF por WhatsApp para +{recipient}")
     caption = f"Estudo/Devocional para Pequenos Grupos — {title}"
-    run([NODE, WHATSAPP_SCRIPT, recipient, pdf_path, caption], timeout=180)
+    recipients = []
+    for part in re.split(r"[,;\s]+", raw):
+        number = part.removeprefix("+")
+        if not number.isdigit() or not 10 <= len(number) <= 15:
+            raise SystemExit(f"ERRO: numero de WhatsApp invalido: {part}")
+        if number not in recipients:
+            recipients.append(number)
+    if len(recipients) > 20:
+        raise SystemExit("ERRO: limite de 20 numeros de destino")
+    failures = []
+    for recipient in recipients:
+        log(f"8. Enviando PDF por WhatsApp para +{recipient}")
+        result = run([NODE, WHATSAPP_SCRIPT, recipient, pdf_path, caption], check=False, timeout=180)
+        output = (result.stdout or "") if result else ""
+        match = re.search(r"^ACEITO:([^\r\n]+)", output, re.MULTILINE)
+        if result and result.returncode == 0 and match:
+            log(f"8. WhatsApp aceito pelo servidor para +{recipient} id={match.group(1).strip()}")
+        else:
+            log(f"8. WhatsApp falhou para +{recipient}")
+            failures.append(recipient)
+    if failures:
+        raise SystemExit("ERRO: falha no WhatsApp para " + ", ".join("+" + n for n in failures))
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +353,7 @@ def main() -> None:
 
     md_path = step_notebooklm(cfg, audio, title)
     pdf_path = step_md_to_pdf(md_path)
+    print(f"ARQUIVO_PDF:{pdf_path}", flush=True)
 
     step_whatsapp(cfg, pdf_path, title, args.to, args.skip_whatsapp)
 

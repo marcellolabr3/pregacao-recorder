@@ -192,10 +192,27 @@
       <div class="card-title">ESTUDO AUTOMATICO (NOTEBOOKLM)</div>
       <label><input name="estudos.ativo" type="checkbox">
         Gerar estudo e enviar o PDF por WhatsApp apos gravar</label>
-      <label>Numero do WhatsApp (com DDI)
-        <input name="estudos.whatsapp" type="tel" inputmode="numeric"
-               maxlength="16" placeholder="5521999999999">
+      <label>Destinatarios do WhatsApp (DDI + DDD, um por linha)
+        <textarea name="estudos.whatsapp" rows="3" maxlength="340" placeholder="5521999999999&#10;5511888888888"></textarea>
       </label>
+      <p class="hint" id="cfgWaDestinos" role="status">Nenhum numero salvo.</p>
+      <div class="big" id="cfgWaState">--</div>
+      <div class="btn-row">
+        <button id="btnWaLogin" class="btn btn-primary" type="button">CONECTAR WHATSAPP (QR)</button>
+        <button id="btnWaCheck" class="btn btn-ghost" type="button">VERIFICAR CONEXAO</button>
+      </div>
+      <p class="hint" id="cfgWaDetail" role="status">A sessao fica neste computador. Conecte no WhatsApp &gt; Aparelhos conectados.</p>
+      <img id="cfgWaQr" class="hidden" alt="QR para conectar o WhatsApp" style="width:min(100%,320px);height:auto">
+      <p class="hint">"Aceito pelo servidor" nao garante entrega. Confira o recebimento no telefone.</p>
+      <div class="card-title">REENVIAR ESTUDO PRONTO</div>
+      <label>Estudo
+        <select id="cfgWaStudy"></select>
+      </label>
+      <label>Destinos do reenvio (DDI + DDD, um por linha)
+        <textarea id="cfgWaResendNumbers" rows="2" maxlength="340"></textarea>
+      </label>
+      <button id="btnWaResend" class="btn btn-ghost" type="button">REENVIAR PDF EXISTENTE</button>
+      <p class="hint" id="cfgWaResendStatus" role="status">O reenvio nao refaz o estudo.</p>
       <div class="big" id="cfgNlmState">--</div>
       <dl class="meta">
         <div><dt>Estudos</dt><dd id="cfgNlmPend">--</dd></div>

@@ -180,7 +180,10 @@ def test_pdf_sem_arquivo_nao_e_considerado_concluido(pipeline, monkeypatch, tmp_
 
 def test_whatsapp_resolve_node_privado_e_pula_sem_destinatario(pipeline, monkeypatch, tmp_path, capsys):
     calls = []
-    monkeypatch.setattr(pipeline, "run", lambda cmd, **kw: calls.append((cmd, kw)))
+    def accepted(cmd, **kw):
+        calls.append((cmd, kw))
+        return SimpleNamespace(returncode=0, stdout="ACEITO:mensagem-1\n", stderr="")
+    monkeypatch.setattr(pipeline, "run", accepted)
     pdf = tmp_path / "estudo.pdf"
     pipeline.step_whatsapp(pipeline.load_config(), pdf, "Estudo", None, False)
     assert calls == []
@@ -188,7 +191,24 @@ def test_whatsapp_resolve_node_privado_e_pula_sem_destinatario(pipeline, monkeyp
     pipeline.step_whatsapp(pipeline.load_config(), pdf, "Estudo", "5500000000000", False)
     assert calls[0][0][0] == os.environ["PREGACAO_NODE"]
     assert calls[0][0][1] == VENDOR / "whatsapp" / "send.js"
-    assert calls[0][1] == {"timeout": 180}
+    assert calls[0][1] == {"check": False, "timeout": 180}
+    assert "aceito pelo servidor" in capsys.readouterr().out
+
+
+def test_whatsapp_multiplos_destinos_guarda_resultado_individual(pipeline, monkeypatch, tmp_path, capsys):
+    sent = []
+    def send(cmd, **kwargs):
+        sent.append(cmd[2])
+        if cmd[2] == "5511999999999":
+            return SimpleNamespace(returncode=0, stdout="ACEITO:abc123\n", stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="sem sessao")
+    monkeypatch.setattr(pipeline, "run", send)
+    with pytest.raises(SystemExit, match="5511888888888"):
+        pipeline.step_whatsapp({}, tmp_path / "estudo.pdf", "Estudo", "5511999999999,5511888888888", False)
+    assert sent == ["5511999999999", "5511888888888"]
+    output = capsys.readouterr().out
+    assert "aceito pelo servidor para +5511999999999 id=abc123" in output
+    assert "falhou para +5511888888888" in output
 
 
 def test_cli_integrado_preserva_skip_drive_e_ordem(pipeline, monkeypatch, tmp_path, capsys):

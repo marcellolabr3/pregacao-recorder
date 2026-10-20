@@ -16,11 +16,11 @@ Data: 20/10/2026. Escopo: codigo do PC e painel web. Nenhum APK, instalador ou p
 
 ## Sprint 2 — WhatsApp confiavel
 
-- [ ] CONFIG: numeros multiplos com indicacao visivel dos destinos ativos.
-- [ ] CONFIG: conectar sessao via QR, verificar estado e orientar quando ausente.
-- [ ] Enviar para cada numero, guardar resultado por destinatario e marcar apenas o que puder ser comprovado.
-- [ ] Reenvio manual do PDF existente, sem repetir NotebookLM nem Drive.
-- [ ] Testes isolados de autenticacao, envio, reenvio e estados.
+- [x] CONFIG: numeros multiplos com indicacao visivel dos destinos ativos.
+- [x] CONFIG: conectar sessao via QR, verificar estado e orientar quando ausente.
+- [x] Enviar para cada numero, guardar resultado por destinatario e marcar apenas o que puder ser comprovado.
+- [x] Reenvio manual do PDF existente, sem repetir NotebookLM nem Drive.
+- [x] Testes isolados de autenticacao, envio, reenvio e estados (sem envio real).
 
 ## Sprint 3 — desligamento apos conclusao
 

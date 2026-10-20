@@ -17,6 +17,7 @@
   var nlmUltimo = null;
   var nlmLoginPedido = false;
   var nlmDiagnostico = false;
+  var waSaved = [];
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -781,7 +782,14 @@
       // usuario comum recebe "estudos" no topo; admin traz dentro de config
       var est = data.estudos || c.estudos || {};
       $("configForm").elements["estudos.ativo"].checked = est.ativo !== false;
-      $("configForm").elements["estudos.whatsapp"].value = est.whatsapp || "";
+      $("configForm").elements["estudos.whatsapp"].value = (est.whatsapp || "").replace(/[,;\s]+/g, "\n").trim();
+      waSaved = (est.whatsapp || "").split(/[,;\s]+/).filter(Boolean);
+      $("cfgWaDestinos").textContent = waSaved.length
+        ? "DESTINOS SALVOS (" + waSaved.length + "): " + waSaved.join(" · ")
+        : "Nenhum numero salvo. Salve a CONFIG antes do proximo estudo.";
+      $("cfgWaResendNumbers").value = waSaved.join("\n");
+      loadWaStatus();
+      loadWaStudies();
 
       // card ESTUDO: saude da sessao do NotebookLM (consulta propria,
       // independente do Drive - sao autenticacoes diferentes)
@@ -1120,6 +1128,45 @@
     });
   }
 
+  function loadWaStatus() {
+    api("/api/whatsapp/status").then(function (s) {
+      var label = s.busy ? "AGUARDANDO " + (s.action === "login" ? "QR/LOGIN" : "CONEXAO")
+        : s.connection === "verificada" ? "CONEXAO VERIFICADA"
+        : s.session_saved ? "SESSAO SALVA, AINDA NAO VERIFICADA" : "LOGIN NECESSARIO";
+      $("cfgWaState").textContent = label;
+      $("cfgWaDetail").textContent = s.detail || (s.session_saved
+        ? "Use VERIFICAR CONEXAO. A sessao pertence a esta instalacao."
+        : "Abra WhatsApp no celular > Aparelhos conectados > Conectar aparelho e leia o QR abaixo.");
+      $("btnWaLogin").style.display = isAdmin ? "" : "none";
+      $("btnWaCheck").style.display = isAdmin ? "" : "none";
+      $("btnWaLogin").disabled = !!s.busy;
+      $("btnWaCheck").disabled = !!s.busy;
+      var qr = $("cfgWaQr");
+      qr.classList.toggle("hidden", !s.qr_ready);
+      if (s.qr_ready) qr.src = "/api/whatsapp/qr?t=" + Date.now();
+    }).catch(function (e) { $("cfgWaDetail").textContent = e.message; });
+  }
+
+  function loadWaStudies() {
+    api("/api/estudos/jobs").then(function (r) {
+      var select = $("cfgWaStudy");
+      var selected = select.value;
+      select.innerHTML = "";
+      (r.items || []).forEach(function (job) {
+        if (!job.pdf_available) return;
+        var option = document.createElement("option");
+        option.value = job.job_id;
+        option.textContent = dataHora(job.created_at) + " · " + job.audio;
+        select.appendChild(option);
+      });
+      if (selected) select.value = selected;
+      var found = (r.items || []).find(function (item) { return item.job_id === select.value; });
+      $("cfgWaResendStatus").textContent = found && found.sends.length
+        ? found.sends.map(function (s) { return "+" + s.recipient + ": " + s.status.replace(/_/g, " "); }).join(" | ")
+        : "O reenvio usa o PDF existente e nao refaz o estudo.";
+    }).catch(function (e) { $("cfgWaResendStatus").textContent = e.message; });
+  }
+
   function saveAdvanced(ev) {
     ev.preventDefault();
     var form = $("advancedForm");
@@ -1309,6 +1356,28 @@
     });
 
     $("configForm").addEventListener("submit", saveConfig);
+    $("btnWaLogin").addEventListener("click", function () {
+      api("/api/whatsapp/login", "POST").then(function () { loadWaStatus(); })
+        .catch(function (e) { toast(e.message, "error"); });
+    });
+    $("btnWaCheck").addEventListener("click", function () {
+      api("/api/whatsapp/check", "POST").then(function () { loadWaStatus(); })
+        .catch(function (e) { toast(e.message, "error"); });
+    });
+    $("btnWaResend").addEventListener("click", function () {
+      var id = $("cfgWaStudy").value;
+      if (!id) { toast("Nao ha PDF disponivel para reenviar", "warning"); return; }
+      var numbers = $("cfgWaResendNumbers").value.trim();
+      api("/api/estudos/jobs/" + encodeURIComponent(id) + "/reenviar", "POST", { numbers: numbers })
+        .then(function (r) {
+          toast(r.queued + " reenvio(s) iniciado(s). Confira o resultado aqui.", "info");
+          loadWaStudies();
+        }).catch(function (e) { toast(e.message, "error"); });
+    });
+    $("cfgWaStudy").addEventListener("change", loadWaStudies);
+    setInterval(function () {
+      if (authed && document.body.dataset.view === "config") { loadWaStatus(); loadWaStudies(); }
+    }, 5000);
     $("advancedForm").addEventListener("submit", saveAdvanced);
     $("btnAdvanced").addEventListener("click", openAdvanced);
     $("btnRemoteToken").addEventListener("click", toggleRemoteToken);

@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -42,7 +43,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from . import bundled_runtime
+from . import bundled_runtime, whatsapp
 from .config import config
 from .db import db
 from .logging_setup import get
@@ -604,13 +605,10 @@ def retomar_apos_reinicio() -> int:
             except OSError:
                 provado = False
         if provado:
-            # a prova vale para os DOIS marcos finais: "=== 8. Enviando"
-            # = envio em curso confirmado; "pulado" = o pipeline acabou
-            # sem numero para enviar - la fora a barra nunca marca 100%
-            # sem WhatsApp real
-            enviado = "=== 8. Enviando" in texto
+            # O marcador Enviando prova tentativa, nao aceite nem entrega.
+            aceito = "=== 8. WhatsApp aceito pelo servidor" in texto
             pulado = "por WhatsApp pulado" in texto
-            etapa_final = "FINAL" if enviado and not pulado else "FINAL_SEM_ENVIO"
+            etapa_final = "FINAL_ACEITO" if aceito else ("FINAL_SEM_ENVIO" if pulado else "FINAL_INCERTO")
             db.job_concluir(
                 job["job_id"], resultado=resultado, etapa=etapa_final
             )
@@ -706,8 +704,10 @@ _MARCOS_PIPELINE = {
     "ESTUDO": 1,  # "=== 5." visto: fonte pronta, estudo em geracao
     "PDF": 2,  # "=== 6." visto: relatorio baixado
     "WHATSAPP": 3,  # "=== 8." visto: pdf pronto, envio em curso
-    "FINAL": 4,  # WhatsApp confirmado
+    "FINAL": 4,  # legado: aceite presumido, entrega nao comprovada
+    "FINAL_ACEITO": 4,  # servidor devolveu ID de mensagem
     "FINAL_SEM_ENVIO": 3,  # concluiu sem enviar (numero nao configurado)
+    "FINAL_INCERTO": 3,
 }
 
 _DESCRICOES = {
@@ -716,8 +716,10 @@ _DESCRICOES = {
     "ESTUDO": "Gerando o estudo devocional",
     "PDF": "Convertendo o estudo em PDF",
     "WHATSAPP": "Enviando o PDF por WhatsApp",
-    "FINAL": "Enviado por WhatsApp",
+    "FINAL": "Envio solicitado (legado; entrega nao confirmada)",
+    "FINAL_ACEITO": "Aceito pelo servidor WhatsApp (entrega nao confirmada)",
     "FINAL_SEM_ENVIO": "Estudo pronto (WhatsApp nao configurado - envio pulado)",
+    "FINAL_INCERTO": "Estudo pronto; envio nao comprovado",
 }
 
 
@@ -831,6 +833,17 @@ def _drenar_log(
         elif linha.startswith("=== 8. Enviando"):
             etapa = "WHATSAPP"
             visto["envio"] = True
+        elif linha.startswith("ARQUIVO_PDF:"):
+            db.save_study_artifact(atual["job_id"], pdf_path=linha.partition(":")[2].strip())
+        elif linha.startswith("=== 8. WhatsApp aceito pelo servidor"):
+            match = re.search(r"para \+(\d+) id=(\S+)", linha)
+            if match:
+                db.record_whatsapp_send(atual["job_id"], match.group(1), "ACEITO_PELO_SERVIDOR", message_id=match.group(2))
+                visto["aceito"] = True
+        elif linha.startswith("=== 8. WhatsApp falhou"):
+            match = re.search(r"para \+(\d+)", linha)
+            if match:
+                db.record_whatsapp_send(atual["job_id"], match.group(1), "FALHOU", error="Falha no emissor; veja log do estudo")
         elif linha.startswith("=== 8. Envio por WhatsApp pulado"):
             visto["pulado"] = True
         if etapa:
@@ -1112,7 +1125,8 @@ def _rodar(job: Dict[str, Any]) -> None:
             # sessao confirmada agora: aproveita para retomar o que ficou
             # em espera por uma falha anterior (roda depois deste job)
             _retomar_pendentes()
-        _rodar_pipeline(job, python, alvo)
+        with whatsapp.operation_lock:
+            _rodar_pipeline(job, python, alvo)
 
 
 def _rodar_pipeline(job: Dict[str, Any], python: str, alvo: Path) -> None:
@@ -1120,7 +1134,7 @@ def _rodar_pipeline(job: Dict[str, Any], python: str, alvo: Path) -> None:
     job_id = job["job_id"]
     caminho = job["audio_path"]
     cmd = [python, "pipeline.py", caminho, "--skip-drive"]
-    numero = _cfg("whatsapp")
+    numero = ",".join(whatsapp.recipients())
     if numero:
         cmd += ["--to", numero]
 
@@ -1167,7 +1181,7 @@ def _rodar_pipeline(job: Dict[str, Any], python: str, alvo: Path) -> None:
     db.update_job(job_id, **update_campos)
     job = dict(job, etapa="NOTEBOOKLM", resultado=str(arquivo_log))
     _publicar_job(job, "NOTEBOOKLM")
-    visto = {"envio": False, "pulado": False}
+    visto = {"envio": False, "pulado": False, "aceito": False}
     pos_log = 0
     with open(arquivo_log, "w", encoding="utf-8") as fh:
         fh.write(f"# handoff {selo}\n# cmd: {' '.join(cmd)}\n\n")
@@ -1195,27 +1209,23 @@ def _rodar_pipeline(job: Dict[str, Any], python: str, alvo: Path) -> None:
             codigo = proc.wait()
 
     if codigo == 0:
-        # A tarefa concluida chega a 100%; o passo de envio so e marcado
-        # como realizado se o pipeline realmente tentou o WhatsApp.
-        enviado = bool(visto["envio"]) and not bool(visto["pulado"])
-        etapa_final = "FINAL" if enviado else "FINAL_SEM_ENVIO"
+        # Aceite pelo servidor nao equivale a entrega no telefone.
+        aceito = bool(visto["aceito"])
+        etapa_final = "FINAL_ACEITO" if aceito else ("FINAL_SEM_ENVIO" if visto["pulado"] else "FINAL_INCERTO")
         db.job_concluir(job_id, resultado=str(arquivo_log), etapa=etapa_final)
         _publicar_job(
             dict(job, etapa=etapa_final, estado="CONCLUIDO"),
             etapa_final,
-            descricao=None
-            if enviado
-            else "Estudo pronto (WhatsApp nao configurado - envio pulado)",
+            descricao=_DESCRICOES[etapa_final],
             estado="CONCLUIDO",
-            level="success" if enviado else "warning",
+            level="success" if aceito else "warning",
         )
         log.info("estudo concluido (%s)", arquivo_log.name)
         notify(
             "estudo_pronto",
-            "Estudo gerado e enviado por WhatsApp"
-            if enviado
-            else "Estudo gerado (WhatsApp nao configurado - envio pulado)",
-            level="success",
+            "Estudo pronto; WhatsApp aceitou o envio (entrega ainda nao confirmada)"
+            if aceito else _DESCRICOES[etapa_final],
+            level="success" if aceito else "warning",
         )
     else:
         db.job_falhar(
