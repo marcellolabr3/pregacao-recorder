@@ -1,5 +1,8 @@
 # Plano de desenvolvimento - instalacao pessoal em outro PC
 
+Novo ciclo de estabilidade, programacao, APK e inicio com Windows:
+[tasks e sprints de 20/10/2026](TASKS_SPRINTS_20261020.md).
+
 Task: **PR-DIST-001 - Instalar meu Pregacao Recorder em outro PC**.
 Escopo atualizado pelo usuario: executar diretamente no SSD portatil com
 configuracao, contas, historico e gravacoes atuais. Sprint 1 e implementacao

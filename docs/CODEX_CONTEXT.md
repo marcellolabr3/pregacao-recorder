@@ -87,6 +87,12 @@
 
 ## Pendencias e proximo passo
 
+- Novo pedido (20/10/2026): seguir [tasks e sprints](TASKS_SPRINTS_20261020.md),
+  commitar cada sprint e gerar APK/instalador apenas apos todas as mudancas.
+  Os processos da copia de desenvolvimento foram encerrados neste PC; o log
+  do agente tem 761 quedas MQTT `rc=128`, compativeis com disputa do ClientID
+  `pregacao-<device_id>`. O SSD `E:` nao esta acessivel neste PC no momento.
+
 1. Aguardar resposta do usuario sobre destino da pasta antiga e interrupcao temporaria da copia de desenvolvimento para testar o inicio completo do SSD.
 2. Levar o SSD ao PC destino, abrir `PregacaoRecorder-Pessoal/Iniciar Pregacao.cmd` e seguir `docs/ACEITE_WINDOWS.md`.
 3. Selecionar audio/disco, autorizar contas/destinatario, definir coexistencia/substituicao e configurar credencial/ACL MQTT/celular; concluir aceite 2.2/2.3.
