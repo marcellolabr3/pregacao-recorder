@@ -43,13 +43,13 @@ assinado por Pyrsys B.V. O compilador pode ficar em `.bundle-cache/`, em
 
 ```powershell
 .venv\Scripts\python.exe -B packaging/build_installer.py `
-  'dist-pacote\PregacaoRecorder-sprint2-VERSAO' `
+  'dist-pacote\PregacaoRecorder-release-VERSAO' `
   --iscc '.bundle-cache\inno-7.1.0\compiler\ISCC.exe'
 ```
 
 O montador verifica hashes e caminhos antes de compilar e inclui somente o
 inventario publico. Arquivos privados extras no diretorio de build nao entram
-no instalador. Saidas: `PregacaoRecorder-Instalar-sprint2-VERSAO.exe`, checksum
+no instalador. Saidas: `PregacaoRecorder-Instalar-release-VERSAO.exe`, checksum
 `.exe.sha256`, script gerado e log local em `dist-pacote/`.
 
 Instala por usuario em `%LOCALAPPDATA%\PregacaoRecorder`, sem elevar privilegios,
@@ -62,7 +62,7 @@ Backups podem conter segredos e devem permanecer privados.
 O instalador recusa processos ativos, trava do iniciador, juncoes e pastas
 preexistentes sem manifesto. Nao encerra processos. A desinstalacao exige
 ociosidade e remove componentes instalados, preservando dados criados pelo uso.
-Nao ha atualizador, migrador entre PCs nem restauracao automatica.
+O instalador generico nao migra contas entre PCs nem restaura automaticamente.
 
 ## Conteudo e uso
 
@@ -146,11 +146,51 @@ Windows. `verify_personal_portable.py` confere o estado imediatamente apos a
 instalacao; dados privados podem mudar legitimamente com o uso. O instalador
 privado esta na raiz do SSD e em `dist-pacote/`, fora do Git. A pasta pessoal
 foi reinstalada em 20/10/2026; a pasta antiga `E:\PregacaoRecorder` reapareceu
-incompleta e aguarda instrucao do usuario para destinacao. Uma copia anterior
+incompleta naquela data. O usuario autorizou sua eliminacao, mas o SSD esta
+em outro PC e ainda precisa ser conferido la. Uma copia anterior
 da pasta antiga foi arquivada em `recovery/ssd-root-archive-20261020/`, ignorado pelo Git.
 Nao publicar esses artefatos. Consulte
 [GUIA_SSD_PORTATIL.md](../docs/GUIA_SSD_PORTATIL.md) para uso, celular,
 contas e testes no outro PC.
+
+## Atualizar a pasta pessoal existente
+
+Quando o SSD estiver em outro PC, use o atualizador sem estado privado. Ele
+leva o pacote publico novo e o APK, aceita somente a pasta
+`PregacaoRecorder-Pessoal` ja instalada, confere que ela esta fechada e faz uma
+copia dos arquivos publicos antigos em `gravador/recovery/update-*` dentro
+dessa pasta. Nao leva nem substitui configuracao, banco, contas, perfis,
+gravacoes ou credenciais do laboratorio. O numero de serie do volume permite
+ao inicio automatico encontrar o SSD mesmo se a letra mudar.
+
+```powershell
+.venv\Scripts\python.exe -B packaging/build_personal_update.py `
+  'dist-pacote\PregacaoRecorder-release-VERSAO' `
+  --apk 'flutter\pregacao_controle\PregacaoControle-2.7.apk' `
+  --iscc '.bundle-cache\inno-7.1.0\compiler\ISCC.exe'
+```
+
+Copie o `.exe` e o `.exe.sha256` resultantes para dentro da pasta pessoal no SSD,
+feche as tarefas e o programa, execute o atualizador e confira a pasta escolhida
+na tela do instalador. Assim a raiz do SSD nao ganha outra pasta. Nao
+execute o `build_personal_portable.py` com dados do laboratorio para atualizar
+o SSD real: esse montador incorpora o estado privado da maquina de origem.
+
+O instalador pessoal e o atualizador registram o inicio ao entrar no Windows
+para o usuario atual. Na maquina instalada, estes comandos conferem, ativam ou
+desativam essa opcao, sem depender da letra atual do SSD:
+
+```powershell
+$inicio = "$env:LOCALAPPDATA\PregacaoRecorder-Personal-Autostart\autostart.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inicio -Mode Status -Layout Personal
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inicio -Mode Enable -Layout Personal
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inicio -Mode Disable -Layout Personal
+```
+
+Se o SSD nao estiver conectado ao entrar no Windows, o iniciador espera ate
+60 segundos; depois registra o erro em `ultimo-erro.txt` na mesma pasta local.
+Conecte o SSD e abra `Iniciar Pregacao.cmd` para essa sessao. A proxima entrada
+no Windows com o SSD conectado volta a iniciar automaticamente.
 
 ## Inventario da sprint 1
 

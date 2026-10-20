@@ -1,4 +1,4 @@
-; Instalador pessoal: payload privado, pasta movel no SSD, sem registro local.
+; Instalador pessoal: payload privado no SSD e atalho de inicio por usuario.
 [Setup]
 AppId={{722C8AB5-104F-44A1-9797-F760FA29FA82}
 AppName=Pregacao Recorder Pessoal
@@ -27,3 +27,9 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 
 [Files]
 #include "personal-files.iss"
+Source: "{#AutostartScript}"; DestDir: "{localappdata}\PregacaoRecorder-Personal-Autostart"; DestName: "autostart.ps1"; Flags: ignoreversion
+
+[Run]
+; Registra o volume e a pasta relativa. O atalho localiza o SSD pelo numero
+; do volume, mesmo quando o Windows muda a letra da unidade.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{localappdata}\PregacaoRecorder-Personal-Autostart\autostart.ps1"" -Mode Register -Layout Personal -PackagePath ""{app}"""; Flags: runhidden waituntilterminated

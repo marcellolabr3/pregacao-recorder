@@ -173,7 +173,7 @@ def main(argv=None) -> int:
     cache.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    target = output / ("PregacaoRecorder-sprint2-" + stamp)
+    target = output / ("PregacaoRecorder-release-" + stamp)
     target.mkdir()
     log = output / ("build-" + stamp + ".log")
     env = public_build_env()
@@ -220,7 +220,7 @@ def main(argv=None) -> int:
     (licenses / "RUNTIME-SOURCES.txt").write_text("CPython: " + PYTHON_URL + "\nNode: https://nodejs.org/ (binary supplied at build, hash in manifest)\nFFmpeg: https://github.com/yt-dlp/FFmpeg-Builds (binary supplied at build, hash in manifest)\nPython/Node dependencies retain their distribution metadata/licenses.\n", encoding="utf-8")
     with (licenses / "FFmpeg.txt").open("w", encoding="utf-8") as stream:
         subprocess.run([str(ffmpeg), "-L"], stdout=stream, stderr=subprocess.STDOUT)
-    manifest = {"schema_version": 1, "name": "PregacaoRecorder", "version": "sprint2-" + stamp, "source_revision": revision(ROOT), "created_at": stamp,
+    manifest = {"schema_version": 1, "name": "PregacaoRecorder", "version": "release-" + stamp, "source_revision": revision(ROOT), "created_at": stamp,
                 "layout": {"recorder": "gravador", "pipeline": "pipeline", "python": "runtime/python", "node": "runtime/node/node.exe", "ffmpeg": "runtime/ffmpeg/bin", "browsers": "runtime/browsers"},
                 "components": {"python": {"version": PYTHON_VERSION, "archive_sha256": PYTHON_SHA256}, "node": {"version": subprocess.check_output([str(node), "--version"], text=True).strip(), "sha256": sha256(node)}, "ffmpeg": {"sha256": sha256(ffmpeg)}, "ffprobe": {"sha256": sha256(ffprobe)}, "python_lock_sha256": sha256(lock)}}
     (target / "package-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

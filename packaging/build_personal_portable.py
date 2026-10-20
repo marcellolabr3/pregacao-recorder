@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -154,7 +155,8 @@ def _build_installer(stage: Path, output: Path, version: str, public: list[str],
     (work / "personal-files.iss").write_text("\n".join(entries) + "\n", encoding="utf-8-sig")
     source = (ROOT / "packaging/personal_portable.iss").read_text(encoding="utf-8-sig")
     defines = (f'#define PackageVersion "{version}"\n'
-               f'#define InstallerOutput "{inno_string(str(output))}"\n')
+               f'#define InstallerOutput "{inno_string(str(output))}"\n'
+               f'#define AutostartScript "{inno_string(str(ROOT / "packaging/windows_autostart.ps1"))}"\n')
     script = work / "setup.iss"
     script.write_text(defines + source, encoding="utf-8-sig")
     log = output / ("personal-installer-" + version + ".build.log")
@@ -180,7 +182,11 @@ def main(argv=None) -> int:
     compiler = options.iscc.resolve()
     if not compiler.is_file():
         parser.error("Compilador Inno Setup ausente")
-    apk = ROOT / "flutter/pregacao_controle/PregacaoControle-2.6.apk"
+    pubspec = (ROOT / "flutter/pregacao_controle/pubspec.yaml").read_text(encoding="utf-8")
+    match = re.search(r"^version:\s*(\d+)\.(\d+)\.\d+\+\d+\s*$", pubspec, re.MULTILINE)
+    if not match:
+        parser.error("Versao Flutter invalida")
+    apk = ROOT / "flutter/pregacao_controle" / f"PregacaoControle-{match[1]}.{match[2]}.apk"
     if not apk.is_file():
         parser.error("APK atual ausente")
     source = _source_locations(options.notebooklm_home)

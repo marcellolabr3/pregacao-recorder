@@ -52,19 +52,29 @@ gravacoes ou perfil NotebookLM no Git.
 
 ## Sprint 4 - iniciar com o Windows
 
-- [ ] S4.1 Registrar inicializacao por usuario ao entrar no Windows para a
+- [x] S4.1 Registrar inicializacao por usuario ao entrar no Windows para a
   edicao pessoal instalada, sem abrir navegador e sem iniciar copia duplicada.
-- [ ] S4.2 Permitir ativar/desativar no PC ja instalado; orientar o caso em
+  O atalho e registrado pelo instalador/atualizador; a execucao real do
+  laboratorio iniciou painel e agente e uma segunda chamada manteve os PIDs.
+- [x] S4.2 Permitir ativar/desativar no PC ja instalado; orientar o caso em
   que o SSD estiver ausente na entrada ou mudar de letra. A copia de
-  laboratorio usa um ID MQTT distinto da instalacao real.
-- [ ] S4.3 Validar sem reiniciar com gravacao/tarefas em curso; commitar a sprint.
+  laboratorio usa um ID MQTT distinto da instalacao real. O volume e
+  identificado pelo numero de serie, com espera de 60 segundos na entrada.
+- [x] S4.3 Validar sem reiniciar com gravacao/tarefas em curso; commitar a sprint.
+  O laboratorio estava ocioso. O atalho foi registrado e resolveu D:; a
+  abertura real iniciou painel e agente com ID proprio e a segunda chamada
+  nao duplicou nenhum processo. O painel respondeu em 8080 e a lista da
+  programacao respondeu. A suite Python completa passou. O reboot e o SSD
+  real ficam para o aceite no PC de destino.
 
 ## Sprint 5 - integracao e entrega
 
 - [ ] S5.1 Executar testes completos Python/Flutter e verificacoes de interface;
   revisar documentacao, versao e estado do Git.
-- [ ] S5.2 Somente agora gerar APK, pacote pessoal e instalador; conferir
-  checksums e instalar no PC/SSD de destino quando ele estiver acessivel.
+- [ ] S5.2 Somente agora gerar APK, pacote publico, instalador generico e
+  atualizador da pasta pessoal; conferir checksums e instalar no PC/SSD de
+  destino quando ele estiver acessivel. Nao gerar um instalador privado a
+  partir dos dados deste laboratorio.
 - [ ] S5.3 Fazer aceite real: PC online estavel no APK, programacao sincronizada,
   progresso 100% ao concluir e inicio apos nova entrada no Windows.
 - [ ] S5.4 Atualizar README/contexto/evidencias e commitar/push final.
