@@ -12,7 +12,8 @@
 ## Ciclo atual - WhatsApp, desligamento e mapa mental (20/10/2026)
 
 - Escopo e aceite: [TASKS_SPRINTS_20261020_ENTREGA.md](TASKS_SPRINTS_20261020_ENTREGA.md).
-  Sprints 1, 2 e 3 enviadas em `ecf2df6`, `e81017b`, `a1bad7e`.
+  Sprints 1 a 4 enviadas em `ecf2df6`, `e81017b`, `a1bad7e`, `2dc4b85`.
+  Ajuste de migracao e acesso ao mapa sem PDF em `f29c77c`.
   **Nao gerar APK, instalador, pacote ou atualizador** ate o usuario pedir
   expressamente, mesmo apos todos os testes passarem. Commit/push por sprint.
 - O usuario esclareceu: **APK sem PIN/senha de acesso; MQTT conserva senha e
