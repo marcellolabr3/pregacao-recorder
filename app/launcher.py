@@ -117,6 +117,12 @@ def running_pid(pid_file: Path, component: str, root: Path | None = None,
     base_python = getattr(sys, "_base_executable", None)
     if base_python:
         allowed.add(Path(base_python).resolve())
+    if os.name == "nt":
+        # A tarefa de inicializacao pode usar pythonw.exe enquanto o atalho
+        # e os diagnosticos usam python.exe da mesma instalacao. O redirector
+        # da venv registra no PID o executavel base, nao o caminho da venv.
+        allowed.update(path.with_name("pythonw.exe" if path.name.lower() == "python.exe"
+                                      else "python.exe") for path in tuple(allowed))
     module_args = args[args.index("-m") + 1:] if "-m" in args else []
     if python not in allowed:
         raise LaunchError(f"{pid_file.name} aponta para outro processo; nenhum processo foi alterado.")

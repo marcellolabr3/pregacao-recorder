@@ -43,6 +43,17 @@
 - Suite Python completa e sintaxe JS passaram apos as mudancas de fonte. Nao
   foi feito envio real nem desligamento real. Aceite no outro PC/SSD continua
   pendente por falta de acesso fisico.
+- Integracao no laboratorio: `app.launcher --sem-navegador` reiniciou gravador
+  e agente depois de confirmar IDLE e filas vazias; nova chamada reconheceu os
+  dois como ja em execucao. API mostrou controles novos, desligamento desativado,
+  WhatsApp verificado via `/api/whatsapp/check` e MQTT conectado. O launcher
+  agora aceita `pythonw.exe` do mesmo Python base quando consultado por
+  `python.exe`, sempre conferindo os marcadores absolutos de instalacao/home.
+  Suite Python completa passou apos esse ajuste.
+- O codigo Flutter do protocolo agora trata `FINAL` legado como envio incerto e
+  `FINAL_ACEITO` como aceite pelo servidor, sem comprovacao de entrega. Os 37
+  testes de `test/protocolo_test.dart` passaram; o APK instalado permanece antigo
+  ate novo build solicitado pelo usuario.
 
 ## Ciclo anterior - 20/10/2026
 

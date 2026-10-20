@@ -349,8 +349,11 @@ class ProgressoJob {
     );
   }
 
-  /// Se o envio por WhatsApp foi confirmado (etapa FINAL = 100%).
-  bool get envioConfirmado => etapa == 'FINAL';
+  /// O servidor WhatsApp aceitou a mensagem; isso nao comprova entrega.
+  bool get envioAceitoPeloServidor => etapa == 'FINAL_ACEITO';
+
+  /// Nao ha recibo de entrega ao telefone neste protocolo.
+  bool get envioConfirmado => false;
 
   /// A tarefa terminou; o envio opcional pode ter sido pulado.
   bool get concluido => estado == 'CONCLUIDO';
@@ -375,7 +378,10 @@ class ProgressoJob {
       case 'WHATSAPP':
         return 'ENVIANDO WHATSAPP';
       case 'FINAL':
-        return 'ENVIADO';
+      case 'FINAL_INCERTO':
+        return 'PRONTO (ENVIO INCERTO)';
+      case 'FINAL_ACEITO':
+        return 'ACEITO PELO WHATSAPP';
       case 'FINAL_SEM_ENVIO':
         return 'PRONTO (SEM ENVIO)';
       default:

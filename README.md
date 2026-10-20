@@ -48,6 +48,10 @@ sem ela, o PDF nao e enviado. O sistema distingue tentativa, aceite pelo servido
 e falha. Aceite pelo servidor ainda nao comprova entrega no telefone. Um estudo
 pronto pode ser reenviado a outros numeros pelo painel, usando o PDF existente.
 
+O codigo do aplicativo Android tambem distingue aceite e envio incerto na
+barra de progresso. O APK instalado so recebera esse texto quando um novo
+APK for gerado a pedido do usuario.
+
 O mapa mental e opcional: marque a caixa em CONFIG e escreva as instrucoes no
 campo proprio. O NotebookLM gera um mapa do mesmo estudo; o painel permite
 visualizar a arvore e baixar seu JSON. O desligamento automatico do Windows

@@ -303,17 +303,41 @@ void main() {
       expect(pj.tomEtapa, 'ativo');
     });
 
-    test('etapa FINAL = envio confirmado (100%)', () {
+    test('etapa FINAL legada nao comprova entrega (100%)', () {
       final pj = ProgressoJob.fromJson(const {
         'job_id': 'done',
         'etapa': 'FINAL',
         'percentual': 100,
         'estado': 'CONCLUIDO',
       });
-      expect(pj.envioConfirmado, isTrue);
+      expect(pj.envioConfirmado, isFalse);
+      expect(pj.envioAceitoPeloServidor, isFalse);
       expect(pj.concluido, isTrue);
-      expect(pj.rotuloEtapa, 'ENVIADO');
+      expect(pj.rotuloEtapa, 'PRONTO (ENVIO INCERTO)');
       expect(pj.tomEtapa, 'concluido');
+    });
+
+    test('aceite pelo servidor nao e recibo de entrega ao telefone', () {
+      final pj = ProgressoJob.fromJson(const {
+        'job_id': 'accepted',
+        'etapa': 'FINAL_ACEITO',
+        'percentual': 100,
+        'estado': 'CONCLUIDO',
+      });
+      expect(pj.envioAceitoPeloServidor, isTrue);
+      expect(pj.envioConfirmado, isFalse);
+      expect(pj.rotuloEtapa, 'ACEITO PELO WHATSAPP');
+    });
+
+    test('etapa final incerta conserva aviso de reenvio', () {
+      final pj = ProgressoJob.fromJson(const {
+        'job_id': 'uncertain',
+        'etapa': 'FINAL_INCERTO',
+        'percentual': 100,
+        'estado': 'CONCLUIDO',
+      });
+      expect(pj.envioAceitoPeloServidor, isFalse);
+      expect(pj.rotuloEtapa, 'PRONTO (ENVIO INCERTO)');
     });
 
     test('etapa FINAL_SEM_ENVIO = tarefa concluida sem fingir envio', () {
@@ -384,7 +408,9 @@ void main() {
         'ESTUDO': 'GERANDO ESTUDO',
         'PDF': 'CONVERTENDO PDF',
         'WHATSAPP': 'ENVIANDO WHATSAPP',
-        'FINAL': 'ENVIADO',
+        'FINAL': 'PRONTO (ENVIO INCERTO)',
+        'FINAL_INCERTO': 'PRONTO (ENVIO INCERTO)',
+        'FINAL_ACEITO': 'ACEITO PELO WHATSAPP',
         'FINAL_SEM_ENVIO': 'PRONTO (SEM ENVIO)',
       };
       etapas.forEach((k, v) {

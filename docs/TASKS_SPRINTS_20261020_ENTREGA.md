@@ -34,8 +34,19 @@ Data: 20/10/2026. Escopo: codigo do PC e painel web. Nenhum APK, instalador ou p
 - [x] Gerar mapa no mesmo notebook, salvar JSON por estudo e expor visualizacao/arquivo no painel.
 - [x] Integrar erros, progresso, documentacao e testes isolados.
 
+## Sprint 5 — integracao no laboratorio
+
+- [x] Reiniciar gravador e agente apenas depois de confirmar estado IDLE, zero
+  uploads/estudos/reenvios pendentes e desligamento desativado.
+- [x] Corrigir reconhecimento do mesmo servico aberto com `pythonw.exe` e
+  consultado pelo inicializador `python.exe`; impedir subida duplicada.
+- [x] Ajustar os rotulos do progresso Flutter para `FINAL` legado,
+  `FINAL_INCERTO` e `FINAL_ACEITO`, sem afirmar entrega ao telefone.
+- [x] Conferir painel/rotas, WhatsApp por `--status`, agente MQTT, suite Python
+  completa e teste de protocolo Flutter, sem gerar APK nem disparar mensagem.
+
 ## Aceite final
 
-- Testes automatizados e checagem no laboratorio, sem envio real ou desligamento real: suite Python completa passou; sessao WhatsApp real foi verificada com `--status` sem enviar mensagem.
+- Testes automatizados e checagem no laboratorio, sem envio real ou desligamento real: suite Python completa passou; a API confirmou a sessao WhatsApp real com `--status`, MQTT conectado e painel atualizado.
 - README e contexto atualizados; commit e push ao fim de cada sprint.
 - Validacao de envio, mapa NotebookLM e desligamento reais no PC de destino depende de acesso a esse PC.

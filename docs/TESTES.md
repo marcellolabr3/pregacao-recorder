@@ -13,6 +13,13 @@
 - O outro PC e o SSD nao estavam acessiveis: causa exata do envio anterior,
   recebimento real, mapa real e desligamento real continuam para aceite no destino.
 - Nenhum APK, pacote, instalador ou atualizador foi gerado neste ciclo.
+- Integracao em servicos reais do laboratorio: estado `IDLE`, zero filas
+  pendentes; gravador e agente reiniciados e reconhecidos na segunda chamada do
+  launcher. GET do painel/config/estudos/desligamento respondeu com campos novos;
+  POST `/api/whatsapp/check` confirmou conexao sem envio; MQTT conectado.
+  Depois do ajuste de `pythonw.exe`, a suite Python completa passou novamente.
+- `flutter test --no-pub test/protocolo_test.dart`: 37 testes passaram apos a
+  correcao dos rotulos de aceite/envio incerto; nenhuma compilacao de APK.
 
 ## Suite Python
 

@@ -149,6 +149,19 @@ def test_pid_do_servico_do_launcher_e_reconhecido(tmp_path, monkeypatch, compone
     assert launcher.running_pid(pidfile, component, tmp_path, tmp_path) == 12345
 
 
+@pytest.mark.skipif(launcher.os.name != "nt", reason="executavel sem console do Windows")
+@pytest.mark.parametrize("component", ["gravador", "agente"])
+def test_pid_do_pythonw_e_reconhecido_pelo_python_console(tmp_path, monkeypatch, component):
+    pidfile = tmp_path / "processo.pid"
+    pidfile.write_text("12345", encoding="utf-8")
+    base = Path(getattr(launcher.sys, "_base_executable", None) or launcher.sys.executable)
+    pythonw = base.with_name("pythonw.exe")
+    monkeypatch.setattr(launcher, "process_command", lambda _: [
+        str(pythonw), "-B", "-m", "app.launcher", "--service", component,
+        "--service-root", str(tmp_path), "--service-home", str(tmp_path)])
+    assert launcher.running_pid(pidfile, component, tmp_path, tmp_path) == 12345
+
+
 @pytest.mark.parametrize("component", ["gravador", "agente"])
 def test_pid_legado_do_launcher_nao_e_reutilizado(tmp_path, monkeypatch, component):
     pidfile = tmp_path / "processo.pid"
