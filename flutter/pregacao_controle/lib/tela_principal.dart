@@ -460,6 +460,8 @@ class _TelaPrincipalState extends State<TelaPrincipal>
           const SizedBox(height: 6),
           Row(
             children: [
+              Text('${pj.percentual}%  ',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
               Expanded(
                 child: Text(
                   pj.descricao.isNotEmpty ? pj.descricao : pj.rotuloEtapa,
@@ -485,7 +487,7 @@ class _TelaPrincipalState extends State<TelaPrincipal>
   Color _corProgresso(ProgressoJob pj) {
     if (pj.falhou) return Colors.red;
     if (pj.emEspera) return Colors.orange;
-    if (pj.envioConfirmado) return Colors.green;
+    if (pj.concluido) return Colors.green;
     return Colors.blue;
   }
 }

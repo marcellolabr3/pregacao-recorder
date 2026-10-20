@@ -697,8 +697,9 @@ def _vigia_loop() -> None:
 # Marca-se somente o que foi CONCLUIDO e com prova: os marcos 1-3 vem da
 # gravacao no banco (ended_at, final_bytes, drive_file_id) e os marcos
 # 4-7 das linhas "=== N." que o proprio pipeline imprime (flush por
-# passo) no log de handoff. 100% exige WhatsApp confirmado (codigo 0 do
-# pipeline com o passo 8 executado - nunca estimativa de tempo).
+# passo) no log de handoff. Um job CONCLUIDO representa 100% da tarefa,
+# inclusive quando uma etapa opcional foi pulada. O envio so e marcado
+# como realizado se houve prova no pipeline.
 _MARCOS_PIPELINE = {
     "PRE-FLIGHT": 0,
     "NOTEBOOKLM": 0,
@@ -748,6 +749,12 @@ def _percentual(marcos: int) -> int:
     return round(100 * max(0, min(7, marcos)) / 7)
 
 
+def _percentual_job(job: Dict[str, Any], etapa: Optional[str] = None) -> int:
+    if str(job.get("estado") or "") == "CONCLUIDO":
+        return 100
+    return _percentual(_marcos_concluidos(job, etapa))
+
+
 def _seq() -> int:
     """Sequencia de progresso sempre crescente.
 
@@ -784,7 +791,7 @@ def _publicar_job(
         "recording_id": job.get("recording_id"),
         "estado": estado or str(job.get("estado") or ""),
         "etapa": etapa,
-        "percentual": _percentual(_marcos_concluidos(job, etapa)),
+        "percentual": _percentual_job(dict(job, estado=estado or job.get("estado")), etapa),
         "descricao": descricao or _DESCRICOES.get(etapa, etapa),
         "motivo": str(job.get("motivo") or ""),
         "seq": _seq(),
@@ -845,7 +852,7 @@ def _job_publico() -> Optional[Dict[str, Any]]:
         "recording_id": j.get("recording_id"),
         "estado": j.get("estado"),
         "etapa": etapa,
-        "percentual": _percentual(_marcos_concluidos(j)),
+        "percentual": _percentual_job(j),
         "descricao": _DESCRICOES.get(etapa, ""),
         "motivo": j.get("motivo") or "",
         "erro": j.get("erro") or "",
@@ -861,7 +868,8 @@ def barra() -> Dict[str, Any]:
     -> PDF -> WHATSAPP para o painel e para o celular (S3).
 
     Cada passo so aparece concluido com prova no banco; percentual
-    avanca somente por marco concluido; 100% exige WhatsApp confirmado.
+    avanca somente por marco concluido enquanto o job roda; ao concluir a
+    tarefa, chega a 100% mesmo se uma integracao opcional foi pulada.
     Passo ativo herda o tom do job: azul em execucao, amarelo em espera
     (sessao/rede), vermelho em erro. Sem nada a mostrar, "mostrar" e
     False e a interface esconde a barra.
@@ -896,7 +904,10 @@ def barra() -> Dict[str, Any]:
         (job and job.get("drive_file_id"))
         or (sess and sess.get("drive_file_id"))
     )
-    _add("DRIVE", drive_ok, ativo=bool(sess and mp3_ok and not drive_ok))
+    drive_pulado = bool(job and job.get("estado") == "CONCLUIDO" and not drive_ok)
+    _add("DRIVE (PULADO)" if drive_pulado else "DRIVE", drive_ok,
+         ativo=bool(sess and mp3_ok and not drive_ok and not drive_pulado),
+         tom="pulado" if drive_pulado else None)
 
     etapa_job = str((job or {}).get("etapa") or "")
     estado_job = str((job or {}).get("estado") or "")
@@ -909,7 +920,9 @@ def barra() -> Dict[str, Any]:
     for nome, idx in (("NOTEBOOKLM", 0), ("ESTUDO", 1), ("PDF", 2), ("WHATSAPP", 3)):
         concluido = concluidos_pipeline > idx
         ativo = bool(job) and concluidos_pipeline == idx and tom_ativo is not None
-        _add(nome, concluido, ativo=ativo, tom=tom_ativo if ativo else None)
+        pulado = nome == "WHATSAPP" and etapa_job == "FINAL_SEM_ENVIO"
+        _add(nome + " (PULADO)" if pulado else nome, concluido, ativo=ativo,
+             tom="pulado" if pulado else (tom_ativo if ativo else None))
 
     if estado_job == "ERRO":
         descricao = "Erro no estudo: " + str(
@@ -935,7 +948,7 @@ def barra() -> Dict[str, Any]:
     )
     return {
         "mostrar": True,
-        "percentual": _percentual(marcos),
+        "percentual": _percentual_job(job) if job else _percentual(marcos),
         "descricao": descricao,
         "estado": estado_job or ("RECORDING" if gravando else "COMPLETED"),
         "job_id": (job or {}).get("job_id"),
@@ -1182,9 +1195,8 @@ def _rodar_pipeline(job: Dict[str, Any], python: str, alvo: Path) -> None:
             codigo = proc.wait()
 
     if codigo == 0:
-        # 100% so com WhatsApp confirmado: o passo 8 ("Enviando PDF")
-        # foi visto no log. Sem numero configurado o pipeline pula o
-        # envio e o job conclui honestamente em 6/7 - nunca finge envio
+        # A tarefa concluida chega a 100%; o passo de envio so e marcado
+        # como realizado se o pipeline realmente tentou o WhatsApp.
         enviado = bool(visto["envio"]) and not bool(visto["pulado"])
         etapa_final = "FINAL" if enviado else "FINAL_SEM_ENVIO"
         db.job_concluir(job_id, resultado=str(arquivo_log), etapa=etapa_final)

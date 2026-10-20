@@ -476,9 +476,10 @@
     if (!b || !b.mostrar) { card.classList.add("hidden"); return; }
     card.classList.remove("hidden");
     var bar = $("progressoBar");
-    if (bar) bar.style.width = Math.max(0, Math.min(100, b.percentual || 0)) + "%";
+    var pct = Math.max(0, Math.min(100, Number(b.percentual) || 0));
+    if (bar) bar.style.width = pct + "%";
     var desc = $("progressoDesc");
-    if (desc) desc.textContent = b.descricao || "";
+    if (desc) desc.textContent = pct + "% - " + (b.descricao || "");
     var et = $("progressoEtapas");
     if (et) {
       et.innerHTML = "";

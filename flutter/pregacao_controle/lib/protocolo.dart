@@ -287,7 +287,8 @@ class EventoSistema {
 /// Progresso do estudo por job (topic "jobs", retido).
 /// O painel/APK so avanca a barra com marco REAL concluido (S3):
 /// GRAVACAO -> MP3 -> DRIVE -> NOTEBOOKLM -> ESTUDO -> PDF -> WHATSAPP.
-/// Percentual = marcos_concluidos / 7 * 100; 100% so com WhatsApp confirmado.
+/// Durante o trabalho, percentual acompanha marcos concluidos. Ao terminar,
+/// 100% representa a tarefa concluida; envio opcional pulado fica identificado.
 class ProgressoJob {
   final String jobId;
   final String recordingId;
@@ -332,6 +333,9 @@ class ProgressoJob {
 
   /// Se o envio por WhatsApp foi confirmado (etapa FINAL = 100%).
   bool get envioConfirmado => etapa == 'FINAL';
+
+  /// A tarefa terminou; o envio opcional pode ter sido pulado.
+  bool get concluido => estado == 'CONCLUIDO';
 
   /// Se o estudo esta em espera (sessao/rede) - passo ativo amarelo.
   bool get emEspera => estado == 'AGUARDANDO_INTERVENCAO';

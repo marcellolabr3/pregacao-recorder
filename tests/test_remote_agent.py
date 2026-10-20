@@ -830,6 +830,52 @@ def test_job_progress_republica_no_topic_retido():
     assert dados["percentual"] == 57
 
 
+def test_reconexao_corrige_job_retido_com_estado_final_do_banco():
+    job = {
+        "job_id": "j1", "recording_id": "r1", "estado": "CONCLUIDO",
+        "etapa": "FINAL_SEM_ENVIO", "percentual": 100,
+        "descricao": "Estudo pronto (envio pulado)", "motivo": "",
+    }
+    agent, client, _ = make_agent(api=FakeApi(snapshot=base_snapshot(estudos={"job": job})))
+    agent._on_connect(client, None, None, 0)
+    jobs = [item for item in client.published if item["topic"].endswith("/jobs")]
+    assert len(jobs) == 1
+    assert jobs[0]["retain"] is True
+    assert json.loads(jobs[0]["payload"])["percentual"] == 100
+    assert json.loads(jobs[0]["payload"])["etapa"] == "FINAL_SEM_ENVIO"
+
+    # Um marco antigo em fila apos reconectar nao pode regredir o retido.
+    ultimo = json.loads(jobs[0]["payload"])
+    assert ultimo["seq"] > 0
+    agent._publica_job({
+        "job_id": "j1", "estado": "EXECUTANDO", "etapa": "PDF",
+        "percentual": 86, "seq": ultimo["seq"] - 1,
+    })
+    assert len([item for item in client.published
+                if item["topic"].endswith("/jobs")]) == 1
+
+
+def test_snapshot_nao_e_descartado_se_seq_em_memoria_estiver_adiantada():
+    job = {"job_id": "j1", "estado": "CONCLUIDO", "etapa": "FINAL", "percentual": 100}
+    agent, client, _ = make_agent(api=FakeApi(snapshot=base_snapshot(estudos={"job": job})))
+    agent._job_visto = "j1"
+    adiantada = int(time.time() * 1000) + 10000
+    agent._job_seq = adiantada
+    assert agent.publish_job_snapshot() is True
+    recebido = json.loads(client.published[-1]["payload"])
+    assert recebido["seq"] > adiantada
+    assert recebido["percentual"] == 100
+
+
+def test_reconexao_limpa_job_retido_quando_banco_esta_vazio():
+    agent, client, _ = make_agent(api=FakeApi(snapshot=base_snapshot(estudos={"job": None})))
+    agent._on_connect(client, None, None, 0)
+    jobs = [item for item in client.published if item["topic"].endswith("/jobs")]
+    assert len(jobs) == 1
+    assert jobs[0]["retain"] is True
+    assert jobs[0]["payload"] == ""
+
+
 def test_job_progress_descarta_sequencia_antiga_mesmo_job():
     """Seq antiga do mesmo job e descartada (guarda)."""
     api = FakeApi(snapshot=base_snapshot())

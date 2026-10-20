@@ -283,18 +283,21 @@ void main() {
         'estado': 'CONCLUIDO',
       });
       expect(pj.envioConfirmado, isTrue);
+      expect(pj.concluido, isTrue);
       expect(pj.rotuloEtapa, 'ENVIADO');
       expect(pj.tomEtapa, 'concluido');
     });
 
-    test('etapa FINAL_SEM_ENVIO = 86% honesto (WhatsApp nao configurado)', () {
+    test('etapa FINAL_SEM_ENVIO = tarefa concluida sem fingir envio', () {
       final pj = ProgressoJob.fromJson(const {
         'job_id': 'sem_envio',
         'etapa': 'FINAL_SEM_ENVIO',
-        'percentual': 86,
+        'percentual': 100,
         'estado': 'CONCLUIDO',
       });
       expect(pj.envioConfirmado, isFalse);
+      expect(pj.concluido, isTrue);
+      expect(pj.percentual, 100);
       expect(pj.rotuloEtapa, 'PRONTO (SEM ENVIO)');
       expect(pj.tomEtapa, 'concluido');
     });

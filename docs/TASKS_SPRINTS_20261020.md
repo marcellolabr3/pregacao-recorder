@@ -21,18 +21,20 @@ gravacoes ou perfil NotebookLM no Git.
   Isto e forte indicio de disputa de sessao, mas a causa remota exata ainda
   requer o evento `client_disconnected` do broker ou confirmacao do APK.
   Referencia: [eventos de conexao/desconexao do EMQX](https://docs.emqx.com/en/cloud/latest/best_practices/connection_disconnection_event_topic.html).
-- [x] S1.3 Solicitar ao usuario confirmacao se o APK estabilizou apos encerrar
-  a copia deste PC e registrar o local atual do SSD. A unidade `E:` saiu deste
-  PC; a resposta e o aceite entram na sprint 5.
+- [x] S1.3 O usuario confirmou que o APK estabilizou apos encerrar o agente
+  deste PC. O SSD esta em outro PC; este repositorio e o laboratorio e precisa
+  de identidade MQTT propria para nao derrubar a sessao da instalacao real.
 
 ## Sprint 2 - progresso da tarefa
 
-- [ ] S2.1 Fazer `CONCLUIDO` representar 100% da tarefa mesmo quando Drive ou
+- [x] S2.1 Fazer `CONCLUIDO` representar 100% da tarefa mesmo quando Drive ou
   WhatsApp opcionais foram pulados. Manter passos nao executados identificados
   como pulados; nao dizer que houve envio.
-- [ ] S2.2 Alinhar painel, evento MQTT retido e APK com o mesmo estado final;
+- [x] S2.2 Alinhar painel, evento MQTT retido e APK com o mesmo estado final;
   cobrir conclusao com e sem envio, espera, erro e reinicio.
-- [ ] S2.3 Rodar testes relevantes e commitar a sprint.
+- [x] S2.3 Suite Python relevante aprovada (159 testes), protocolo Flutter
+  aprovado (34 testes), `flutter analyze` sem problemas, `node --check` e
+  `git diff --check` aprovados. Commit da sprint realizado.
 
 ## Sprint 3 - programacao visivel no PC e no APK
 

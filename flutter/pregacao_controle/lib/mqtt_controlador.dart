@@ -356,6 +356,11 @@ class MqttControlador extends ChangeNotifier {
             _aoEvento(EventoSistema.fromJson(dados));
           }
         } else if (topico == topicos.jobs) {
+          if (texto.isEmpty) {
+            _ultimoProgresso = null;
+            notifyListeners();
+            continue;
+          }
           // S3: progresso do estudo por job (payload ja e o payload do
           // job_progress - o agente repassa o que o app emite via SSE).
           final dados = jsonDecode(texto);

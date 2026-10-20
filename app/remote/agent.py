@@ -573,6 +573,7 @@ class RemoteAgent:
         client.subscribe(self.topics["cmd"], qos=1)
         self._publish(self.topics["avail"], ONLINE, retain=True)
         self.publish_state(force=True)
+        self.publish_job_snapshot()
 
     def _on_disconnect(self, client: Any, userdata: Any, *args: Any) -> None:
         # paho v1: (client, userdata, rc)
@@ -652,6 +653,34 @@ class RemoteAgent:
             self._job_visto = job_id
             self._job_seq = seq
         return self._publish(self.topics["jobs"], payload, retain=True)
+
+    def publish_job_snapshot(self) -> bool:
+        """Sincroniza o ultimo job retido ao reconectar o agente.
+
+        O evento SSE final pode ter sido perdido durante uma queda ou uma
+        atualizacao. O banco, via API local, e a fonte de verdade do progresso.
+        """
+        status_code, snapshot = self.api.status()
+        if status_code != 200 or not isinstance(snapshot, dict):
+            return False
+        job = ((snapshot.get("estudos") or {}).get("job") or {})
+        if not job.get("job_id"):
+            self._job_visto = None
+            self._job_seq = 0
+            return self._publish(self.topics["jobs"], "", retain=True)
+        payload = {
+            key: job.get(key)
+            for key in ("job_id", "recording_id", "estado", "etapa",
+                        "percentual", "descricao", "motivo")
+        }
+        # Eventos SSE que ficaram na fila antes deste snapshot nao podem
+        # substituir no broker o estado final que acaba de vir do banco.
+        agora = time.time()
+        seq = int(agora * 1000)
+        if job["job_id"] == self._job_visto:
+            seq = max(seq, self._job_seq + 1)
+        payload.update(seq=seq, ts=agora)
+        return self._publica_job(payload)
 
     # ------------------------------------------------------------------
     # estado

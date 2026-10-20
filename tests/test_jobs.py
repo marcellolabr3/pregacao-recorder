@@ -450,7 +450,7 @@ def test_barra_pinta_espera_e_erro_com_o_tom_do_job(monkeypatch, tmp_path):
     assert "codigo 1" in b["descricao"]
 
 
-def test_percentual_cem_somente_com_whatsapp_provado(monkeypatch, tmp_path):
+def test_tarefa_concluida_chega_a_cem_sem_fingir_envio(monkeypatch, tmp_path):
     banco = estudos.db
     banco.create_session(
         {"id": "s1", "started_at": time.time(), "state": "COMPLETED"}
@@ -469,9 +469,9 @@ def test_percentual_cem_somente_com_whatsapp_provado(monkeypatch, tmp_path):
 
     banco.job_concluir(job["job_id"], etapa="FINAL")
     job = banco.get_job(job["job_id"])
-    assert estudos._percentual(estudos._marcos_concluidos(job)) == 100
+    assert estudos._percentual_job(job) == 100
 
-    # concluiu SEM numero para enviar: 6 de 7, nunca 100%
+    # O envio foi pulado, mas a tarefa concluida deve indicar 100%.
     banco.create_session(
         {"id": "s2", "started_at": time.time(), "state": "COMPLETED"}
     )
@@ -487,6 +487,24 @@ def test_percentual_cem_somente_com_whatsapp_provado(monkeypatch, tmp_path):
     banco.job_concluir(job2["job_id"], etapa="FINAL_SEM_ENVIO")
     job2 = banco.get_job(job2["job_id"])
     assert estudos._percentual(estudos._marcos_concluidos(job2)) == 86
+    assert estudos._percentual_job(job2) == 100
+    assert estudos._job_publico()["percentual"] == 100
+    barra = estudos.barra()
+    assert barra["percentual"] == 100
+    assert barra["descricao"].startswith("Estudo pronto")
+    assert barra["etapas"][-1]["nome"] == "WHATSAPP (PULADO)"
+    assert barra["etapas"][-1]["tom"] == "pulado"
+
+
+def test_evento_final_sem_envio_publica_cem(monkeypatch, tmp_path):
+    capturas = []
+    monkeypatch.setattr(estudos, "notify", lambda *a, **k: capturas.append(k["payload"]))
+    estudos._publicar_job(
+        {"job_id": "j1", "estado": "CONCLUIDO", "etapa": "FINAL_SEM_ENVIO"},
+        "FINAL_SEM_ENVIO",
+    )
+    assert capturas[0]["percentual"] == 100
+    assert capturas[0]["etapa"] == "FINAL_SEM_ENVIO"
 
 
 def test_drenagem_so_emite_o_que_ja_foi_escrito(monkeypatch, tmp_path):
