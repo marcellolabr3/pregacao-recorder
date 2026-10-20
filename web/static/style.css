@@ -173,12 +173,18 @@ body{
 /* ---------- formulario ---------- */
 .stack{display:flex;flex-direction:column;gap:12px;margin:16px}
 label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:10px;font-weight:600}
-input[type=text],input[type=number],input[type=password],select{
+input[type=text],input[type=number],input[type=password],select,textarea{
   width:100%;margin-top:5px;background:#0b0f14;color:var(--txt);
   border:1px solid var(--line);border-radius:9px;padding:12px;font-size:1rem;
   font-family:inherit;
 }
-input:focus,select:focus{outline:none;border-color:var(--blue)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue)}
+textarea{resize:vertical;min-height:70px;font-family:inherit}
+.mindmap-tree{max-height:520px;overflow:auto;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px}
+.mindmap-tree ul{list-style:none;margin:4px 0 4px 12px;padding-left:14px;border-left:2px solid var(--line)}
+.mindmap-tree li{margin:6px 0;padding-left:2px;color:var(--txt)}
+.mindmap-tree li>span{display:inline-block;background:rgba(56,139,253,.13);border:1px solid rgba(56,139,253,.38);border-radius:8px;padding:5px 9px}
+.mindmap-tree>ul>li>span{font-weight:800;color:var(--green2);border-color:var(--green2)}
 .row{display:flex;gap:10px}
 .row label{flex:1}
 .check{display:flex;align-items:center;gap:10px;color:var(--txt);font-size:.92rem}

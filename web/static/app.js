@@ -782,6 +782,8 @@
       // usuario comum recebe "estudos" no topo; admin traz dentro de config
       var est = data.estudos || c.estudos || {};
       $("configForm").elements["estudos.ativo"].checked = est.ativo !== false;
+      $("configForm").elements["estudos.mind_map_enabled"].checked = !!est.mind_map_enabled;
+      $("configForm").elements["estudos.mind_map_prompt"].value = est.mind_map_prompt || "";
       $("configForm").elements["estudos.whatsapp"].value = (est.whatsapp || "").replace(/[,;\s]+/g, "\n").trim();
       waSaved = (est.whatsapp || "").split(/[,;\s]+/).filter(Boolean);
       $("cfgWaDestinos").textContent = waSaved.length
@@ -1117,6 +1119,8 @@
     var payload = {
       "device_name": form.elements["device_name"].value,
       "estudos.ativo": form.elements["estudos.ativo"].checked,
+      "estudos.mind_map_enabled": form.elements["estudos.mind_map_enabled"].checked,
+      "estudos.mind_map_prompt": form.elements["estudos.mind_map_prompt"].value.trim(),
       "estudos.whatsapp": form.elements["estudos.whatsapp"].value.trim(),
       "power.shutdown_after_tasks": form.elements["power.shutdown_after_tasks"].checked,
       "power.shutdown_delay_minutes": Number(form.elements["power.shutdown_delay_minutes"].value)
@@ -1170,7 +1174,44 @@
       $("cfgWaResendStatus").textContent = found && found.sends.length
         ? found.sends.map(function (s) { return "+" + s.recipient + ": " + s.status.replace(/_/g, " "); }).join(" | ")
         : "O reenvio usa o PDF existente e nao refaz o estudo.";
+      var hasMap = !!(found && found.mind_map_available);
+      $("btnMapOpen").disabled = !hasMap;
+      $("btnMapDownload").classList.toggle("hidden", !hasMap);
+      if (hasMap) {
+        $("btnMapDownload").href = "/api/estudos/jobs/" + encodeURIComponent(found.job_id) + "/mapa?download=1";
+      }
+      $("cfgMapStatus").textContent = hasMap ? "Mapa pronto para visualizar ou baixar."
+        : found && found.mind_map_error ? "Falha ao gerar mapa: " + found.mind_map_error
+        : "Este estudo ainda nao tem mapa mental.";
     }).catch(function (e) { $("cfgWaResendStatus").textContent = e.message; });
+  }
+
+  function renderMindMap(data) {
+    var root = data && (data.mind_map || data);
+    var viewer = $("cfgMapViewer");
+    viewer.innerHTML = "";
+    var count = 0;
+    function branch(node, depth) {
+      if (count++ > 500 || depth > 20) return null;
+      var li = document.createElement("li");
+      var label = document.createElement("span");
+      label.textContent = typeof node === "string" ? node :
+        String((node && (node.name || node.title || node.label || node.text)) || "Tema");
+      li.appendChild(label);
+      var children = node && (node.children || node.nodes || node.items);
+      if (Array.isArray(children) && children.length) {
+        var ul = document.createElement("ul");
+        children.forEach(function (item) { var child = branch(item, depth + 1); if (child) ul.appendChild(child); });
+        li.appendChild(ul);
+      }
+      return li;
+    }
+    var tree = document.createElement("ul");
+    (Array.isArray(root) ? root : [root]).forEach(function (item) {
+      var child = branch(item, 0); if (child) tree.appendChild(child);
+    });
+    viewer.appendChild(tree);
+    viewer.classList.remove("hidden");
   }
 
   function paintPower(p) {
@@ -1402,6 +1443,13 @@
           loadWaStudies();
         }).catch(function (e) { toast(e.message, "error"); });
     });
+    $("btnMapOpen").addEventListener("click", function () {
+      var id = $("cfgWaStudy").value;
+      if (!id) return;
+      api("/api/estudos/jobs/" + encodeURIComponent(id) + "/mapa")
+        .then(renderMindMap)
+        .catch(function (e) { $("cfgMapStatus").textContent = e.message; });
+    });
     $("btnPowerArm").addEventListener("click", function () {
       api("/api/power/arm", "POST").then(paintPower)
         .catch(function (e) { toast(e.message, "error"); });
@@ -1410,7 +1458,10 @@
       api("/api/power/cancel", "POST").then(paintPower)
         .catch(function (e) { toast(e.message, "error"); });
     });
-    $("cfgWaStudy").addEventListener("change", loadWaStudies);
+    $("cfgWaStudy").addEventListener("change", function () {
+      $("cfgMapViewer").classList.add("hidden");
+      loadWaStudies();
+    });
     setInterval(function () {
       if (authed && document.body.dataset.view === "config") { loadWaStatus(); loadWaStudies(); loadPowerStatus(); }
     }, 5000);

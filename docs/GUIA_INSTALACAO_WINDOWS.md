@@ -47,16 +47,26 @@ pois os nomes e letras das unidades podem mudar.
 2. **NotebookLM:** em CONFIG, use **RENOVAR LOGIN** e conclua o login no navegador
    aberto no proprio PC. Depois use **DIAGNOSTICAR SESSAO**. Essa sessao e
    separada da autorizacao do Drive; aguarde finalizar antes de iniciar estudos.
-3. **WhatsApp:** confira o **Numero do WhatsApp (com DDI)** em CONFIG antes de
-   ativar o estudo automatico. Execute **Conectar WhatsApp.cmd** na pasta instalada;
-   esse comando apenas conecta, sem enviar arquivo. No telefone use **Aparelhos
-   conectados > Conectar aparelho** e leia o QR aberto no PC. Aguarde confirmar
-   a conexao e feche a janela antes de gerar estudos.
-   Nao copie cookies/perfis nem `whatsapp/auth` do
-   PC anterior. Confira a conexao e o destinatario antes do primeiro envio real.
+3. **WhatsApp:** em CONFIG, informe os numeros com DDI e DDD (um por linha),
+   salve e confira **DESTINOS SALVOS**. Clique **CONECTAR WHATSAPP (QR)**. No
+   telefone use **Aparelhos conectados > Conectar aparelho** e leia o QR
+   exibido no painel. Clique **VERIFICAR CONEXAO** antes de gerar estudos.
+   **Conectar WhatsApp.cmd** continua disponivel como alternativa local. Cada
+   instalacao tem sua propria sessao; no PC novo, conecte novamente. Nao copie
+   cookies/perfis nem `whatsapp/auth` do PC anterior.
+4. **Mapa mental:** marque **Gerar tambem um mapa mental** e escreva as
+   instrucoes no campo em CONFIG. Apos o estudo, selecione-o em CONFIG para
+   visualizar a arvore e baixar o arquivo JSON.
+5. **Desligamento:** a opcao vem desativada. Em CONFIG, marque o desligamento,
+   escolha o atraso em minutos e salve. O monitor espera gravacao, uploads,
+   estudos e reenvios terminarem. **ARMAR PARA AS TAREFAS ATUAIS** inicia a
+   contagem mesmo se o PC ja estiver ocioso; **CANCELAR CONTAGEM** cancela o
+   ciclo atual. Uma nova tarefa reinicia o prazo.
 
-As filas atuais fazem upload e estudo separadamente. Um indicador local de
-saude nao comprova um envio; confirme arquivo/PDF e recebimento no teste final.
+As filas atuais fazem upload e estudo separadamente. **Aceito pelo servidor**
+significa que o WhatsApp devolveu um ID de mensagem, sem confirmar a entrega
+ao telefone. O painel permite reenviar o PDF pronto a outros numeros sem
+recriar o estudo. Confira o recebimento antes de repetir um envio incerto.
 
 ## PINs e configuracao privada
 

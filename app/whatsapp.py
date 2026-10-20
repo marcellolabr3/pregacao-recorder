@@ -17,7 +17,7 @@ from .logging_setup import get
 log = get("whatsapp")
 operation_lock = threading.RLock()
 _state_lock = threading.Lock()
-_state: dict[str, Any] = {"busy": False, "action": "", "result": "", "detail": ""}
+_state: dict[str, Any] = {"busy": False, "action": "", "result": "", "detail": "", "home": ""}
 
 
 def parse_numbers(raw: str) -> list[str]:
@@ -81,12 +81,12 @@ def status() -> dict[str, Any]:
     qr = bool(qr_files and time.time() - qr_files[-1].stat().st_mtime < 180)
     credentials = (folder / "whatsapp" / "auth" / "creds.json").is_file()
     return {
-        **state,
+        **{key: value for key, value in state.items() if key != "home"},
         "configured": (pipeline_dir() / "whatsapp" / "send.js").is_file(),
         "session_saved": credentials,
         "qr_ready": qr and state["busy"] and state["action"] == "login",
         "recipients": recipients(),
-        "connection": "verificada" if state["result"] == "conectado" else (
+        "connection": "verificada" if credentials and state["result"] == "conectado" and state["home"] == str(folder) else (
             "sessao_salva_nao_verificada" if credentials else "login_necessario"
         ),
     }
@@ -113,7 +113,7 @@ def start_connection(action: str) -> bool:
     with _state_lock:
         if _state["busy"]:
             return False
-        _state.update(busy=True, action=action, result="", detail="")
+        _state.update(busy=True, action=action, result="", detail="", home=str(data_dir()))
     if action == "login":
         for old in (data_dir() / "whatsapp").glob("qr_*.png"):
             try:
@@ -143,13 +143,8 @@ def _pdf_for_job(job_id: str) -> Path:
         raise ValueError("Estudo ainda nao terminou ou nao existe")
     artifact = db.study_artifact(job_id) or {}
     value = artifact.get("pdf_path")
-    if not value and job.get("resultado"):
-        try:
-            for line in Path(job["resultado"]).read_text(encoding="utf-8", errors="replace").splitlines():
-                if line.strip().startswith("PDF:"):
-                    value = line.partition(":")[2].strip()
-        except OSError:
-            pass
+    if not value:
+        value = _logged_value(job, ("ARQUIVO_PDF:", "PDF:"))
     if not value:
         raise ValueError("PDF deste estudo nao foi localizado")
     pdf = Path(value).resolve()
@@ -157,6 +152,32 @@ def _pdf_for_job(job_id: str) -> Path:
     if not pdf.is_relative_to(output) or pdf.suffix.lower() != ".pdf" or not pdf.is_file():
         raise ValueError("PDF deste estudo indisponivel nesta instalacao")
     return pdf
+
+
+def _logged_value(job: dict[str, Any], prefixes: tuple[str, ...]) -> str:
+    if not job.get("resultado"):
+        return ""
+    try:
+        for line in Path(job["resultado"]).read_text(encoding="utf-8", errors="replace").splitlines():
+            stripped = line.strip()
+            if stripped.startswith(prefixes):
+                return stripped.partition(":")[2].strip()
+    except OSError:
+        pass
+    return ""
+
+
+def mind_map_path(job_id: str) -> Path:
+    job = db.get_job(job_id)
+    artifact = db.study_artifact(job_id) or {}
+    value = artifact.get("mind_map_path") or (_logged_value(job, ("ARQUIVO_MAPA:",)) if job else "")
+    if not job or not value:
+        raise ValueError("Mapa mental deste estudo indisponivel")
+    path = Path(value).resolve()
+    output = (data_dir() / "output").resolve()
+    if not path.is_relative_to(output) or path.suffix.lower() != ".json" or not path.is_file():
+        raise ValueError("Mapa mental deste estudo indisponivel nesta instalacao")
+    return path
 
 
 def list_studies(limit: int = 20) -> list[dict[str, Any]]:
@@ -167,11 +188,19 @@ def list_studies(limit: int = 20) -> list[dict[str, Any]]:
             available = True
         except ValueError:
             available = False
+        try:
+            mind_map_path(job["job_id"])
+            map_available = True
+        except ValueError:
+            map_available = False
+        artifact = db.study_artifact(job["job_id"]) or {}
         result.append({
             "job_id": job["job_id"],
             "audio": Path(job["audio_path"]).stem,
             "estado": job["estado"], "etapa": job["etapa"],
             "created_at": job["created_at"], "pdf_available": available,
+            "mind_map_available": map_available,
+            "mind_map_error": artifact.get("mind_map_error") or _logged_value(job, ("MAPA_ERRO:",)),
             "sends": db.list_whatsapp_sends(job["job_id"]),
         })
     return result

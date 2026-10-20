@@ -30,12 +30,12 @@ Data: 20/10/2026. Escopo: codigo do PC e painel web. Nenhum APK, instalador ou p
 
 ## Sprint 4 — mapa mental opcional
 
-- [ ] CONFIG: checkbox e campo de instrucoes editavel.
-- [ ] Gerar mapa no mesmo notebook, salvar JSON por estudo e expor visualizacao/arquivo no painel.
-- [ ] Integrar erros, progresso, documentacao e testes isolados.
+- [x] CONFIG: checkbox e campo de instrucoes editavel.
+- [x] Gerar mapa no mesmo notebook, salvar JSON por estudo e expor visualizacao/arquivo no painel.
+- [x] Integrar erros, progresso, documentacao e testes isolados.
 
 ## Aceite final
 
-- Testes automatizados e checagem no laboratorio, sem envio real ou desligamento real.
-- Atualizar README e contexto; commit e push ao fim de cada sprint.
-- Validacao com WhatsApp e NotebookLM reais no PC de destino continua dependente de acesso a esse PC.
+- Testes automatizados e checagem no laboratorio, sem envio real ou desligamento real: suite Python completa passou; sessao WhatsApp real foi verificada com `--status` sem enviar mensagem.
+- README e contexto atualizados; commit e push ao fim de cada sprint.
+- Validacao de envio, mapa NotebookLM e desligamento reais no PC de destino depende de acesso a esse PC.

@@ -835,6 +835,11 @@ def _drenar_log(
             visto["envio"] = True
         elif linha.startswith("ARQUIVO_PDF:"):
             db.save_study_artifact(atual["job_id"], pdf_path=linha.partition(":")[2].strip())
+        elif linha.startswith("ARQUIVO_MAPA:"):
+            db.save_study_artifact(atual["job_id"], mind_map_path=linha.partition(":")[2].strip(), mind_map_error="")
+        elif linha.startswith("MAPA_ERRO:"):
+            db.save_study_artifact(atual["job_id"], mind_map_error=linha.partition(":")[2].strip()[:300])
+            visto["mapa_erro"] = True
         elif linha.startswith("=== 8. WhatsApp aceito pelo servidor"):
             match = re.search(r"para \+(\d+) id=(\S+)", linha)
             if match:
@@ -1137,6 +1142,14 @@ def _rodar_pipeline(job: Dict[str, Any], python: str, alvo: Path) -> None:
     numero = ",".join(whatsapp.recipients())
     if numero:
         cmd += ["--to", numero]
+    if config.get("estudos.mind_map_enabled", False):
+        cmd.append("--mind-map")
+        prompt = _cfg("mind_map_prompt")
+        if prompt:
+            cmd += ["--mind-map-prompt", prompt]
+    shown = list(cmd)
+    if "--mind-map-prompt" in shown:
+        shown[shown.index("--mind-map-prompt") + 1] = "[prompt configurado]"
 
     logs = alvo / "logs"
     logs.mkdir(parents=True, exist_ok=True)
@@ -1144,7 +1157,7 @@ def _rodar_pipeline(job: Dict[str, Any], python: str, alvo: Path) -> None:
     arquivo_log = logs / f"handoff_{selo}.log"
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
-    log.info("disparando estudo: %s", " ".join(cmd))
+    log.info("disparando estudo: %s", " ".join(shown))
     notify(
         "estudo_iniciando",
         f"Gerando estudo de {Path(caminho).name} (NotebookLM)...",
@@ -1181,10 +1194,10 @@ def _rodar_pipeline(job: Dict[str, Any], python: str, alvo: Path) -> None:
     db.update_job(job_id, **update_campos)
     job = dict(job, etapa="NOTEBOOKLM", resultado=str(arquivo_log))
     _publicar_job(job, "NOTEBOOKLM")
-    visto = {"envio": False, "pulado": False, "aceito": False}
+    visto = {"envio": False, "pulado": False, "aceito": False, "mapa_erro": False}
     pos_log = 0
     with open(arquivo_log, "w", encoding="utf-8") as fh:
-        fh.write(f"# handoff {selo}\n# cmd: {' '.join(cmd)}\n\n")
+        fh.write(f"# handoff {selo}\n# cmd: {' '.join(shown)}\n\n")
         fh.flush()
         proc = subprocess.Popen(
             cmd,
@@ -1213,19 +1226,22 @@ def _rodar_pipeline(job: Dict[str, Any], python: str, alvo: Path) -> None:
         aceito = bool(visto["aceito"])
         etapa_final = "FINAL_ACEITO" if aceito else ("FINAL_SEM_ENVIO" if visto["pulado"] else "FINAL_INCERTO")
         db.job_concluir(job_id, resultado=str(arquivo_log), etapa=etapa_final)
+        descricao_final = _DESCRICOES[etapa_final]
+        if visto["mapa_erro"]:
+            descricao_final += "; mapa mental falhou"
         _publicar_job(
             dict(job, etapa=etapa_final, estado="CONCLUIDO"),
             etapa_final,
-            descricao=_DESCRICOES[etapa_final],
+            descricao=descricao_final,
             estado="CONCLUIDO",
-            level="success" if aceito else "warning",
+            level="success" if aceito and not visto["mapa_erro"] else "warning",
         )
         log.info("estudo concluido (%s)", arquivo_log.name)
         notify(
             "estudo_pronto",
             "Estudo pronto; WhatsApp aceitou o envio (entrega ainda nao confirmada)"
-            if aceito else _DESCRICOES[etapa_final],
-            level="success" if aceito else "warning",
+            if aceito and not visto["mapa_erro"] else descricao_final,
+            level="success" if aceito and not visto["mapa_erro"] else "warning",
         )
     else:
         db.job_falhar(

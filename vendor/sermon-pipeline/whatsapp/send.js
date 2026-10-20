@@ -15,6 +15,7 @@ const fs = require("fs");
 const path = require("path");
 const { makeWASocket, useMultiFileAuthState, Browsers, DisconnectReason } = require("baileys");
 const qrcode = require("qrcode-terminal");
+const pino = require("pino");
 
 // O pacote usa pasta gravavel por usuario. Nunca distribuir auth/ ou QRs.
 const dataRoot = process.env.PREGACAO_PIPELINE_HOME
@@ -81,6 +82,7 @@ async function main() {
       auth: state,
       browser: Browsers.ubuntu("Chrome"),
       printQRInTerminal: false,
+      logger: pino({ level: "silent" }),
     });
     sock.ev.on("creds.update", saveCreds);
     sock.ev.on("connection.update", (update) => handleUpdate(update, myGen, sock));

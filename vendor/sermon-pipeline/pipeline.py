@@ -56,7 +56,10 @@ def log(msg: str) -> None:
 
 def _exec(cmd: list[str], timeout: int | None = None) -> subprocess.CompletedProcess:
     """Executa um comando, ecoando a saida em tempo real."""
-    print(f"$ {' '.join(str(c) for c in cmd)}", flush=True)
+    shown = [str(c) for c in cmd]
+    if "--instructions" in shown:
+        shown[shown.index("--instructions") + 1] = "[prompt configurado]"
+    print(f"$ {' '.join(shown)}", flush=True)
     proc = subprocess.run(
         [str(c) for c in cmd],
         cwd=ROOT,
@@ -69,7 +72,10 @@ def _exec(cmd: list[str], timeout: int | None = None) -> subprocess.CompletedPro
         creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
     )
     if proc.stdout:
-        print(proc.stdout, end="", flush=True)
+        if "mind-map" in cmd and "generate" in cmd and "--json" in cmd:
+            print("[mapa mental recebido; arvore omitida do log]", flush=True)
+        else:
+            print(proc.stdout, end="", flush=True)
     if proc.stderr:
         print(proc.stderr, end="", file=sys.stderr, flush=True)
     return proc
@@ -114,7 +120,10 @@ def run(cmd: list[str], check: bool = True, timeout: int | None = None) -> subpr
                 "ERRO: sessao do Google/NotebookLM expirou e nao foi possivel renovar sozinho. "
                 "Execute 'notebooklm login' uma vez para re-autenticar."
             )
-        raise SystemExit(f"ERRO: comando falhou (exit {proc.returncode}): {' '.join(str(c) for c in cmd)}")
+        shown = [str(c) for c in cmd]
+        if "--instructions" in shown:
+            shown[shown.index("--instructions") + 1] = "[prompt configurado]"
+        raise SystemExit(f"ERRO: comando falhou (exit {proc.returncode}): {' '.join(shown)}")
     return proc
 
 
@@ -200,6 +209,7 @@ def step_notebooklm(cfg: dict, audio: Path, title: str) -> Path:
     log("3. Criando notebook no NotebookLM")
     proc = run([*NLM, "create", title, "--use", "--json"])
     notebook_id = find_id(extract_json(proc.stdout), ("notebook_id", "id", "notebook"))
+    cfg["_notebook_id"] = notebook_id
     if notebook_id:
         print(f"   notebook: {notebook_id}")
 
@@ -289,6 +299,38 @@ print(pdf_path)
     return pdf_path
 
 
+def step_mind_map(cfg: dict, md_path: Path) -> Path:
+    """Gera e baixa o mapa EXATO deste notebook, sem selecionar o mais recente."""
+    notebook_id = cfg.get("_notebook_id")
+    if not notebook_id:
+        raise ValueError("ID do notebook indisponivel para gerar o mapa mental")
+    prompt = str(cfg.get("mind_map_prompt") or "Organize o estudo em um mapa mental em portugues, com temas, textos biblicos e aplicacoes.").strip()
+    if len(prompt) > 2000:
+        raise ValueError("Prompt do mapa mental excede 2000 caracteres")
+    log("7a. Gerando mapa mental no NotebookLM")
+    command = [*NLM, "generate", "mind-map", "--kind", "interactive",
+               "--instructions", prompt, "-n", notebook_id, "--json"]
+    if cfg.get("report_language"):
+        command += ["--language", cfg["report_language"]]
+    result = run(command, timeout=600)
+    artifact_id = find_id(extract_json(result.stdout), ("mind_map", "artifact_id", "note_id", "id"))
+    if not artifact_id:
+        raise ValueError("NotebookLM nao retornou ID do mapa mental")
+    target = md_path.with_name(md_path.stem.replace("estudo_", "mapa_", 1) + ".json")
+    run([*NLM, "download", "mind-map", target, "-a", artifact_id,
+         "-n", notebook_id, "--force"], timeout=300)
+    if not target.is_file() or target.stat().st_size == 0:
+        raise ValueError("Download do mapa mental nao produziu arquivo")
+    try:
+        tree = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("Mapa mental baixado nao e JSON valido") from exc
+    if not isinstance(tree, (dict, list)):
+        raise ValueError("Mapa mental baixado tem formato invalido")
+    print(f"ARQUIVO_MAPA:{target}", flush=True)
+    return target
+
+
 def step_whatsapp(cfg: dict, pdf_path: Path, title: str, to: str | None, skip: bool) -> None:
     raw = (to or cfg.get("whatsapp_number") or "").strip()
     if skip:
@@ -333,9 +375,13 @@ def main() -> None:
     parser.add_argument("--title", metavar="TITULO", help="titulo do notebook/mensagem")
     parser.add_argument("--skip-drive", action="store_true", help="nao enviar o audio para o Drive")
     parser.add_argument("--skip-whatsapp", action="store_true", help="nao enviar o WhatsApp")
+    parser.add_argument("--mind-map", action="store_true", help="gerar mapa mental opcional")
+    parser.add_argument("--mind-map-prompt", default="", help="instrucoes do mapa mental")
     args = parser.parse_args()
 
     cfg = load_config()
+    if args.mind_map_prompt:
+        cfg["mind_map_prompt"] = args.mind_map_prompt
 
     if args.drive:
         audio = step_download_from_drive(cfg, args.drive)
@@ -354,6 +400,12 @@ def main() -> None:
     md_path = step_notebooklm(cfg, audio, title)
     pdf_path = step_md_to_pdf(md_path)
     print(f"ARQUIVO_PDF:{pdf_path}", flush=True)
+    if args.mind_map:
+        try:
+            step_mind_map(cfg, md_path)
+        except (Exception, SystemExit) as exc:
+            # Mapa opcional nao impede o envio do estudo ja pronto.
+            print(f"MAPA_ERRO:{str(exc)[:300]}", flush=True)
 
     step_whatsapp(cfg, pdf_path, title, args.to, args.skip_whatsapp)
 

@@ -152,6 +152,8 @@ COERCE = {
     "setup.completed": bool,
     "estudos.ativo": bool,
     "estudos.whatsapp": str,
+    "estudos.mind_map_enabled": bool,
+    "estudos.mind_map_prompt": str,
     "power.shutdown_after_tasks": bool,
     "power.shutdown_delay_minutes": int,
     "estudos.python": str,
@@ -194,6 +196,7 @@ VALIDATION = {
     "drive.client_secret": lambda v: (not v) or len(v) >= 8,
     # WhatsApp com DDI: so digitos, opcional "+", de 10 a 15 caracteres
     "estudos.whatsapp": lambda v: _valid_whatsapp(v),
+    "estudos.mind_map_prompt": lambda v: len(v) <= 2000,
     "power.shutdown_delay_minutes": lambda v: 1 <= v <= 1440,
 }
 
@@ -488,6 +491,8 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
                     "estudos": {
                         "ativo": bool(config.get("estudos.ativo", True)),
                         "whatsapp": str(config.get("estudos.whatsapp", "") or ""),
+                        "mind_map_enabled": bool(config.get("estudos.mind_map_enabled", False)),
+                        "mind_map_prompt": str(config.get("estudos.mind_map_prompt", "") or ""),
                     },
                     "power": {
                         "shutdown_after_tasks": bool(config.get("power.shutdown_after_tasks", False)),
@@ -1036,6 +1041,13 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
                 "acao": "confira o numero de destino",
                 "ultimo_finished_at": ultimo.get("finished_at"),
             }
+        elif str(ultimo.get("etapa")) == "FINAL_INCERTO":
+            saida["whatsapp"] = {
+                "estado": "verificando",
+                "detalhe": "ultimo estudo concluiu; envio nao comprovado",
+                "acao": "confira o telefone e reenvie o PDF pelo painel se necessario",
+                "ultimo_finished_at": ultimo.get("finished_at"),
+            }
         else:
             saida["whatsapp"] = {
                 "estado": "erro",
@@ -1326,6 +1338,19 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
     @auth.require_auth
     def estudos_jobs():
         return jsonify({"items": whatsapp.list_studies()})
+
+    @app.get("/api/estudos/jobs/<job_id>/mapa")
+    @auth.require_auth
+    def estudos_mapa(job_id: str):
+        try:
+            path = whatsapp.mind_map_path(job_id)
+        except ValueError as exc:
+            return _err(str(exc), 404)
+        return send_file(
+            path, mimetype="application/json",
+            as_attachment=request.args.get("download") == "1",
+            download_name=path.name,
+        )
 
     @app.post("/api/estudos/jobs/<job_id>/reenviar")
     @auth.require_auth

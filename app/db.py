@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS study_artifacts (
     job_id          TEXT PRIMARY KEY,
     pdf_path        TEXT,
     mind_map_path   TEXT,
+    mind_map_error  TEXT,
     updated_at      REAL NOT NULL
 );
 
@@ -131,6 +132,9 @@ class Database:
         self._lock = threading.RLock()
         with self.connection() as conn:
             conn.executescript(SCHEMA)
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(study_artifacts)")}
+            if "mind_map_error" not in columns:
+                conn.execute("ALTER TABLE study_artifacts ADD COLUMN mind_map_error TEXT")
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
@@ -492,7 +496,7 @@ class Database:
 
     def save_study_artifact(self, job_id: str, **fields: str) -> None:
         allowed = {key: value for key, value in fields.items()
-                   if key in ("pdf_path", "mind_map_path")}
+                   if key in ("pdf_path", "mind_map_path", "mind_map_error")}
         if not allowed:
             return
         with self.connection() as conn:

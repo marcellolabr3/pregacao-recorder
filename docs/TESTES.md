@@ -1,5 +1,19 @@
 # Validacao - Windows
 
+## Ciclo de envio, desligamento e mapa mental (20/10/2026)
+
+- A suite Python completa passou com `.venv\Scripts\python.exe -B -m pytest -p no:cacheprovider --tb=short -q`.
+- `node --check` validou o painel e o emissor WhatsApp; testes isolados cobrem
+  numeros multiplos, reenvio sem regenerar, mapa opcional/artefato especifico,
+  API de visualizacao e bloqueio do desligamento pelas filas.
+- O CLI NotebookLM da instalacao local informa versao 0.8.5 e suporta
+  `generate mind-map --kind interactive --instructions`; o fluxo real de geracao
+  nao foi executado. A sessao WhatsApp local conectou com `send.js --status`,
+  sem enviar mensagem. Nenhum comando de desligamento real foi executado.
+- O outro PC e o SSD nao estavam acessiveis: causa exata do envio anterior,
+  recebimento real, mapa real e desligamento real continuam para aceite no destino.
+- Nenhum APK, pacote, instalador ou atualizador foi gerado neste ciclo.
+
 ## Suite Python
 
 Revisao da sprint 2 em 19/10/2026: **488 testes passaram em 42,17 s** em copia temporaria

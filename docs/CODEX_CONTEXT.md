@@ -9,7 +9,41 @@
 - `.env`, configuracao pessoal, tokens/perfis, banco, logs e gravacoes nunca entram no Git.
 - `docs/CODEX_CONTEXT.local.md` contem legado sensivel; nunca imprimir/commitar.
 
-## Ciclo atual - 20/10/2026
+## Ciclo atual - WhatsApp, desligamento e mapa mental (20/10/2026)
+
+- Escopo e aceite: [TASKS_SPRINTS_20261020_ENTREGA.md](TASKS_SPRINTS_20261020_ENTREGA.md).
+  Sprints 1, 2 e 3 enviadas em `ecf2df6`, `e81017b`, `a1bad7e`.
+  **Nao gerar APK, instalador, pacote ou atualizador** ate o usuario pedir
+  expressamente, mesmo apos todos os testes passarem. Commit/push por sprint.
+- O usuario esclareceu: **APK sem PIN/senha de acesso; MQTT conserva senha e
+  token como ja configurados**. Nao mudar broker nem retirar autenticacao MQTT.
+- WhatsApp: o app antigo confundia o marcador `8. Enviando` com entrega.
+  Agora apenas `ACEITO_PELO_SERVIDOR` (ID devolvido por Baileys) e comprovado;
+  nenhuma mensagem e rotulada como entregue ao telefone. Estados antigos
+  `FINAL` sao legado de prova incerta. CONFIG mostra destinos salvos, conexao
+  local/QR, verificacao, reenvio do PDF existente e resultados por numero.
+- Diagnostico do outro PC sem SSD: a sessao e local em
+  `PREGACAO_PIPELINE_HOME/whatsapp/auth`; sem o log daquele PC, nao ha como
+  afirmar o motivo exato. O usuario foi consultado pelas linhas do log.
+- No laboratorio, o codigo atualizado esta em `vendor/sermon-pipeline`; a
+  configuracao ignorada pelo Git foi apontada para ele. `.env` local direciona
+  `PREGACAO_PIPELINE_HOME` e `NODE_PATH` a instalacao local antiga, preservando
+  login, output e dependencias ja existentes sem copia-los. O CLI local e
+  NotebookLM 0.8.5. `send.js --status` conectou ao WhatsApp real, sem enviar
+  mensagem, usando o codigo novo. Nunca imprimir ou commitar QR/auth/.env.
+- Desligamento: opcao desligada por padrao, atraso 1..1440 minutos. Monitor
+  so arma apos atividade ou clique explicito; bloqueia enquanto ha gravacao,
+  recuperacao, upload, estudo ou reenvio pendente. Uma nova atividade zera o
+  prazo. Comando Windows ocorre apenas no fim da contagem. Testes o simulam.
+- Mapa mental: opcional, instrucoes em CONFIG, geracao `interactive` no mesmo
+  notebook via CLI 0.8.5, salva JSON em `output`, visualiza e baixa no painel.
+  Falha opcional e informada sem impedir o envio do PDF. Formato imagem/PDF
+  ainda nao foi pedido. Nenhuma geracao real foi feita neste ciclo.
+- Suite Python completa e sintaxe JS passaram apos as mudancas de fonte. Nao
+  foi feito envio real nem desligamento real. Aceite no outro PC/SSD continua
+  pendente por falta de acesso fisico.
+
+## Ciclo anterior - 20/10/2026
 
 - Pedido e tarefas: [TASKS_SPRINTS_20261020.md](TASKS_SPRINTS_20261020.md).
   Commits ja enviados: sprint 1 `a3977a9`, sprint 2 `0ae930a`, sprint 3
@@ -128,15 +162,15 @@
   NotebookLM ainda pede login interativo; uso real no outro PC e celular segue
   sem aceite. Detalhes em `docs/TESTES.md` e `docs/GUIA_SSD_PORTATIL.md`.
 
-## Pendencias deste ciclo
+## Pendencias dependentes do usuario
 
-1. Confirmar com o usuario se "sem senha no APK" inclui o token MQTT inicial
-   ou apenas o PIN para operar; nao mudar o broker por suposicao.
-2. Atualizar as goldens Flutter depois da ultima mudanca de fonte, rodar a
-   suite completa e conferir a assinatura/versao do APK anterior e novo.
-3. Gerar APK, pacote publico, instalador generico e atualizador pessoal;
-   validar inventarios, checksums e instalacao isolada. Nao publicar contas,
-   perfis, banco ou logs.
-4. No outro PC, aplicar o atualizador ao SSD, conferir a limpeza de pastas antigas,
-   testar dois celulares e o inicio apos logon.
-5. Atualizar README e evidencias, commitar/push a sprint de integracao.
+1. Conferir as linhas do log do envio no outro PC para fechar a causa exata;
+   autenticar WhatsApp em CONFIG no proprio PC se a sessao estiver ausente.
+2. Provar no destino com recebimento real nos numeros escolhidos, NotebookLM
+   real, mapa mental e desligamento depois de uma tarefa real. Esses testes
+   podem ter efeitos externos; no laboratorio so houve verificacao de sessao.
+3. O SSD permanece no outro PC. Ao voltar a ficar acessivel, conferir e eliminar
+   as pastas antigas autorizadas, preservando a pasta pessoal; validar os dois
+   celulares e o inicio no logon. Nao declarar essa limpeza concluida daqui.
+4. Goldens Flutter e artefatos de APK/pacote/instalador/atualizador aguardam
+   pedido expresso do usuario. Nao iniciar build por iniciativa propria.

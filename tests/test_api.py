@@ -98,6 +98,25 @@ def test_whatsapp_config_lista_destinos_e_reenvio_exige_pdf(client):
     assert client.post("/api/estudos/jobs/inexistente/reenviar", json={"numbers": numeros}).status_code == 422
 
 
+def test_mapa_mental_e_desligamento_sao_opcionais_na_config(client):
+    _login(client)
+    config = client.get("/api/config").get_json()
+    assert config["estudos"]["mind_map_enabled"] is False
+    assert config["power"]["shutdown_after_tasks"] is False
+    assert client.post("/api/config", json={
+        "estudos.mind_map_enabled": True,
+        "estudos.mind_map_prompt": "Enfatize o texto biblico",
+        "power.shutdown_delay_minutes": 0,
+    }).status_code == 422
+    assert client.post("/api/config", json={
+        "estudos.mind_map_enabled": True,
+        "estudos.mind_map_prompt": "Enfatize o texto biblico",
+    }).status_code == 200
+    saved = client.get("/api/config").get_json()["estudos"]
+    assert saved["mind_map_enabled"] is True
+    assert saved["mind_map_prompt"] == "Enfatize o texto biblico"
+
+
 def test_wrong_pin_rejected(client):
     resp = _login(client, "9999")
     assert resp.status_code == 401

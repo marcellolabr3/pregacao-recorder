@@ -41,6 +41,19 @@ processar em paralelo. O celular envia comandos e permite manter a programacao;
 o PC grava e processa. Tarefas concluidas mostram 100%, inclusive quando
 etapas opcionais sao puladas e identificadas como tal.
 
+Em **CONFIG**, informe um ou mais numeros com DDI e DDD (um por linha), salve e
+confira **DESTINOS SALVOS**. Conecte o WhatsApp pelo QR no proprio painel e use
+**VERIFICAR CONEXAO** neste computador. A sessao e local a cada instalacao;
+sem ela, o PDF nao e enviado. O sistema distingue tentativa, aceite pelo servidor
+e falha. Aceite pelo servidor ainda nao comprova entrega no telefone. Um estudo
+pronto pode ser reenviado a outros numeros pelo painel, usando o PDF existente.
+
+O mapa mental e opcional: marque a caixa em CONFIG e escreva as instrucoes no
+campo proprio. O NotebookLM gera um mapa do mesmo estudo; o painel permite
+visualizar a arvore e baixar seu JSON. O desligamento automatico do Windows
+tambem e opcional e vem desligado: defina o atraso em CONFIG, salve e arme a
+tarefa. Gravacao, uploads, estudos ou reenvios pendentes adiam a contagem.
+
 ## Componentes
 
 - `app/`: Flask/waitress, SQLite, captura, recuperacao, upload, estudos e agente MQTT.
@@ -55,7 +68,9 @@ etapas opcionais sao puladas e identificadas como tal.
 - Autenticacao do NotebookLM pode exigir login; jobs ficam em espera.
 - Jobs persistem, mas o pipeline ainda nao retoma cada etapa individualmente.
 - Upload apos reinicio nao persiste a sessao resumivel; falhas ambiguas podem duplicar arquivos.
-- WhatsApp nao comprova entrega final; retry individual/idempotente permanece pendente.
+- WhatsApp nao comprova entrega final; antes de reenviar, confira o telefone
+  para evitar duplicatas se o resultado anterior ficou incerto.
+- O mapa mental e salvo em JSON; exportacao em imagem/PDF nao foi implementada.
 - Metadados da gravacao ainda nao sao enviados ao pipeline; o formulario Flutter
   de gravacao continua incompleto.
 - Provas com audio real, dois celulares e reinicio no meio do pipeline continuam pendentes.

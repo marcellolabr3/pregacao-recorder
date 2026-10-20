@@ -42,5 +42,11 @@
   "power": {
     "shutdown_after_tasks": false,
     "shutdown_delay_minutes": 30
+  },
+  "estudos": {
+    "ativo": true,
+    "whatsapp": "",
+    "mind_map_enabled": false,
+    "mind_map_prompt": "Organize o estudo em um mapa mental em portugues, com tema central, pontos principais, referencias biblicas e aplicacoes praticas."
   }
 }

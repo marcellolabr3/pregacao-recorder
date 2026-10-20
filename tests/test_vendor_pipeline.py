@@ -211,6 +211,50 @@ def test_whatsapp_multiplos_destinos_guarda_resultado_individual(pipeline, monke
     assert "falhou para +5511888888888" in output
 
 
+def test_mapa_mental_usa_prompt_e_artefato_deste_notebook(pipeline, monkeypatch, tmp_path, capsys):
+    commands = []
+    md = tmp_path / "estudo_teste.md"
+    md.write_text("# Estudo")
+    cfg = {"_notebook_id": "nb-123", "mind_map_prompt": "Destaque as referencias biblicas",
+           "report_language": "pt_BR"}
+
+    def fake_run(cmd, **kwargs):
+        commands.append((cmd, kwargs))
+        if "generate" in cmd:
+            return SimpleNamespace(returncode=0, stdout='{"mind_map":{"name":"Tema","children":[]},"note_id":"map-456","kind":"interactive"}', stderr="")
+        target = Path(cmd[5])
+        target.write_text('{"name":"Tema","children":[{"name":"Aplicacao"}]}', encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(pipeline, "run", fake_run)
+    map_file = pipeline.step_mind_map(cfg, md)
+    assert map_file.name == "mapa_teste.json"
+    generation = commands[0][0]
+    assert generation[generation.index("--instructions") + 1] == cfg["mind_map_prompt"]
+    assert generation[generation.index("-n") + 1] == "nb-123"
+    download = commands[1][0]
+    assert download[download.index("-a") + 1] == "map-456"
+    assert download[download.index("-n") + 1] == "nb-123"
+    assert "ARQUIVO_MAPA:" in capsys.readouterr().out
+
+
+def test_falha_do_mapa_opcional_preserva_estudo_e_envio(pipeline, monkeypatch, tmp_path, capsys):
+    audio = tmp_path / "audio.mp3"
+    audio.write_bytes(b"audio")
+    md = tmp_path / "estudo.md"
+    pdf = tmp_path / "estudo.pdf"
+    pdf.write_bytes(b"%PDF")
+    calls = []
+    monkeypatch.setattr(pipeline, "step_notebooklm", lambda cfg, path, title: md)
+    monkeypatch.setattr(pipeline, "step_md_to_pdf", lambda path: pdf)
+    monkeypatch.setattr(pipeline, "step_mind_map", lambda cfg, path: (_ for _ in ()).throw(ValueError("limite do NotebookLM")))
+    monkeypatch.setattr(pipeline, "step_whatsapp", lambda *args: calls.append("whatsapp"))
+    monkeypatch.setattr(sys, "argv", ["pipeline.py", str(audio), "--skip-drive", "--mind-map"])
+    pipeline.main()
+    assert calls == ["whatsapp"]
+    assert "MAPA_ERRO:limite do NotebookLM" in capsys.readouterr().out
+
+
 def test_cli_integrado_preserva_skip_drive_e_ordem(pipeline, monkeypatch, tmp_path, capsys):
     audio = tmp_path / "audio_do_teste.mp3"
     audio.write_bytes(b"audio sintetico")
@@ -261,6 +305,7 @@ const fakeRequire = name => {
   if (name === 'fs') return {mkdirSync: directory => observations.push({kind: 'mkdir', directory})};
   if (name === 'baileys') return baileys;
   if (name === 'qrcode-terminal') return {};
+  if (name === 'pino') return () => ({level: 'silent'});
   throw new Error('Dependencia real bloqueada: ' + name);
 };
 vm.runInNewContext(source, {

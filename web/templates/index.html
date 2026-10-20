@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0d1117">
 <title>pregacao-recorder</title>
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v=20261020-ops">
 <link rel="manifest" href="/static/manifest.json">
 </head>
 <body data-view="home">
@@ -192,6 +192,12 @@
       <div class="card-title">ESTUDO AUTOMATICO (NOTEBOOKLM)</div>
       <label><input name="estudos.ativo" type="checkbox">
         Gerar estudo e enviar o PDF por WhatsApp apos gravar</label>
+      <label><input name="estudos.mind_map_enabled" type="checkbox">
+        Gerar tambem um mapa mental deste estudo</label>
+      <label>Como deve ser o mapa mental
+        <textarea name="estudos.mind_map_prompt" rows="4" maxlength="2000" placeholder="Tema central, pontos principais, referencias biblicas e aplicacoes..."></textarea>
+      </label>
+      <p class="hint">O mapa sera criado no NotebookLM e ficara disponivel aqui para visualizar e baixar.</p>
       <label>Destinatarios do WhatsApp (DDI + DDD, um por linha)
         <textarea name="estudos.whatsapp" rows="3" maxlength="340" placeholder="5521999999999&#10;5511888888888"></textarea>
       </label>
@@ -213,6 +219,13 @@
       </label>
       <button id="btnWaResend" class="btn btn-ghost" type="button">REENVIAR PDF EXISTENTE</button>
       <p class="hint" id="cfgWaResendStatus" role="status">O reenvio nao refaz o estudo.</p>
+      <div class="card-title">MAPA MENTAL DO ESTUDO</div>
+      <div class="btn-row">
+        <button id="btnMapOpen" class="btn btn-ghost" type="button">VISUALIZAR MAPA</button>
+        <a id="btnMapDownload" class="btn btn-ghost hidden" href="#" download>BAIXAR MAPA (JSON)</a>
+      </div>
+      <p class="hint" id="cfgMapStatus" role="status">Selecione um estudo com mapa gerado.</p>
+      <div id="cfgMapViewer" class="mindmap-tree hidden" aria-label="Mapa mental do estudo"></div>
       <div class="big" id="cfgNlmState">--</div>
       <dl class="meta">
         <div><dt>Estudos</dt><dd id="cfgNlmPend">--</dd></div>
@@ -559,6 +572,6 @@
   <span id="clock">--:--</span>
 </footer>
 
-<script src="/static/app.js?v=20261019-dist2-config"></script>
+<script src="/static/app.js?v=20261020-ops"></script>
 </body>
 </html>
