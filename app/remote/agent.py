@@ -39,6 +39,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
@@ -63,6 +64,8 @@ COMMANDS = (
     "DRIVE_STATUS", "DRIVE_CONNECT", "DRIVE_FINISH",
     "DRIVE_DISCONNECT", "DRIVE_TEST",
     "STORAGE_LIST", "STORAGE_SET",
+    "PREGACAO_LISTAR", "PREGACAO_OBTER", "PREGACAO_CRIAR",
+    "PREGACAO_ATUALIZAR", "PREGACAO_DELETAR",
 )
 
 # Prazo de validade de um comando (secao 5 do roteiro do MVP): o remetente
@@ -74,7 +77,11 @@ COMMANDS = (
 COMANDO_TTL_SEGUNDOS = 120
 
 # Argumentos de autorizacao Google e destino de gravacao; nunca senha de rede.
-ARGS = ("code", "state", "path")
+ARGS = (
+    "code", "state", "path", "id", "versao", "data", "horario",
+    "pregador", "igreja", "texto_base", "tema", "offset",
+)
+PREGACAO_CAMPOS = ("data", "horario", "pregador", "igreja", "texto_base", "tema")
 
 # Cabecalho que marca TODAS as chamadas do agente a API local: o painel
 # registra a "ultima vista" e o /api/integracoes so declara o EMQX
@@ -203,6 +210,8 @@ def parse_command(raw: Any) -> Dict[str, Any]:
     text = str(raw or "").strip()
     if not text:
         return {"error": "comando vazio"}
+    if len(text) > 4096:
+        return {"error": "comando muito longo"}
 
     payload: Dict[str, Any] = {}
     if text.startswith("{"):
@@ -475,6 +484,24 @@ class LocalApi:
         # trocar o destino e configuracao persistente: mesma protecao de
         # administrador usada pelas rotas de rede
         return self._admined("POST", "/api/storage", {"path": path})
+
+    def pregacoes_list(self) -> Tuple[int, Dict[str, Any]]:
+        return self._authed("GET", "/api/pregacoes")
+
+    def pregacao_get(self, pid: int) -> Tuple[int, Dict[str, Any]]:
+        return self._authed("GET", f"/api/pregacoes/{pid}")
+
+    def pregacao_create(self, campos: Dict[str, str]) -> Tuple[int, Dict[str, Any]]:
+        # O PIN permanece somente no PC: os celulares nao precisam informa-lo.
+        return self._admined("POST", "/api/pregacoes", campos)
+
+    def pregacao_update(
+        self, pid: int, campos: Dict[str, Any],
+    ) -> Tuple[int, Dict[str, Any]]:
+        return self._admined("PUT", f"/api/pregacoes/{pid}", campos)
+
+    def pregacao_delete(self, pid: int, versao: int) -> Tuple[int, Dict[str, Any]]:
+        return self._admined("DELETE", f"/api/pregacoes/{pid}", {"versao": versao})
 
     def open_stream(self, timeout: float = 90.0) -> Any:
         """Abre o fluxo SSE de eventos (exige sessao valida)."""
@@ -800,6 +827,45 @@ class RemoteAgent:
                     ack["code"] = "path_obrigatorio"
                     return ack
                 code, payload = self.api.storage_set(caminho)
+            elif cmd == "PREGACAO_LISTAR":
+                try:
+                    offset = int(parsed.get("offset") or 0)
+                except (TypeError, ValueError):
+                    offset = -1
+                if offset < 0 or offset > 10000:
+                    ack.update(error="pagina invalida", code="pagina_invalida")
+                    return ack
+                code, payload = self.api.pregacoes_list()
+            elif cmd in (
+                "PREGACAO_OBTER", "PREGACAO_ATUALIZAR", "PREGACAO_DELETAR",
+            ):
+                try:
+                    pid = int(parsed.get("id") or 0)
+                except (TypeError, ValueError):
+                    pid = 0
+                if pid <= 0:
+                    ack.update(error="pregacao invalida", code="id_invalido")
+                    return ack
+                if cmd == "PREGACAO_OBTER":
+                    code, payload = self.api.pregacao_get(pid)
+                else:
+                    try:
+                        versao = int(parsed.get("versao") or 0)
+                    except (TypeError, ValueError):
+                        versao = 0
+                    if versao <= 0:
+                        ack.update(error="versao invalida", code="versao_invalida")
+                        return ack
+                    if cmd == "PREGACAO_ATUALIZAR":
+                        campos = {k: str(parsed.get(k) or "") for k in PREGACAO_CAMPOS}
+                        code, payload = self.api.pregacao_update(
+                            pid, {**campos, "versao": versao},
+                        )
+                    else:
+                        code, payload = self.api.pregacao_delete(pid, versao)
+            elif cmd == "PREGACAO_CRIAR":
+                campos = {k: str(parsed.get(k) or "") for k in PREGACAO_CAMPOS}
+                code, payload = self.api.pregacao_create(campos)
             else:  # comando conhecido mas sem ramo: defesa, nao deve ocorrer
                 ack["error"] = f"comando nao suportado: {cmd}"
                 ack["code"] = "comando_invalido"
@@ -831,6 +897,29 @@ class RemoteAgent:
                 elif cmd == "STORAGE_SET":
                     ack["current"] = str(payload.get("current") or "")
                     ack["detail"] = "destino de gravacao atualizado"
+                elif cmd == "PREGACAO_LISTAR":
+                    hoje = date.today().isoformat()
+                    registros = list(payload.get("pregacoes") or [])
+                    futuras = sorted(
+                        (p for p in registros if str(p.get("data") or "") >= hoje),
+                        key=lambda p: (p.get("data") or "", p.get("horario") or ""),
+                    )
+                    anteriores = sorted(
+                        (p for p in registros if str(p.get("data") or "") < hoje),
+                        key=lambda p: (p.get("data") or "", p.get("horario") or ""),
+                        reverse=True,
+                    )
+                    ack["pregacoes"] = (futuras + anteriores)[offset:offset + 40]
+                    ack["total"] = len(registros)
+                elif cmd == "PREGACAO_OBTER":
+                    ack["pregacao"] = payload
+                elif cmd in (
+                    "PREGACAO_CRIAR", "PREGACAO_ATUALIZAR", "PREGACAO_DELETAR",
+                ):
+                    ack["id"] = int(payload.get("id") or parsed.get("id") or 0)
+                    if isinstance(payload.get("pregacao"), dict):
+                        ack["pregacao"] = payload["pregacao"]
+                    ack["detail"] = "programacao atualizada"
             else:
                 ack["error"] = str(
                     payload.get("message")

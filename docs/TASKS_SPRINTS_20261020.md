@@ -38,22 +38,25 @@ gravacoes ou perfil NotebookLM no Git.
 
 ## Sprint 3 - programacao visivel no PC e no APK
 
-- [ ] S3.1 Levar a lista e os botoes de programacao para a primeira pagina
+- [x] S3.1 Levar a lista e os botoes de programacao para a primeira pagina
   do painel, mantendo autorizacao administrativa para alterar ou excluir.
-- [ ] S3.2 Expor listagem e operacoes de programacao por MQTT com respostas
+- [x] S3.2 Expor listagem e operacoes de programacao por MQTT com respostas
   correlacionadas e limites de tamanho/validacao; manter o backend como fonte
   unica dos dados e nao publicar dados privados retidos sem necessidade.
-- [ ] S3.3 Criar a tela de programacao no APK, com consulta, criacao, edicao e
+- [x] S3.3 Criar a tela de programacao no APK, com consulta, criacao, edicao e
   exclusao, estados de carregamento/erro e atualizacao apos reconexao.
-- [ ] S3.4 Testar API, agente, protocolo e interface; commitar a sprint.
+- [x] S3.4 Testar API, agente, protocolo e interface; commitar a sprint.
+  Os testes direcionados de Python (141) e protocolo Flutter (35), a analise
+  Flutter e o parser JavaScript passaram. A referencia visual da primeira
+  pagina sera atualizada na integracao depois de fechar todas as mudancas.
 
 ## Sprint 4 - iniciar com o Windows
 
 - [ ] S4.1 Registrar inicializacao por usuario ao entrar no Windows para a
   edicao pessoal instalada, sem abrir navegador e sem iniciar copia duplicada.
 - [ ] S4.2 Permitir ativar/desativar no PC ja instalado; orientar o caso em
-  que o SSD estiver ausente na entrada ou mudar de letra. Nao ativar a copia
-  de desenvolvimento deste PC que disputa o ID MQTT.
+  que o SSD estiver ausente na entrada ou mudar de letra. A copia de
+  laboratorio usa um ID MQTT distinto da instalacao real.
 - [ ] S4.3 Validar sem reiniciar com gravacao/tarefas em curso; commitar a sprint.
 
 ## Sprint 5 - integracao e entrega
@@ -69,3 +72,12 @@ gravacoes ou perfil NotebookLM no Git.
 Se o SSD permanecer fora deste PC, a instalacao e o aceite final dependem de
 acesso a ele ou de execucao orientada no PC onde esta conectado. Ao encontrar
 essa ou outra limitacao, consultar o usuario antes de escolher alternativa.
+
+Estado de trabalho: o usuario confirmou que nao quer pedir PIN no APK, operara
+com dois celulares e autorizou a identidade MQTT separada do laboratorio. O
+agente usa no PC as credenciais administrativas ja configuradas, sem pedir PIN
+ao celular; o token MQTT salvo no telefone continua necessario para conectar.
+O inicio automatico do laboratorio foi registrado para o usuario Windows atual,
+resolvendo o volume em vez de fixar a letra D:. O SSD esta em outro PC: o aceite
+real da instalacao pessoal e dos dois celulares ainda depende dele. Nenhum
+APK/pacote/instalador novo foi gerado neste ciclo.

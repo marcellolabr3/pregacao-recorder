@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import time
 from datetime import datetime
@@ -57,6 +58,49 @@ RATES = [16000, 22050, 32000, 44100, 48000]
 
 def _err(message: str, status: int = 400, code: str = "erro"):
     return jsonify({"error": code, "message": message}), status
+
+
+_PREGACAO_LIMITES = {
+    "data": 10, "horario": 5, "pregador": 120, "igreja": 120,
+    "texto_base": 160, "tema": 200,
+}
+
+
+def _campos_pregacao(body: Any, atual: Dict[str, Any] | None = None) -> Dict[str, str]:
+    if not isinstance(body, dict):
+        raise ValueError("payload da programacao invalido")
+    campos = {}
+    for nome, limite in _PREGACAO_LIMITES.items():
+        valor = body.get(nome, (atual or {}).get(nome, ""))
+        if valor is None and nome in ("texto_base", "tema"):
+            valor = ""
+        if not isinstance(valor, str):
+            raise ValueError(f"{nome} deve ser texto")
+        valor = valor.strip()
+        if len(valor) > limite or any(ord(c) < 32 for c in valor):
+            raise ValueError(f"{nome} invalido ou muito longo")
+        if nome in ("data", "horario", "pregador", "igreja") and not valor:
+            raise ValueError(f"{nome} obrigatorio")
+        campos[nome] = valor
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", campos["data"]):
+        raise ValueError("data invalida (use AAAA-MM-DD)")
+    if not re.fullmatch(r"\d{2}:\d{2}", campos["horario"]):
+        raise ValueError("horario invalido (use HH:MM)")
+    try:
+        datetime.strptime(campos["data"], "%Y-%m-%d")
+        datetime.strptime(campos["horario"], "%H:%M")
+    except ValueError as exc:
+        raise ValueError("data ou horario invalido") from exc
+    return campos
+
+
+def _versao_pregacao(body: Dict[str, Any]) -> int | None:
+    valor = body.get("versao")
+    if valor is None:
+        return None
+    if isinstance(valor, bool) or not isinstance(valor, int) or valor < 1:
+        raise ValueError("versao da programacao invalida")
+    return valor
 
 
 def _oauth_page(status: str, message: str) -> str:
@@ -1048,45 +1092,63 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
     @app.post("/api/pregacoes")
     @auth.require_admin
     def criar_pregacao():
-        body = request.get_json(silent=True) or {}
         try:
-            pid = db.create_pregacao(
-                data=str(body.get("data", "") or "").strip(),
-                horario=str(body.get("horario", "") or "").strip(),
-                pregador=str(body.get("pregador", "") or "").strip(),
-                igreja=str(body.get("igreja", "") or "").strip(),
-                texto_base=str(body.get("texto_base", "") or "").strip(),
-                tema=str(body.get("tema", "") or "").strip(),
-            )
+            campos = _campos_pregacao(request.get_json(silent=True))
+        except ValueError as exc:
+            return _err(str(exc), 422, "programacao_invalida")
+        try:
+            pid = db.create_pregacao(**campos)
         except sqlite3.IntegrityError:
             return _err(
                 "Ja existe pregacao nesta data e horario", 409, "duplicata"
             )
-        return jsonify({"id": pid, "ok": True})
+        notify.notify("programacao_alterada", "Programacao atualizada",
+                      payload={"acao": "criada", "id": pid})
+        return jsonify({"id": pid, "pregacao": db.get_pregacao(pid), "ok": True})
 
     @app.put("/api/pregacoes/<int:pid>")
     @auth.require_admin
     def atualizar_pregacao(pid: int):
-        body = request.get_json(silent=True) or {}
-        ok = db.update_pregacao(
-            pid,
-            data=body.get("data"),
-            horario=body.get("horario"),
-            pregador=body.get("pregador"),
-            igreja=body.get("igreja"),
-            texto_base=body.get("texto_base"),
-            tema=body.get("tema"),
-        )
+        atual = db.get_pregacao(pid)
+        if not atual:
+            return _err("Pregacao nao encontrada", 404, "nao_encontrado")
+        body = request.get_json(silent=True)
+        try:
+            campos = _campos_pregacao(body, atual)
+            esperada = _versao_pregacao(body)
+        except ValueError as exc:
+            return _err(str(exc), 422, "programacao_invalida")
+        try:
+            ok = db.update_pregacao(pid, expected_version=esperada, **campos)
+        except sqlite3.IntegrityError:
+            return _err("Ja existe pregacao nesta data e horario", 409, "duplicata")
         if not ok:
-            return _err("Pregacao nao encontrada ou versao desatualizada", 404, "nao_encontrado")
-        return jsonify({"ok": True})
+            if db.get_pregacao(pid):
+                return _err("Programacao alterada em outro aparelho; atualize a lista",
+                            409, "versao_desatualizada")
+            return _err("Pregacao nao encontrada", 404, "nao_encontrado")
+        notify.notify("programacao_alterada", "Programacao atualizada",
+                      payload={"acao": "atualizada", "id": pid})
+        return jsonify({"ok": True, "pregacao": db.get_pregacao(pid)})
 
     @app.delete("/api/pregacoes/<int:pid>")
     @auth.require_admin
     def deletar_pregacao(pid: int):
-        ok = db.delete_pregacao(pid)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            return _err("payload da programacao invalido", 422, "programacao_invalida")
+        try:
+            esperada = _versao_pregacao(body)
+        except ValueError as exc:
+            return _err(str(exc), 422, "programacao_invalida")
+        ok = db.delete_pregacao(pid, expected_version=esperada)
         if not ok:
+            if db.get_pregacao(pid):
+                return _err("Programacao alterada em outro aparelho; atualize a lista",
+                            409, "versao_desatualizada")
             return _err("Pregacao nao encontrada", 404, "nao_encontrado")
+        notify.notify("programacao_alterada", "Programacao atualizada",
+                      payload={"acao": "excluida", "id": pid})
         return jsonify({"ok": True})
 
     @app.post("/api/importacao/previa")
@@ -1151,6 +1213,8 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
             ids = gravar_pregacoes(db, pregacoes)
         except sqlite3.IntegrityError:
             return _err("duplicata detectada na gravacao", 409, "duplicata")
+        notify.notify("programacao_alterada", "Programacao atualizada",
+                      payload={"acao": "importada", "quantidade": len(ids)})
         return jsonify({"gravados": len(ids), "ids": ids, "ok": True})
 
     @app.get("/api/importacao/modelo")

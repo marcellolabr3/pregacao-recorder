@@ -185,6 +185,34 @@ void main() {
       expect(ack.drive['connected'], isTrue);
       expect(ack.drive['account'], 'igreja@gmail.com');
     });
+
+    test('ack de PREGACAO_LISTAR carrega a programacao', () {
+      final ack = Ack.fromJson(const {
+        'ok': true,
+        'cmd': 'PREGACAO_LISTAR',
+        'total': 1,
+        'pregacoes': [
+          {'id': 7, 'data': '2026-11-01', 'horario': '19:00',
+           'pregador': 'Ana', 'igreja': 'Central', 'versao': 2},
+        ],
+      });
+      expect(ack.totalPregacoes, 1);
+      expect(ack.pregacoes.single.id, 7);
+      expect(ack.pregacoes.single.pregador, 'Ana');
+    });
+
+    test('conflito entre celulares preserva o codigo para a interface', () {
+      final ack = Ack.fromJson(const {
+        'ok': false,
+        'cmd': 'PREGACAO_ATUALIZAR',
+        'req_id': 'celular-2',
+        'code': 'versao_desatualizada',
+        'error': 'Programacao alterada em outro aparelho',
+      });
+      expect(ack.ok, isFalse);
+      expect(ack.code, 'versao_desatualizada');
+      expect(ack.reqId, 'celular-2');
+    });
   });
 
   group('EventoSistema', () {

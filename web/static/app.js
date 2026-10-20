@@ -9,6 +9,7 @@
   var authed = false;
   var pinRequired = false;
   var isAdmin = false;
+  var adminReturnView = "advanced";
   var wizStep = 1;              // assistente de primeiro acesso
   var clockOffset = 0;      // servidor - navegador
   var source = null;
@@ -452,6 +453,7 @@
      "upload_inicio", "upload_concluido", "upload_pendente", "upload_falho", "erro",
      "recuperacao", "recuperacao_descartada", "servico_parado", "capture_gap",
      "configuracao", "drive_conectado", "drive_desconectado", "audio_teste",
+     "programacao_alterada",
      "conversao", "notificacao", "job_progress"].forEach(function (kind) {
       source.addEventListener(kind, function (ev) {
         try {
@@ -464,6 +466,7 @@
             }
           }
         } catch (e) { /* ignora */ }
+        if (kind === "programacao_alterada" && authed) loadPregacoes();
         refresh();
       });
     });
@@ -869,7 +872,6 @@
       $("cfgDriveCreds").textContent = "Credenciais: "
         + (srcLabel[d.source] !== undefined ? srcLabel[d.source] : d.source);
 
-      loadPregacoes();
     };
     if (data) apply(data);
     else api("/api/config").then(apply).catch(function (e) { toast(e.message, "error"); });
@@ -878,7 +880,9 @@
   // ================================================================
   // S4: PROGRAMACAO DE PREGACOES (CRUD + IMPORTACAO)
   // ================================================================
-  var _pregacoesCache = []; // cache local para importacao
+  var _pregacoesCache = [];
+  var _importacaoCache = [];
+  var _pregacaoEditada = null;
 
   function loadPregacoes() {
     api("/api/pregacoes").then(function (r) {
@@ -892,18 +896,30 @@
   function renderPregacoes() {
     var list = $("pregacoesList");
     if (!list) return;
+    ["btnAddPregacao", "btnImportPregacao", "btnDownloadModelo"].forEach(function (id) {
+      $(id).classList.toggle("hidden", !isAdmin);
+    });
+    $("btnScheduleAdmin").classList.toggle("hidden", isAdmin);
     if (!_pregacoesCache.length) {
       list.innerHTML = "<li class='muted'>Nenhuma pregacao cadastrada</li>";
       return;
     }
     list.innerHTML = "";
-    _pregacoesCache.forEach(function (p) {
+    var hoje = new Date();
+    var corte = hoje.getFullYear() + "-" + String(hoje.getMonth() + 1).padStart(2, "0") +
+      "-" + String(hoje.getDate()).padStart(2, "0");
+    var proximas = _pregacoesCache.filter(function (p) { return p.data >= corte; })
+      .sort(function (a, b) { return (a.data + a.horario).localeCompare(b.data + b.horario); });
+    var anteriores = _pregacoesCache.filter(function (p) { return p.data < corte; })
+      .sort(function (a, b) { return (b.data + b.horario).localeCompare(a.data + a.horario); });
+    proximas.concat(anteriores).forEach(function (p) {
       var li = document.createElement("li");
       li.innerHTML =
-        "<strong>" + p.data + " " + p.horario + "</strong>  " +
+        "<strong>" + esc(p.data) + " " + esc(p.horario) + "</strong>  " +
         esc(p.pregador) + " / " + esc(p.igreja) +
         (p.texto_base ? " · " + esc(p.texto_base) : "") +
         (p.tema ? " · " + esc(p.tema) : "");
+      if (!isAdmin) { list.appendChild(li); return; }
       var btns = document.createElement("div");
       btns.style.marginTop = "4px";
       var editar = document.createElement("button");
@@ -919,10 +935,10 @@
       excluir.style.borderColor = "var(--red2)";
       excluir.onclick = function () {
         if (!confirm("Excluir pregacao de " + p.data + " " + p.horario + "?")) return;
-        api("/api/pregacoes/" + p.id, "DELETE").then(function () {
+        api("/api/pregacoes/" + p.id, "DELETE", { versao: p.versao }).then(function () {
           toast("Pregacao excluida", "success");
           loadPregacoes();
-        }).catch(function (e) { toast(e.message, "error"); });
+        }).catch(function (e) { toast(e.message, "error"); loadPregacoes(); });
       };
       btns.appendChild(editar);
       btns.appendChild(excluir);
@@ -936,6 +952,7 @@
     var form = $("pregacaoForm");
     var title = $("pregacaoOverlayTitle");
     form.reset();
+    _pregacaoEditada = p;
     if (p) {
       title.textContent = "EDITAR PREGACAO";
       $("pregacaoId").value = p.id;
@@ -962,6 +979,7 @@
   function closePregacaoModal() {
     $("pregacaoOverlay").classList.add("hidden");
     $("pregacaoForm").reset();
+    _pregacaoEditada = null;
   }
 
   function savePregacao(ev) {
@@ -976,6 +994,7 @@
       texto_base: form.elements["texto_base"].value.trim(),
       tema: form.elements["tema"].value.trim(),
     };
+    if (id && _pregacaoEditada) payload.versao = _pregacaoEditada.versao;
     var url = id ? "/api/pregacoes/" + id : "/api/pregacoes";
     var method = id ? "PUT" : "POST";
     var msg = $("pregacaoMsg");
@@ -988,12 +1007,17 @@
     }).catch(function (e) {
       msg.textContent = e.message;
       toast(e.message, "error");
+      if (e.data && e.data.error === "versao_desatualizada") {
+        closePregacaoModal();
+        loadPregacoes();
+      }
     });
   }
 
   // ----- IMPORTACAO CSV/XLSX -----
   function openImportModal() {
     $("importOverlay").classList.remove("hidden");
+    _importacaoCache = [];
     $("importFile").value = "";
     $("importPreview").style.display = "none";
     $("importPreview").textContent = "";
@@ -1037,10 +1061,10 @@
           $("importPreview").style.display = "block";
         }
         if (e.length || d.length) {
-          _pregacoesCache = v; // guarda para confirmar
+          _importacaoCache = v; // guarda para confirmar
           $("importConfirm").disabled = false;
         } else {
-          _pregacoesCache = v;
+          _importacaoCache = v;
           $("importConfirm").disabled = v.length === 0;
         }
       });
@@ -1048,10 +1072,10 @@
   }
 
   function confirmImport() {
-    if (!_pregacoesCache.length) return;
+    if (!_importacaoCache.length) return;
     var msg = $("importMsg");
     msg.textContent = "gravando...";
-    api("/api/importacao/confirmar", "POST", { validos: _pregacoesCache })
+    api("/api/importacao/confirmar", "POST", { validos: _importacaoCache })
       .then(function () {
         msg.textContent = "";
         toast("Importacao concluida", "success");
@@ -1137,7 +1161,8 @@
   }
 
   // ---------------------------------------------------------------- admin
-  function openAdmin() {
+  function openAdmin(returnView) {
+    adminReturnView = returnView || "advanced";
     $("adminPinError").classList.add("hidden");
     $("adminPinInput").value = "";
     $("adminOverlay").classList.remove("hidden");
@@ -1150,8 +1175,14 @@
         isAdmin = true;
         $("adminOverlay").classList.add("hidden");
         $("adminPinInput").value = "";
-        loadAdvanced();
-        setView("advanced");
+        renderPregacoes();
+        if (adminReturnView === "home") {
+          loadPregacoes();
+          setView("home");
+        } else {
+          loadAdvanced();
+          setView("advanced");
+        }
       }).catch(function () {
         $("adminPinError").classList.remove("hidden");
         $("adminPinInput").select();
@@ -1376,6 +1407,7 @@
 
     // PREGACOES (S4)
     $("btnAddPregacao").addEventListener("click", function () { openPregacaoModal(null); });
+    $("btnScheduleAdmin").addEventListener("click", function () { openAdmin("home"); });
     $("pregacaoForm").addEventListener("submit", savePregacao);
     $("pregacaoCancel").addEventListener("click", closePregacaoModal);
     $("btnImportPregacao").addEventListener("click", openImportModal);
@@ -1480,6 +1512,7 @@
   function start() {
     refresh().then(function () {
       if (authed) loadConfig();
+      if (authed) loadPregacoes();
       if (authed && document.body.dataset.view === "history") loadHistory();
       // historico de notificacoes
       if (authed) {

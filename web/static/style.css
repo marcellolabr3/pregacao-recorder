@@ -124,6 +124,7 @@ body{
 .progresso-etapas span.tom-erro{background:rgba(248,81,73,.18);border-color:var(--red2);color:var(--red2)}
 .progresso-etapas span.tom-pulado{background:var(--panel2);border-style:dashed;color:var(--muted)}
 .progresso-etapas span.tom-pendente{background:var(--panel2);border-color:var(--line);color:var(--muted)}
+.programacao-lista{max-height:360px;overflow-y:auto}
 
 /* ---------- saude das integracoes (S3) ---------- */
 .integracoes-grid{

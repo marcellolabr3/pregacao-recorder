@@ -50,12 +50,19 @@ class MqttControlador extends ChangeNotifier {
 
   Configuracao cfg;
   MqttServerClient? _client;
+  StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>? _updatesSubscription;
 
   bool conectadoBroker = false;
   bool equipamentoOnline = false;
   EstadoEquipamento? estado;
   String ultimaMensagem = '';
   String nomeArquivo = '';
+  List<Pregacao> pregacoes = const [];
+  int totalPregacoes = 0;
+  bool carregandoPregacoes = false;
+  String erroPregacoes = '';
+  int _geracaoPregacoes = 0;
+  bool _recarregarPregacoesPendente = false;
   final List<String> eventos = []; // ultimos 6, mais novos primeiro
 
   final StreamController<Ack> _acks = StreamController<Ack>.broadcast();
@@ -160,8 +167,9 @@ class MqttControlador extends ChangeNotifier {
       // Etapa 3: TLS + CONNACK. O cliente precisa do NOME (SNI/certificado),
       // por isso a conexao e' feita com o hostname, nao com o IP da sonda.
       _fase(FaseConexao.tlsMqtt, detalhe: servidor);
-      final clientId =
-          'fl-${DateTime.now().millisecondsSinceEpoch.toRadixString(16)}';
+      // Dois celulares podem abrir no mesmo instante: o sufixo aleatorio
+      // evita takeover de sessao por ClientID igual.
+      final clientId = novoReqId();
       final client = MqttServerClient.withPort(servidor, clientId, porta);
       client.secure = cfg.tls;
       client.keepAlivePeriod = 60;
@@ -202,11 +210,9 @@ class MqttControlador extends ChangeNotifier {
         }
         _cancelarRetry();
         _delayRetry = 5;
+        _ouvirAtualizacoes(client);
         _assinar(client); // idempotente: o callback pode ja ter assinado
         _fase(FaseConexao.conectado);
-        client.updates?.listen(_aoReceber, onError: (Object e) {
-          _avisar('falha no fluxo MQTT: $e');
-        });
       } catch (e) {
         if (geracao != _geracao) return;
         _client = null;
@@ -227,9 +233,9 @@ class MqttControlador extends ChangeNotifier {
     if (_assinado) return;
     _assinado = true;
     for (final t in [
+      topicos.ack,
       topicos.avail,
       topicos.state,
-      topicos.ack,
       topicos.events,
       topicos.jobs, // S3: progresso do estudo por job (retido)
     ]) {
@@ -241,6 +247,18 @@ class MqttControlador extends ChangeNotifier {
         _assinado = false;
       }
     }
+  }
+
+  void _ouvirAtualizacoes(MqttServerClient client) {
+    if (_updatesSubscription != null) return;
+    // O stream do mqtt_client e broadcast: mensagens retidas podem chegar
+    // assim que o SUBSCRIBE e enviado. Ouvir antes de assinar evita perder
+    // o primeiro "avail" e deixar o APK mostrando PC OFF.
+    _updatesSubscription = client.updates?.listen((mensagens) {
+      if (identical(_client, client)) _aoReceber(mensagens);
+    }, onError: (Object e) {
+      if (identical(_client, client)) _avisar('falha no fluxo MQTT: $e');
+    });
   }
 
   void _fase(FaseConexao nova, {String detalhe = ''}) {
@@ -304,6 +322,7 @@ class MqttControlador extends ChangeNotifier {
     final client = _client;
     if (client == null) return;
     conectadoBroker = true;
+    _ouvirAtualizacoes(client);
     _assinar(client); // SUBSCRIBE aqui mesmo - nao depende do future
     // assinatura confirmada: limpa avisos de conexao antigos
     ultimaMensagem = '';
@@ -332,8 +351,12 @@ class MqttControlador extends ChangeNotifier {
       final texto = utf8.decode(msg.payload.message);
       try {
         if (topico == topicos.avail) {
+          final eraOnline = equipamentoOnline;
           equipamentoOnline = texto.trim() == 'online';
           notifyListeners();
+          if (equipamentoOnline && !eraOnline) {
+            unawaited(carregarPregacoes());
+          }
         } else if (topico == topicos.state) {
           final dados = jsonDecode(texto);
           if (dados is Map<String, dynamic>) {
@@ -378,6 +401,9 @@ class MqttControlador extends ChangeNotifier {
   }
 
   void _aoEvento(EventoSistema evento) {
+    if (evento.kind == 'programacao_alterada') {
+      unawaited(carregarPregacoes());
+    }
     if (evento.kind == 'gravacao_pronta' && evento.path.isNotEmpty) {
       final nome = evento.path
           .replaceAll('\\', '/')
@@ -443,6 +469,54 @@ class MqttControlador extends ChangeNotifier {
     return completer.future;
   }
 
+  Future<void> carregarPregacoes() async {
+    if (!conectadoBroker || !equipamentoOnline) return;
+    if (carregandoPregacoes) {
+      _recarregarPregacoesPendente = true;
+      return;
+    }
+    final geracao = ++_geracaoPregacoes;
+    carregandoPregacoes = true;
+    erroPregacoes = '';
+    notifyListeners();
+    try {
+      final itens = <Pregacao>[];
+      var total = 0;
+      do {
+        final resposta = await executar(ComandoPregacao.listar.valor,
+            extras: {'offset': '${itens.length}'});
+        if (geracao != _geracaoPregacoes) return;
+        if (!resposta.ok) {
+          erroPregacoes = resposta.error.isEmpty
+              ? 'Nao foi possivel carregar a programacao'
+              : resposta.error;
+          return;
+        }
+        total = resposta.totalPregacoes;
+        if (resposta.pregacoes.isEmpty && itens.length < total) {
+          erroPregacoes = 'Lista incompleta; tente atualizar';
+          return;
+        }
+        itens.addAll(resposta.pregacoes);
+      } while (itens.length < total);
+      pregacoes = itens;
+      totalPregacoes = total;
+    } catch (_) {
+      if (geracao == _geracaoPregacoes) {
+        erroPregacoes = 'Falha ao carregar a programacao';
+      }
+    } finally {
+      if (geracao == _geracaoPregacoes) {
+        carregandoPregacoes = false;
+        notifyListeners();
+        if (_recarregarPregacoesPendente) {
+          _recarregarPregacoesPendente = false;
+          unawaited(carregarPregacoes());
+        }
+      }
+    }
+  }
+
   // ------------------------------------------------------------------
   // utilidades
   // ------------------------------------------------------------------
@@ -497,6 +571,9 @@ class MqttControlador extends ChangeNotifier {
   }
 
   void _desconectarCliente() {
+    _geracaoPregacoes++;
+    carregandoPregacoes = false;
+    _recarregarPregacoesPendente = false;
     final client = _client;
     _client = null;
     conectadoBroker = false;
@@ -504,6 +581,9 @@ class MqttControlador extends ChangeNotifier {
     fase = FaseConexao.desconectado;
     detalheFase = '';
     _assinado = false;
+    final updates = _updatesSubscription;
+    _updatesSubscription = null;
+    if (updates != null) unawaited(updates.cancel());
     if (client != null) {
       try {
         client.disconnect();

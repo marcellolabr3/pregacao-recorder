@@ -1,8 +1,7 @@
 // Tela unica de controle (paridade com o app Android original).
 //
-// Ela apenas EXIBE o estado que chega por MQTT e envia dois comandos
-// (START/STOP). Nada de audio e gravado aqui: o celular observa o
-// equipamento, nao substitui ele.
+// Exibe o estado que chega por MQTT, controla a gravacao e permite manter
+// a programacao do PC. O audio continua sendo gravado no equipamento.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -29,6 +28,7 @@ class _TelaPrincipalState extends State<TelaPrincipal>
   String _versao = '';
   bool _aguardandoAck = false;
   bool _enviandoComando = false;
+  bool _mostrarTodasPregacoes = false;
 
   @override
   void initState() {
@@ -266,6 +266,8 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         // (o agente republica so o que o app emite via SSE job_progress).
         _progressoWidget(mqtt),
 
+        _programacaoWidget(mqtt),
+
         // mensagem (erros, detalhes de ack)
         if (mqtt.ultimaMensagem.isNotEmpty)
           Padding(
@@ -484,10 +486,329 @@ class _TelaPrincipalState extends State<TelaPrincipal>
     );
   }
 
+  Widget _programacaoWidget(MqttControlador mqtt) {
+    final itens = mqtt.pregacoes;
+    final visiveis = _mostrarTodasPregacoes ? itens : itens.take(3).toList();
+    return Card(
+      margin: const EdgeInsets.only(top: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('PROGRAMACAO DE PREGACOES',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                IconButton(
+                  tooltip: 'Nova pregacao',
+                  onPressed: mqtt.equipamentoOnline
+                      ? () => _editarPregacao(null)
+                      : null,
+                  icon: const Icon(Icons.add_circle_outline),
+                ),
+                IconButton(
+                  tooltip: 'Atualizar programacao',
+                  onPressed: mqtt.equipamentoOnline && !mqtt.carregandoPregacoes
+                      ? mqtt.carregarPregacoes
+                      : null,
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+            if (mqtt.carregandoPregacoes) const LinearProgressIndicator(),
+            if (mqtt.erroPregacoes.isNotEmpty)
+              Text(mqtt.erroPregacoes,
+                  style: const TextStyle(color: Colors.red)),
+            if (itens.isEmpty && !mqtt.carregandoPregacoes && mqtt.erroPregacoes.isEmpty)
+              Text(mqtt.equipamentoOnline
+                  ? 'Nenhuma pregacao cadastrada'
+                  : 'Conecte ao PC para consultar a programacao'),
+            for (final p in visiveis)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text('${p.data} ${p.horario}  ${p.pregador}'),
+                subtitle: Text([
+                  p.igreja,
+                  if (p.tema.isNotEmpty) p.tema,
+                  if (p.textoBase.isNotEmpty) p.textoBase,
+                ].join(' - ')),
+                trailing: mqtt.equipamentoOnline
+                    ? PopupMenuButton<String>(
+                        tooltip: 'Opcoes da pregacao',
+                        onSelected: (acao) {
+                          if (acao == 'editar') _editarPregacao(p);
+                          if (acao == 'excluir') _excluirPregacao(p);
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(value: 'editar', child: Text('EDITAR')),
+                          PopupMenuItem(value: 'excluir', child: Text('EXCLUIR')),
+                        ],
+                      )
+                    : null,
+              ),
+            if (itens.length > 3)
+              TextButton(
+                onPressed: () => setState(
+                    () => _mostrarTodasPregacoes = !_mostrarTodasPregacoes),
+                child: Text(_mostrarTodasPregacoes
+                    ? 'MOSTRAR MENOS'
+                    : (mqtt.totalPregacoes > itens.length
+                        ? 'VER ${itens.length} DE ${mqtt.totalPregacoes}'
+                        : 'VER TODAS (${itens.length})')),
+              ),
+            if (!mqtt.equipamentoOnline)
+              const Text('PC offline: exibindo a ultima programacao recebida',
+                  style: TextStyle(color: Colors.grey, fontSize: 12)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editarPregacao(Pregacao? atual) async {
+    final resultado = await showDialog<String>(
+      context: context,
+      builder: (context) => _DialogoPregacao(mqtt: mqtt, atual: atual),
+    );
+    if (!mounted || resultado == null) return;
+    await mqtt.carregarPregacoes();
+    if (!mounted) return;
+    final mensagem = resultado == 'ok'
+        ? 'Programacao salva'
+        : 'Outro aparelho alterou esta programacao. Confira a lista atualizada.';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagem)));
+  }
+
+  Future<void> _excluirPregacao(Pregacao p) async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir pregacao?'),
+        content: Text('${p.data} ${p.horario}  ${p.pregador}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('CANCELAR'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('EXCLUIR'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !mounted) return;
+    final resposta = await mqtt.executar(ComandoPregacao.deletar.valor,
+        extras: {'id': '${p.id}', 'versao': '${p.versao}'});
+    if (!mounted) return;
+    await mqtt.carregarPregacoes();
+    if (!mounted) return;
+    final mensagem = resposta.ok
+        ? 'Pregacao excluida'
+        : (resposta.error.isEmpty ? 'Nao foi possivel excluir' : resposta.error);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagem)));
+  }
+
   Color _corProgresso(ProgressoJob pj) {
     if (pj.falhou) return Colors.red;
     if (pj.emEspera) return Colors.orange;
     if (pj.concluido) return Colors.green;
     return Colors.blue;
+  }
+}
+
+class _DialogoPregacao extends StatefulWidget {
+  final MqttControlador mqtt;
+  final Pregacao? atual;
+
+  const _DialogoPregacao({required this.mqtt, this.atual});
+
+  @override
+  State<_DialogoPregacao> createState() => _DialogoPregacaoState();
+}
+
+class _DialogoPregacaoState extends State<_DialogoPregacao> {
+  final _form = GlobalKey<FormState>();
+  late final TextEditingController _data;
+  late final TextEditingController _horario;
+  late final TextEditingController _pregador;
+  late final TextEditingController _igreja;
+  late final TextEditingController _textoBase;
+  late final TextEditingController _tema;
+  bool _salvando = false;
+  String _erro = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final atual = widget.atual;
+    final hoje = DateTime.now();
+    _data = TextEditingController(text: atual?.data ?? _formatarData(hoje));
+    _horario = TextEditingController(text: atual?.horario ?? '19:00');
+    _pregador = TextEditingController(text: atual?.pregador ?? '');
+    _igreja = TextEditingController(text: atual?.igreja ?? '');
+    _textoBase = TextEditingController(text: atual?.textoBase ?? '');
+    _tema = TextEditingController(text: atual?.tema ?? '');
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_data, _horario, _pregador, _igreja, _textoBase, _tema]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  static String _formatarData(DateTime data) =>
+      '${data.year.toString().padLeft(4, '0')}-'
+      '${data.month.toString().padLeft(2, '0')}-'
+      '${data.day.toString().padLeft(2, '0')}';
+
+  Future<void> _escolherData() async {
+    final informada = DateTime.tryParse(_data.text);
+    final inicial = informada != null &&
+            !informada.isBefore(DateTime(1900)) &&
+            !informada.isAfter(DateTime(2200))
+        ? informada
+        : DateTime.now();
+    final escolha = await showDatePicker(
+      context: context,
+      initialDate: inicial,
+      firstDate: DateTime(1900),
+      lastDate: DateTime(2200),
+    );
+    if (escolha != null && mounted) _data.text = _formatarData(escolha);
+  }
+
+  Future<void> _escolherHorario() async {
+    final partes = _horario.text.split(':');
+    final hora = partes.length == 2 ? int.tryParse(partes[0]) : null;
+    final minuto = partes.length == 2 ? int.tryParse(partes[1]) : null;
+    final escolha = await showTimePicker(
+      context: context,
+      initialTime: hora != null && minuto != null &&
+              hora >= 0 && hora < 24 && minuto >= 0 && minuto < 60
+          ? TimeOfDay(hour: hora, minute: minuto)
+          : const TimeOfDay(hour: 19, minute: 0),
+    );
+    if (escolha != null && mounted) {
+      _horario.text = '${escolha.hour.toString().padLeft(2, '0')}:'
+          '${escolha.minute.toString().padLeft(2, '0')}';
+    }
+  }
+
+  Future<void> _salvar() async {
+    if (!_form.currentState!.validate() || _salvando) return;
+    setState(() { _salvando = true; _erro = ''; });
+    final atual = widget.atual;
+    final extras = <String, String>{
+      'data': _data.text,
+      'horario': _horario.text,
+      'pregador': _pregador.text.trim(),
+      'igreja': _igreja.text.trim(),
+      'texto_base': _textoBase.text.trim(),
+      'tema': _tema.text.trim(),
+      if (atual != null) 'id': '${atual.id}',
+      if (atual != null) 'versao': '${atual.versao}',
+    };
+    try {
+      final resposta = await widget.mqtt.executar(
+          atual == null
+              ? ComandoPregacao.criar.valor
+              : ComandoPregacao.atualizar.valor,
+          extras: extras);
+      if (!mounted) return;
+      if (resposta.ok) {
+        Navigator.pop(context, 'ok');
+      } else if (resposta.code == 'versao_desatualizada') {
+        Navigator.pop(context, 'conflito');
+      } else {
+        setState(() {
+          _erro = resposta.error.isEmpty
+              ? 'Nao foi possivel salvar a programacao'
+              : resposta.error;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _erro = 'Falha ao salvar a programacao');
+    } finally {
+      if (mounted) setState(() => _salvando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.atual == null ? 'NOVA PREGACAO' : 'EDITAR PREGACAO'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _form,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _data,
+                  readOnly: true,
+                  onTap: _escolherData,
+                  decoration: const InputDecoration(labelText: 'Data',
+                      suffixIcon: Icon(Icons.calendar_today)),
+                  validator: (v) => v == null || v.isEmpty ? 'Informe a data' : null,
+                ),
+                TextFormField(
+                  controller: _horario,
+                  readOnly: true,
+                  onTap: _escolherHorario,
+                  decoration: const InputDecoration(labelText: 'Horario',
+                      suffixIcon: Icon(Icons.access_time)),
+                  validator: (v) => v == null || v.isEmpty ? 'Informe o horario' : null,
+                ),
+                TextFormField(
+                  controller: _pregador,
+                  maxLength: 120,
+                  decoration: const InputDecoration(labelText: 'Pregador'),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Informe o pregador' : null,
+                ),
+                TextFormField(
+                  controller: _igreja,
+                  maxLength: 120,
+                  decoration: const InputDecoration(labelText: 'Igreja'),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Informe a igreja' : null,
+                ),
+                TextFormField(
+                  controller: _textoBase,
+                  maxLength: 160,
+                  decoration: const InputDecoration(labelText: 'Texto base'),
+                ),
+                TextFormField(
+                  controller: _tema,
+                  maxLength: 200,
+                  decoration: const InputDecoration(labelText: 'Tema'),
+                ),
+                if (_erro.isNotEmpty)
+                  Text(_erro, style: const TextStyle(color: Colors.red)),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _salvando ? null : () => Navigator.pop(context),
+          child: const Text('CANCELAR'),
+        ),
+        FilledButton(
+          onPressed: _salvando ? null : _salvar,
+          child: Text(_salvando ? 'SALVANDO...' : 'SALVAR'),
+        ),
+      ],
+    );
   }
 }

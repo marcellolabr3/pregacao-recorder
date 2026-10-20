@@ -35,6 +35,41 @@ def test_index_is_served(client):
     assert b"toggle" not in resp.data.lower()
 
 
+def test_programacao_fica_na_primeira_pagina(client):
+    pagina = client.get("/").data
+    inicio = pagina.index(b'id="viewHome"')
+    programacao = pagina.index(b'id="programacaoCard"')
+    avancado = pagina.index(b'id="viewAdvanced"')
+    assert inicio < programacao < avancado
+
+
+def test_programacao_api_valida_campos_e_versao_de_dois_celulares(client):
+    _admin(client)
+    dados = {
+        "data": "2026-11-01", "horario": "19:00", "pregador": "Ana",
+        "igreja": "Central", "texto_base": "Joao 3:16", "tema": "Amor",
+    }
+    assert client.post("/api/pregacoes", json={**dados, "data": "2026-02-30"}).status_code == 422
+    criado = client.post("/api/pregacoes", json=dados)
+    assert criado.status_code == 200
+    item = criado.get_json()["pregacao"]
+    assert item["versao"] == 1
+    pid = item["id"]
+
+    alterado = client.put(f"/api/pregacoes/{pid}", json={"pregador": "Beatriz", "versao": 1})
+    assert alterado.status_code == 200
+    assert alterado.get_json()["pregacao"]["versao"] == 2
+    conflito = client.put(f"/api/pregacoes/{pid}", json={"pregador": "Carla", "versao": 1})
+    assert conflito.status_code == 409
+    assert conflito.get_json()["error"] == "versao_desatualizada"
+    assert client.get(f"/api/pregacoes/{pid}").get_json()["pregador"] == "Beatriz"
+    assert client.delete(f"/api/pregacoes/{pid}", json={"versao": 1}).status_code == 409
+    assert client.delete(f"/api/pregacoes/{pid}", json={"versao": 2}).status_code == 200
+
+    eventos = client.get("/api/events/history").get_json()["items"]
+    assert len([e for e in eventos if e["kind"] == "programacao_alterada"]) == 3
+
+
 def test_me_reports_pin_required(client):
     data = client.get("/api/me").get_json()
     assert data["pin_required"] is True

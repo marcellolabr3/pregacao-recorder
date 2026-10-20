@@ -163,7 +163,7 @@ def test_update_pregacao_incrementa_versao(db):
     assert p2["versao"] == 2
 
 
-def test_update_pregacao_incrementa_versao(db):
+def test_update_pregacao_multiplas_versoes(db):
     pid = db.create_pregacao("2026-10-25", "19:00", "Pr. A", "Igreja 1", "", "")
     p1 = db.get_pregacao(pid)
     assert p1["versao"] == 1
@@ -178,6 +178,15 @@ def test_update_pregacao_incrementa_versao(db):
     p3 = db.get_pregacao(pid)
     assert p3["versao"] == 3
     assert p3["tema"] == "Tentativa 2"
+
+
+def test_versao_impede_sobrescrita_e_exclusao_de_outro_celular(db):
+    pid = db.create_pregacao("2026-10-25", "19:00", "Pr. A", "Igreja 1")
+    assert db.update_pregacao(pid, expected_version=1, pregador="Pr. B") is True
+    assert db.update_pregacao(pid, expected_version=1, pregador="Pr. C") is False
+    assert db.get_pregacao(pid)["pregador"] == "Pr. B"
+    assert db.delete_pregacao(pid, expected_version=1) is False
+    assert db.delete_pregacao(pid, expected_version=2) is True
 
 
 def test_snapshot_pregacao_para_job_retorna_dict(db):

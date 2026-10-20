@@ -202,6 +202,7 @@ class Ack {
   final String cmd;
   final String reqId;
   final String error;
+  final String code;
   final String detail;
   final String state;
   final bool idempotent;
@@ -215,12 +216,15 @@ class Ack {
   final Map<String, dynamic> drive;
   final Map<String, dynamic> storage;
   final String current;
+  final List<Pregacao> pregacoes;
+  final int totalPregacoes;
 
   const Ack({
     this.ok = false,
     this.cmd = '',
     this.reqId = '',
     this.error = '',
+    this.code = '',
     this.detail = '',
     this.state = '',
     this.idempotent = false,
@@ -234,6 +238,8 @@ class Ack {
     this.drive = const {},
     this.storage = const {},
     this.current = '',
+    this.pregacoes = const [],
+    this.totalPregacoes = 0,
   });
 
   factory Ack.fromJson(Map<String, dynamic> json) {
@@ -244,11 +250,21 @@ class Ack {
         if (item is Map<String, dynamic>) redes.add(item);
       }
     }
+    final programacao = <Pregacao>[];
+    final itens = json['pregacoes'];
+    if (itens is List) {
+      for (final item in itens) {
+        if (item is Map<String, dynamic>) {
+          programacao.add(Pregacao.fromJson(item));
+        }
+      }
+    }
     return Ack(
       ok: json['ok'] == true,
       cmd: json['cmd'] as String? ?? '',
       reqId: json['req_id'] as String? ?? '',
       error: json['error'] as String? ?? '',
+      code: json['code'] as String? ?? '',
       detail: json['detail'] as String? ?? '',
       state: json['state'] as String? ?? '',
       idempotent: json['idempotent'] == true,
@@ -262,6 +278,8 @@ class Ack {
       drive: (json['drive'] as Map<String, dynamic>?) ?? const {},
       storage: (json['storage'] as Map<String, dynamic>?) ?? const {},
       current: json['current'] as String? ?? '',
+      pregacoes: programacao,
+      totalPregacoes: json['total'] is int ? json['total'] as int : programacao.length,
     );
   }
 }

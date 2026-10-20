@@ -76,6 +76,7 @@ class FakeApi:
         self.calls = []
         self.finish_calls = []
         self.set_calls = []
+        self.pregacoes = []
 
     def status(self):
         self.calls.append("status")
@@ -144,6 +145,83 @@ class FakeApi:
                 "message": "dispositivo /mnt/ssd nao esta montado",
             }
         return 200, {"ok": True, "current": path}
+
+    def pregacoes_list(self):
+        self.calls.append("pregacoes_list")
+        return 200, {"pregacoes": self.pregacoes}
+
+    def pregacao_get(self, pid):
+        self.calls.append(("pregacao_get", pid))
+        return 200, {"id": pid, "pregador": "Ana", "versao": 1}
+
+    def pregacao_create(self, campos):
+        self.calls.append(("pregacao_create", campos))
+        return 200, {"ok": True, "id": 7, "pregacao": {"id": 7, **campos, "versao": 1}}
+
+    def pregacao_update(self, pid, campos):
+        self.calls.append(("pregacao_update", pid, campos))
+        return 200, {"ok": True, "pregacao": {"id": pid, **campos}}
+
+    def pregacao_delete(self, pid, versao):
+        self.calls.append(("pregacao_delete", pid, versao))
+        return 200, {"ok": True}
+
+
+def test_programacao_listada_no_ack_sem_expor_mais_de_quarenta_registros():
+    api = FakeApi()
+    api.pregacoes = [
+        {"id": i, "data": "2099-01-01", "horario": f"{i % 24:02d}:00",
+         "pregador": f"Pessoa {i}", "igreja": "Igreja"}
+        for i in range(50)
+    ]
+    agent, _, _ = make_agent(api=api)
+    ack = agent.handle_command({"cmd": "PREGACAO_LISTAR", "req_id": "lista1"})
+    assert ack["ok"] is True
+    assert ack["req_id"] == "lista1"
+    assert ack["total"] == 50
+    assert len(ack["pregacoes"]) == 40
+    assert api.calls[:2] == ["status", "pregacoes_list"]
+    pagina2 = agent.handle_command({"cmd": "PREGACAO_LISTAR", "offset": "40"})
+    assert pagina2["total"] == 50
+    assert len(pagina2["pregacoes"]) == 10
+
+
+def test_programacao_mostra_proximas_antes_do_historico():
+    api = FakeApi()
+    api.pregacoes = [
+        {"id": 1, "data": "2000-01-01", "horario": "19:00"},
+        {"id": 2, "data": "2099-12-31", "horario": "19:00"},
+        {"id": 3, "data": "2099-01-01", "horario": "19:00"},
+        {"id": 4, "data": "2001-01-01", "horario": "19:00"},
+    ]
+    agent, _, _ = make_agent(api=api)
+    ack = agent.handle_command({"cmd": "PREGACAO_LISTAR", "req_id": "ordem"})
+    assert [p["id"] for p in ack["pregacoes"]] == [3, 2, 4, 1]
+
+
+def test_programacao_edita_pelo_agente_sem_pin_no_comando():
+    api = FakeApi()
+    agent, _, _ = make_agent(api=api)
+    campos = {"data": "2026-11-01", "horario": "19:00", "pregador": "Ana",
+              "igreja": "Central", "texto_base": "", "tema": "Amor"}
+    comando = parse_command(json.dumps({"cmd": "PREGACAO_CRIAR", "req_id": "cel1", **campos}))
+    ack = agent.handle_command(comando)
+    assert ack["ok"] is True
+    assert ack["req_id"] == "cel1"
+    assert ack["id"] == 7
+    assert api.calls[-1] == ("pregacao_create", campos)
+    assert "pin" not in comando
+
+    ack = agent.handle_command({"cmd": "PREGACAO_ATUALIZAR", "id": "7",
+                                "versao": "1", **campos})
+    assert ack["ok"] is True
+    assert api.calls[-1][0] == "pregacao_update"
+    assert api.calls[-1][2]["versao"] == 1
+    ack = agent.handle_command({"cmd": "PREGACAO_DELETAR", "id": "7", "versao": "2"})
+    assert ack["ok"] is True
+    assert api.calls[-1] == ("pregacao_delete", 7, 2)
+    invalido = agent.handle_command({"cmd": "PREGACAO_DELETAR", "id": "7"})
+    assert invalido["code"] == "versao_invalida"
 
 
 class FakeClient:

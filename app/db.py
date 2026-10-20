@@ -542,9 +542,11 @@ class Database:
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
-    def update_pregacao(self, pregacao_id: int, **fields: Any) -> bool:
-        """Atualiza campos da pregacao. Incrementa versao automaticamente
-        para evitar sobrescrita concorrente (celular/PC)."""
+    def update_pregacao(
+        self, pregacao_id: int, *, expected_version: Optional[int] = None,
+        **fields: Any,
+    ) -> bool:
+        """Atualiza com versao esperada quando informada pelo cliente."""
         if not fields:
             return False
         # so campos validos
@@ -562,6 +564,8 @@ class Database:
             if not cur:
                 return False
             versao_atual = cur["versao"]
+            if expected_version is not None and versao_atual != expected_version:
+                return False
             campos["versao"] = versao_atual + 1
             set_clause = ", ".join(f"{k} = :{k}" for k in campos)
             cur = conn.execute(
@@ -570,11 +574,19 @@ class Database:
             )
             return cur.rowcount > 0
 
-    def delete_pregacao(self, pregacao_id: int) -> bool:
+    def delete_pregacao(
+        self, pregacao_id: int, *, expected_version: Optional[int] = None,
+    ) -> bool:
         with self.connection() as conn:
-            cur = conn.execute(
-                "DELETE FROM pregacoes WHERE id = ?", (pregacao_id,)
-            )
+            if expected_version is None:
+                cur = conn.execute(
+                    "DELETE FROM pregacoes WHERE id = ?", (pregacao_id,)
+                )
+            else:
+                cur = conn.execute(
+                    "DELETE FROM pregacoes WHERE id = ? AND versao = ?",
+                    (pregacao_id, expected_version),
+                )
             return cur.rowcount > 0
 
     def snapshot_pregacao_para_job(self, data: str, horario: str) -> Optional[Dict[str, Any]]:

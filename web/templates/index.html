@@ -94,6 +94,19 @@
     </button>
   </section>
 
+  <section class="card" id="programacaoCard">
+    <div class="card-title">PROGRAMACAO DE PREGACOES</div>
+    <p class="muted">Consulte as proximas pregacoes diretamente no painel.</p>
+    <div class="btn-row">
+      <button id="btnAddPregacao" class="btn btn-primary btn-sm" type="button">NOVA PREGACAO</button>
+      <button id="btnImportPregacao" class="btn btn-ghost btn-sm" type="button">IMPORTAR CSV/XLSX</button>
+      <a id="btnDownloadModelo" class="btn btn-ghost btn-sm" type="button" download="modelo_pregacoes.csv">BAIXAR MODELO</a>
+      <button id="btnScheduleAdmin" class="btn btn-ghost btn-sm" type="button">LIBERAR EDICAO</button>
+    </div>
+    <div id="pregacaoMsg" class="muted" role="status"></div>
+    <ul id="pregacoesList" class="notiff programacao-lista"></ul>
+  </section>
+
   <section class="grid">
     <div class="card">
       <div class="card-title">ARMAZENAMENTO</div>
@@ -358,19 +371,6 @@
       <p class="hint">O usuario do celular deve ter permissao no broker para este ID.
          O token do operador e diferente da senha do PC. Confirme STATUS/ACK no celular;
          a atividade local do agente nao comprova conexao ao broker.</p>
-    </section>
-
-    <!-- ===== PROGRAMACAO DE PREGACOES (S4) ===== -->
-    <section class="card">
-      <div class="card-title">PROGRAMACAO DE PREGACOES</div>
-      <div class="btn-row">
-        <button id="btnAddPregacao" class="btn btn-primary btn-sm" type="button">NOVA PREGACAO</button>
-        <button id="btnImportPregacao" class="btn btn-ghost btn-sm" type="button">IMPORTAR CSV/XLSX</button>
-        <a id="btnDownloadModelo" class="btn btn-ghost btn-sm" type="button" download="modelo_pregacoes.csv">BAIXAR MODELO</a>
-      </div>
-      <div id="pregacaoMsg" class="muted"></div>
-      <ul id="pregacoesList" class="notiff"></ul>
-
     </section>
 
     <section class="card">
