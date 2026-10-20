@@ -5,7 +5,8 @@ Gravador de pregacoes para Windows com painel local e controle Android por MQTT/
 ## Comecar
 
 1. Seguir [instalacao Windows](docs/WINDOWS.md).
-2. Executar `iniciar-tudo.bat` nesta copia de desenvolvimento.
+2. O laboratorio esta registrado para iniciar com o Windows. Para abrir
+   manualmente, executar `iniciar-tudo.bat` nesta copia de desenvolvimento.
 3. Aguardar o painel abrir no navegador (`http://127.0.0.1:8080` por padrao).
 4. Configurar audio, pasta de gravacao e Google Drive pelo painel.
 
@@ -15,16 +16,16 @@ executar `iniciar-tudo.bat --verificar`. Opcoes e logs: [operacao Windows](docs/
 
 ## Edicao pessoal no SSD
 
-No SSD `E:`, use `E:\PregacaoRecorder-Pessoal\Iniciar Pregacao.cmd`; para conferir
-as dependencias sem iniciar os servicos, use `Verificar Pacote.cmd` na mesma
-pasta. O instalador pessoal tambem esta na raiz do SSD, caso seja necessario
-reinstalar a pasta. O APK atual (`2.6.0+12`) esta dentro da pasta pessoal.
-`E:\PregacaoRecorder` e uma pasta antiga incompleta e nao deve ser usada.
-Execute somente uma copia do gravador por vez: as copias de desenvolvimento e
-do SSD usam a mesma porta 8080 e a mesma identidade MQTT. Ao usar outro PC,
-confira audio, conexao do celular e contas conforme o [guia do SSD](docs/GUIA_SSD_PORTATIL.md)
-e o [roteiro de aceite](docs/ACEITE_WINDOWS.md). O login do NotebookLM precisa
-ser renovado antes de gerar um novo estudo.
+No SSD, use `PregacaoRecorder-Pessoal\Iniciar Pregacao.cmd` sob a letra atribuida
+pelo Windows. `Verificar Pacote.cmd` confere as dependencias. O SSD esta no
+outro PC; o usuario informou que abriu o programa e entrou no NotebookLM la.
+A revisao 2.7.0+13 do APK e o atualizador da pasta pessoal estao em preparacao.
+O atualizador preserva contas, banco, gravacoes e o login feito no outro PC.
+O laboratorio usa identidade MQTT propria (`pregacao-lab-aska`); a instalacao
+pessoal conserva a identidade real. Ao usar o SSD, confira audio, conexao dos
+dois celulares e contas conforme o [guia do SSD](docs/GUIA_SSD_PORTATIL.md)
+e o [roteiro de aceite](docs/ACEITE_WINDOWS.md). A pasta antiga do SSD sera
+conferida e eliminada quando essa unidade estiver acessivel.
 
 ## Fluxo implementado
 
@@ -36,7 +37,9 @@ Mesa/microfone -> FFmpeg/DirectShow -> segmentos WAV -> MP3 local
 ```
 
 O audio continua local sem internet. Upload e estudo usam filas separadas e podem
-processar em paralelo. O celular envia comandos e exibe o estado; o PC grava e processa.
+processar em paralelo. O celular envia comandos e permite manter a programacao;
+o PC grava e processa. Tarefas concluidas mostram 100%, inclusive quando
+etapas opcionais sao puladas e identificadas como tal.
 
 ## Componentes
 
@@ -53,7 +56,8 @@ processar em paralelo. O celular envia comandos e exibe o estado; o PC grava e p
 - Jobs persistem, mas o pipeline ainda nao retoma cada etapa individualmente.
 - Upload apos reinicio nao persiste a sessao resumivel; falhas ambiguas podem duplicar arquivos.
 - WhatsApp nao comprova entrega final; retry individual/idempotente permanece pendente.
-- Metadados ainda nao sao enviados ao pipeline; formulario Flutter esta incompleto.
+- Metadados da gravacao ainda nao sao enviados ao pipeline; o formulario Flutter
+  de gravacao continua incompleto.
 - Provas com audio real, dois celulares e reinicio no meio do pipeline continuam pendentes.
 
 ## Documentacao

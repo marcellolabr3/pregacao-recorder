@@ -2,6 +2,9 @@
 
 Novo ciclo de estabilidade, programacao, APK e inicio com Windows:
 [tasks e sprints de 20/10/2026](TASKS_SPRINTS_20261020.md).
+O restante deste arquivo registra o ciclo anterior de distribuicao Windows;
+as entregas e pendencias atuais estao no plano acima e em
+[CODEX_CONTEXT.md](CODEX_CONTEXT.md).
 
 Task: **PR-DIST-001 - Instalar meu Pregacao Recorder em outro PC**.
 Escopo atualizado pelo usuario: executar diretamente no SSD portatil com
@@ -19,7 +22,8 @@ Detalhes: [TASK_DISTRIBUICAO_WINDOWS.md](TASK_DISTRIBUICAO_WINDOWS.md).
 Em 20/10/2026 UTC, o instalador privado foi executado novamente no SSD apos a
 pasta pessoal ter desaparecido da unidade. Ela foi restaurada e o instalador
 foi copiado para a raiz do SSD. A pasta antiga `PregacaoRecorder` reapareceu
-incompleta; sua destinacao aguarda instrucao do usuario. Foram conferidos 7.859 arquivos publicos e
+incompleta; o usuario depois autorizou eliminar pastas antigas quando o SSD
+voltar a estar acessivel. Foram conferidos 7.859 arquivos publicos e
 6.236 privados; banco integro com 12 gravacoes/12 uploads/2 estudos, links de
 audio existentes, `.env`, token Google, perfil NotebookLM, 5.868 arquivos de
 autenticacao WhatsApp e APK. O ID e o broker copiados coincidem com os defaults

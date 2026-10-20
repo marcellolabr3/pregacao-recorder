@@ -90,4 +90,6 @@ ao celular; o token MQTT salvo no telefone continua necessario para conectar.
 O inicio automatico do laboratorio foi registrado para o usuario Windows atual,
 resolvendo o volume em vez de fixar a letra D:. O SSD esta em outro PC: o aceite
 real da instalacao pessoal e dos dois celulares ainda depende dele. Nenhum
-APK/pacote/instalador novo foi gerado neste ciclo.
+APK/pacote/instalador novo foi gerado neste ciclo. Antes do build final, falta
+o usuario esclarecer se "sem senha" inclui eliminar a configuracao inicial do
+token MQTT, pois isso exige mudar o acesso ao broker.

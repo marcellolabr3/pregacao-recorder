@@ -9,6 +9,51 @@
 - `.env`, configuracao pessoal, tokens/perfis, banco, logs e gravacoes nunca entram no Git.
 - `docs/CODEX_CONTEXT.local.md` contem legado sensivel; nunca imprimir/commitar.
 
+## Ciclo atual - 20/10/2026
+
+- Pedido e tarefas: [TASKS_SPRINTS_20261020.md](TASKS_SPRINTS_20261020.md).
+  Commits ja enviados: sprint 1 `a3977a9`, sprint 2 `0ae930a`, sprint 3
+  `c9f2fea`, sprint 4 `812ed1c`. Gerar APK/pacotes finais so apos fechar
+  todas as alteracoes de fonte; commitar cada sprint.
+- O usuario confirmou que o APK estabilizou depois de encerrar o agente do
+  laboratorio que compartilhava o ClientID MQTT com o SSD. `config/config.json`
+  local e ignorado pelo Git e agora usa `pregacao-lab-aska` em Config e
+  RemoteSettings; a instalacao real conserva `pregacao-igreja-01`. Nao copiar
+  config/estado privado do laboratorio para o SSD.
+- O laboratorio funciona sem o SSD: o inicio automatico do usuario Windows foi
+  registrado por `packaging/windows_autostart.ps1 -Mode Register -Layout Lab`
+  e resolve o volume por numero de serie, nao por letra. Uma abertura real
+  iniciou painel/agente; a segunda nao duplicou PIDs. Painel respondeu em
+  127.0.0.1:8080 com estado IDLE e a programacao respondeu. Servicos foram
+  parados depois do smoke para os testes finais; reiniciar ao concluir.
+- Sprint 2: tarefa `CONCLUIDO` exibe 100% mesmo quando envio opcional foi
+  pulado; etapas puladas continuam identificadas. Snapshot MQTT retido se
+  corrige na reconexao. Sprint 3: programacao na pagina inicial do PC/APK,
+  CRUD por MQTT, versao otimista para dois celulares, eventos de atualizacao;
+  nenhum PIN e solicitado no APK para essa operacao. O agente usa somente as
+  credenciais administrativas locais do PC.
+- Flutter 2.7.0+13 esta preparado em `pubspec.yaml`. Ainda falta gerar e
+  conferir o APK. Os testes Python direcionados (141), protocolo Flutter
+  (35), analise Flutter e a suite Python completa passaram. As duas goldens
+  da pagina principal precisam ser atualizadas para a nova programacao.
+- Sprint 4: `personal_update.iss`/`build_personal_update.py` geram um
+  atualizador que aceita so a pasta pessoal existente, faz backup dos
+  arquivos publicos dentro dela e preserva banco, contas, perfis e audios.
+  O instalador pessoal e o atualizador registram o inicio automatico com
+  resolucao por volume. O helper oferece Status/Enable/Disable e espera ate
+  60 segundos pelo SSD no logon. Falta compilar/testar o atualizador.
+- O SSD esta no outro PC. O usuario conseguiu entrar no NotebookLM la.
+  Nao ha acesso daqui para conferir/remover a pasta antiga, aplicar o
+  atualizador ou testar os dois celulares. O usuario autorizou eliminar
+  pastas antigas do SSD quando ele estiver acessivel, preservando a pasta
+  pessoal. Nao declarar aceite real antes dessa prova.
+- O instalador pessoal antigo pode restaurar o snapshot de 20/10, mas nao deve
+  ser regenerado daqui: `build_personal_portable.py` incorpora contas e dados
+  da maquina de build. Entregar atualizador sem estado privado no ciclo atual.
+- Ferramentas: Flutter `D:\Dev\flutter-sdk\flutter\bin\flutter.bat`, Python
+  `.venv\Scripts\python.exe`, Inno
+  `.bundle-cache\inno-7.1.0\compiler\ISCC.exe`.
+
 ## Arquitetura e regras
 
 - Gravacao local independe de internet/MQTT; PC processa, celular controla.
@@ -24,7 +69,7 @@
 - Auditoria e limites: `CONTEXTO_AUDITORIA_PRODUTO.md` (IDs A-G).
 - Configurar audio/pasta com gravador ocioso; alteracao de destino durante captura e risco preexistente nao corrigido nesta entrega.
 
-## Pacote generico validado (19-20/10/2026)
+## Registro anterior: pacote generico validado (19-20/10/2026)
 
 - PR-DIST-001: implementacao dos fluxos da sprint 2 concluida; aceite pessoal 2.2/2.3 no destino pendente.
 - Sprint 3 iniciada: 11 provas isoladas do instalador passaram; Windows limpo/hardware/contas/celular reais pendentes.
@@ -54,7 +99,7 @@
   `app/launcher.py`, `app/bundled_runtime.py`, `web/static/app.js`, `web/templates/index.html`, `packaging/build_*.py`.
 - Evidencias: `docs/TESTES.md`, `.bundle-cache/sprint2-isolated-pytest.json`, `.bundle-cache/sprint3-installer-fixtures-20261019/`.
 
-## Edicao pessoal no SSD (20/10/2026)
+## Registro anterior: edicao pessoal no SSD (20/10/2026)
 
 - Apos a limpeza anterior, `E:\PregacaoRecorder-Pessoal` nao estava mais no SSD;
   a pasta antiga `E:\PregacaoRecorder` havia reaparecido incompleta. A causa da
@@ -71,13 +116,11 @@
 - O smoke das dependencias privadas passou; a verificacao de ausencia de dados
   do smoke generico falhou por ser incompatível com a edicao pessoal, que inclui
   config, banco e logs por projeto. Nao indica defeito dos runtimes.
-- A pasta antiga ainda existe na raiz. Uma tentativa de exclusao foi bloqueada
-  por revisao automatica; aguardar escolha explicita do usuario antes de mover
-  ou tentar nova remocao. A copia anterior esta em
+- A pasta antiga existia na raiz na ultima inspecao. O usuario autorizou
+  elimina-la quando o SSD estiver acessivel. A copia anterior esta em
   `recovery/ssd-root-archive-20261020/`, ignorada pelo Git.
-- A copia de desenvolvimento nesta maquina esta ativa na porta 8080. A abertura
-  completa do SSD nessa porta depende de autorizacao para interrompe-la
-  temporariamente. Apenas uma copia deve usar o mesmo ID MQTT por vez.
+- Naquela inspecao, a copia de desenvolvimento usava a porta 8080 e o mesmo
+  ID MQTT. A identidade do laboratorio ja foi separada neste ciclo.
 - O APK `2.6.0+12` no SSD tem o mesmo SHA-256 do build release recompilado da
   fonte Flutter atual (`A986EC82AE37C10B9352B80684F0E3C5B27C213157E7BA953E285204498BA0C7`).
   Os 36 testes Flutter passaram; o APK 2.5 da raiz do repositorio e legado.
@@ -85,19 +128,16 @@
   NotebookLM ainda pede login interativo; uso real no outro PC e celular segue
   sem aceite. Detalhes em `docs/TESTES.md` e `docs/GUIA_SSD_PORTATIL.md`.
 
-## Pendencias e proximo passo
+## Pendencias deste ciclo
 
-- Novo pedido (20/10/2026): seguir [tasks e sprints](TASKS_SPRINTS_20261020.md),
-  commitar cada sprint e gerar APK/instalador apenas apos todas as mudancas.
-  Os processos da copia de desenvolvimento foram encerrados neste PC; o log
-  do agente tem 761 quedas MQTT `rc=128`, compativeis com disputa do ClientID
-  `pregacao-<device_id>`. O SSD `E:` nao esta acessivel neste PC no momento.
-
-1. Aguardar resposta do usuario sobre destino da pasta antiga e interrupcao temporaria da copia de desenvolvimento para testar o inicio completo do SSD.
-2. Levar o SSD ao PC destino, abrir `PregacaoRecorder-Pessoal/Iniciar Pregacao.cmd` e seguir `docs/ACEITE_WINDOWS.md`.
-3. Selecionar audio/disco, autorizar contas/destinatario, definir coexistencia/substituicao e configurar credencial/ACL MQTT/celular; concluir aceite 2.2/2.3.
-4. Validar Windows limpo, MP3 real/offline, Drive, NotebookLM/PDF, WhatsApp e STATUS/ACK; registrar resultados antes de declarar entrega pronta.
-
-- Nenhum servidor de desenvolvimento, conta/broker ou fila/job foi modificado nesta etapa. O banco/config pessoal foi realocado no primeiro inicio do SSD.
-- APK Flutter2.6.0+12 reutilizado; sem assistente novo, migrador, atualizador, CI ou recursos Flutter.
-- Demais C/D/G03 da auditoria nao corrigidos; conferir servidor/logins/jobs antes de operacao real.
+1. Confirmar com o usuario se "sem senha no APK" inclui o token MQTT inicial
+   ou apenas o PIN para operar; nao mudar o broker por suposicao.
+2. Atualizar as goldens Flutter depois da ultima mudanca de fonte, rodar a
+   suite completa e conferir a assinatura/versao do APK anterior e novo.
+3. Gerar APK, pacote publico, instalador generico e atualizador pessoal;
+   validar inventarios, checksums e instalacao isolada. Nao publicar contas,
+   perfis, banco ou logs.
+4. Reiniciar o laboratorio com ID proprio e validar painel/agente; no outro
+   PC, aplicar o atualizador ao SSD, conferir a limpeza de pastas antigas,
+   testar dois celulares e o inicio apos logon.
+5. Atualizar README e evidencias, commitar/push a sprint de integracao.
