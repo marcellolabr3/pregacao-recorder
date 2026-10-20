@@ -17,6 +17,9 @@
   `C:\Users\Aska\Documents\Default Project\sermon-pipeline` nao foi alterada.
 - Pacote usa fontes minimas em `vendor/sermon-pipeline/`, prompt preservado e SOURCE.json.
 - Preservar dados/jobs/credenciais; testes somente com homes e bancos isolados.
+- Orientacao explicita do usuario (20/10/2026): ao encontrar uma limitacao,
+  consultar o usuario antes de escolher uma alternativa ou pedir permissao
+  para a acao impedida. Nao presumir consentimento pelo silencio.
 - Nao executar `_instalador/ajustar_caminhos.py` nem copiar .venv com remendos.
 - Auditoria e limites: `CONTEXTO_AUDITORIA_PRODUTO.md` (IDs A-G).
 - Configurar audio/pasta com gravador ocioso; alteracao de destino durante captura e risco preexistente nao corrigido nesta entrega.
@@ -53,17 +56,28 @@
 
 ## Edicao pessoal no SSD (20/10/2026)
 
-- O SSD USB `E:` mostra apenas `PregacaoRecorder-Pessoal` como pasta de usuario
-  na raiz; `$RECYCLE.BIN` e `System Volume Information` sao do Windows.
-- A instalacao pessoal preserva configuracao, contas, historico, 12 gravacoes,
-  12 uploads, 2 estudos e o APK. O banco passou em `integrity_check`.
-- A instalacao antiga tinha banco vazio e nenhum audio exclusivo: seus nove MP3
-  tambem existem na pasta pessoal com o mesmo SHA-256. Ela e os arquivos soltos
-  da raiz foram movidos para `recovery/ssd-root-archive-20261020/`, ignorado
-  pelo Git. O instalador privado identico permanece em `dist-pacote/`.
-- Os 7.859 arquivos publicos da instalacao pessoal passaram na verificacao
-  SHA-256. `Verificar Pacote.cmd` passou antes e depois da limpeza sem iniciar
-  servicos, captura ou envio. Nao havia servico/tarefa agendada da pasta antiga.
+- Apos a limpeza anterior, `E:\PregacaoRecorder-Pessoal` nao estava mais no SSD;
+  a pasta antiga `E:\PregacaoRecorder` havia reaparecido incompleta. A causa da
+  mudanca ainda nao foi identificada. O instalador privado foi copiado para a
+  raiz do SSD e executado de la com codigo 0, restaurando a pasta pessoal.
+- O instalador `PregacaoRecorder-Pessoal-Instalar-portable-20261020T011738Z.exe`
+  no SSD tem SHA-256 `6EA5BE07A137EB7DDFC1BC3DA1E5A0053A2F9FAD4EBC0D00AE89BA4BEC15B48C`;
+  seu `.exe.sha256` tambem esta no SSD. Uma copia privada permanece em `dist-pacote/`.
+- `verify_personal_portable.py` confirmou 7.859 arquivos publicos e 6.236
+  privados. `Verificar Pacote.cmd` e o diagnostico do runtime passaram. O banco
+  passou em `integrity_check`: 12 sessoes, 12 uploads concluidos e 2 estudos
+  concluidos. O primeiro inicio realocou config, banco e caminhos historicos
+  para `E:`. A captura de teste no microfone Logi C270 gravou 2 segundos de sinal.
+- O smoke das dependencias privadas passou; a verificacao de ausencia de dados
+  do smoke generico falhou por ser incompatível com a edicao pessoal, que inclui
+  config, banco e logs por projeto. Nao indica defeito dos runtimes.
+- A pasta antiga ainda existe na raiz. Uma tentativa de exclusao foi bloqueada
+  por revisao automatica; aguardar escolha explicita do usuario antes de mover
+  ou tentar nova remocao. A copia anterior esta em
+  `recovery/ssd-root-archive-20261020/`, ignorada pelo Git.
+- A copia de desenvolvimento nesta maquina esta ativa na porta 8080. A abertura
+  completa do SSD nessa porta depende de autorizacao para interrompe-la
+  temporariamente. Apenas uma copia deve usar o mesmo ID MQTT por vez.
 - O APK `2.6.0+12` no SSD tem o mesmo SHA-256 do build release recompilado da
   fonte Flutter atual (`A986EC82AE37C10B9352B80684F0E3C5B27C213157E7BA953E285204498BA0C7`).
   Os 36 testes Flutter passaram; o APK 2.5 da raiz do repositorio e legado.
@@ -73,10 +87,11 @@
 
 ## Pendencias e proximo passo
 
-1. Levar o SSD ao PC destino, abrir `PregacaoRecorder-Pessoal/Iniciar Pregacao.cmd` e seguir `docs/ACEITE_WINDOWS.md`.
-2. Selecionar audio/disco, autorizar contas/destinatario, definir coexistencia/substituicao e configurar credencial/ACL MQTT/celular; concluir aceite 2.2/2.3.
-3. Validar Windows limpo, MP3 real/offline, Drive, NotebookLM/PDF, WhatsApp e STATUS/ACK; registrar resultados antes de declarar entrega pronta.
+1. Aguardar resposta do usuario sobre destino da pasta antiga e interrupcao temporaria da copia de desenvolvimento para testar o inicio completo do SSD.
+2. Levar o SSD ao PC destino, abrir `PregacaoRecorder-Pessoal/Iniciar Pregacao.cmd` e seguir `docs/ACEITE_WINDOWS.md`.
+3. Selecionar audio/disco, autorizar contas/destinatario, definir coexistencia/substituicao e configurar credencial/ACL MQTT/celular; concluir aceite 2.2/2.3.
+4. Validar Windows limpo, MP3 real/offline, Drive, NotebookLM/PDF, WhatsApp e STATUS/ACK; registrar resultados antes de declarar entrega pronta.
 
-- Nenhum servidor de desenvolvimento, conta/broker, fila/job ou dado real foi modificado nesta etapa.
+- Nenhum servidor de desenvolvimento, conta/broker ou fila/job foi modificado nesta etapa. O banco/config pessoal foi realocado no primeiro inicio do SSD.
 - APK Flutter2.6.0+12 reutilizado; sem assistente novo, migrador, atualizador, CI ou recursos Flutter.
 - Demais C/D/G03 da auditoria nao corrigidos; conferir servidor/logins/jobs antes de operacao real.

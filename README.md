@@ -15,12 +15,14 @@ executar `iniciar-tudo.bat --verificar`. Opcoes e logs: [operacao Windows](docs/
 
 ## Edicao pessoal no SSD
 
-No SSD `E:`, a unica pasta visivel do produto e `PregacaoRecorder-Pessoal`.
-Abra `E:\PregacaoRecorder-Pessoal\Iniciar Pregacao.cmd`; para conferir as
-dependencias sem iniciar os servicos, use `Verificar Pacote.cmd` na mesma pasta.
-O APK atual (`2.6.0+12`) tambem esta nela. A pasta funciona sem a instalacao
-antiga e sem o instalador na raiz do SSD. Ao usar outro PC, confira audio,
-conexao do celular e contas conforme o [guia do SSD](docs/GUIA_SSD_PORTATIL.md)
+No SSD `E:`, use `E:\PregacaoRecorder-Pessoal\Iniciar Pregacao.cmd`; para conferir
+as dependencias sem iniciar os servicos, use `Verificar Pacote.cmd` na mesma
+pasta. O instalador pessoal tambem esta na raiz do SSD, caso seja necessario
+reinstalar a pasta. O APK atual (`2.6.0+12`) esta dentro da pasta pessoal.
+`E:\PregacaoRecorder` e uma pasta antiga incompleta e nao deve ser usada.
+Execute somente uma copia do gravador por vez: as copias de desenvolvimento e
+do SSD usam a mesma porta 8080 e a mesma identidade MQTT. Ao usar outro PC,
+confira audio, conexao do celular e contas conforme o [guia do SSD](docs/GUIA_SSD_PORTATIL.md)
 e o [roteiro de aceite](docs/ACEITE_WINDOWS.md). O login do NotebookLM precisa
 ser renovado antes de gerar um novo estudo.
 

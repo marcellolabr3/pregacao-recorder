@@ -277,7 +277,7 @@ celular, conexao MQTT efetiva, validade das sessoes de Drive/NotebookLM/
 WhatsApp e envio com destinatario de teste. Uma sessao de navegador pode
 precisar de novo login ao mudar de conta Windows.
 
-## SSD limpo e APK conferido (20/10/2026)
+## SSD limpo e APK conferido (20/10/2026, estado anterior)
 
 - SSD USB `E:`: somente `PregacaoRecorder-Pessoal` permanece visivel como pasta
   de usuario na raiz. As duas pastas ocultas do Windows permanecem.
@@ -293,3 +293,29 @@ precisar de novo login ao mudar de conta Windows.
   `A986EC82AE37C10B9352B80684F0E3C5B27C213157E7BA953E285204498BA0C7`.
 - Windows limpo, PC destino, controle pelo celular e sessoes externas ainda
   precisam de aceite real; NotebookLM segue exigindo login interativo.
+
+## Reinstalacao do SSD (20/10/2026, estado atual)
+
+- `E:\PregacaoRecorder-Pessoal` nao estava presente quando o SSD foi revisto; a
+  pasta antiga `E:\PregacaoRecorder` havia reaparecido incompleta. A origem da
+  mudanca nao foi identificada. O instalador pessoal e seu `.exe.sha256` foram
+  repostos na raiz do SSD. SHA-256 do `.exe`:
+  `6EA5BE07A137EB7DDFC1BC3DA1E5A0053A2F9FAD4EBC0D00AE89BA4BEC15B48C`.
+- O instalador foi executado a partir de `E:` com saida 0. `Verificar Pacote.cmd`
+  saiu com 0. `verify_personal_portable.py` conferiu 7.859 arquivos publicos,
+  6.236 privados e banco integro (12 sessoes, 12 uploads concluidos, 2 estudos
+  concluidos). O primeiro inicio realocou config e caminhos historicos para `E:`.
+- Diagnostico `app.launcher --verificar` com runtime privado saiu com 0: Python,
+  FFmpeg/ffprobe, Node, MQTT, Drive e pipeline disponiveis. `rclone` opcional
+  emitiu aviso com PATH restrito. `app.launcher --cli check` saiu com 0 e capturou
+  2 segundos de sinal pelo microfone Logi C270 deste PC.
+- O smoke privado passou imports, PDF, XLSX, Chromium, NotebookLM CLI,
+  dependencias WhatsApp, DirectShow/FFmpeg e MP3 sintetico. O script encerrou
+  com 1 somente na assercao final de pacote generico vazio: a edicao pessoal
+  inclui intencionalmente config, dados e logs.
+- O APK instalado mantem o SHA-256 do release `2.6.0+12` acima. Ao executar
+  o iniciador do SSD na porta 8080, ele retornou 1 com a mensagem de porta
+  ocupada e nao iniciou servicos. A copia de desenvolvimento esta ativa nessa
+  porta; a abertura completa aguarda autorizacao para interromper essa copia
+  temporariamente. A pasta antiga ainda aparece no SSD: a exclusao
+  foi bloqueada por revisao automatica, e seu destino aguarda instrucao do usuario.

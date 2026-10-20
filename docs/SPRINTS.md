@@ -11,11 +11,12 @@ Detalhes: [TASK_DISTRIBUICAO_WINDOWS.md](TASK_DISTRIBUICAO_WINDOWS.md).
 |---|---|---|
 | 1 | Pacote completo e runtimes privados | ZIP gerado; aceite em Windows limpo pendente |
 | 2 | Instalador, atalho, configuracoes existentes e ajustes indispensaveis de login/inicio | Implementacao concluida; 488 testes verdes; aceite pessoal 2.2/2.3 no destino pendente |
-| 3 | Validar funcoes atuais em Windows limpo e no PC destino; entregar guia curto | Edicao pessoal isolada em `E:\PregacaoRecorder-Pessoal`, integridade e diagnostico locais passaram; aceite no outro PC pendente |
+| 3 | Validar funcoes atuais em Windows limpo e no PC destino; entregar guia curto | Edicao pessoal reinstalada em `E:\PregacaoRecorder-Pessoal`; integridade, diagnostico e captura curta de audio passaram. Abertura completa e aceite no outro PC pendentes. |
 
-Em 20/10/2026 UTC, o instalador privado foi executado no SSD. Depois, a pasta
-antiga e os arquivos soltos da raiz foram arquivados fora do SSD; somente
-`PregacaoRecorder-Pessoal` permanece visivel como pasta de usuario. Foram conferidos 7.859 arquivos publicos e
+Em 20/10/2026 UTC, o instalador privado foi executado novamente no SSD apos a
+pasta pessoal ter desaparecido da unidade. Ela foi restaurada e o instalador
+foi copiado para a raiz do SSD. A pasta antiga `PregacaoRecorder` reapareceu
+incompleta; sua destinacao aguarda instrucao do usuario. Foram conferidos 7.859 arquivos publicos e
 6.236 privados; banco integro com 12 gravacoes/12 uploads/2 estudos, links de
 audio existentes, `.env`, token Google, perfil NotebookLM, 5.868 arquivos de
 autenticacao WhatsApp e APK. O ID e o broker copiados coincidem com os defaults
@@ -23,7 +24,7 @@ do APK. O primeiro preparo realocou config e banco para `E:` e o diagnostico
 do runtime privado passou. Guia: [GUIA_SSD_PORTATIL.md](GUIA_SSD_PORTATIL.md).
 
 Artefato e evidencias atuais em [TESTES.md](TESTES.md). O instalador privado
-e seu `.exe.sha256` estao em `dist-pacote/`, fora do SSD e do Git.
+e seu `.exe.sha256` estao no SSD e em `dist-pacote/`; nenhum entra no Git.
 Configuracao em [GUIA_INSTALACAO_WINDOWS.md](GUIA_INSTALACAO_WINDOWS.md).
 Audio selecionado pode ser testado antes de salvar; CONFIG valida/persiste o lote
 e restaura memoria se falhar. MQTT pode ser salvo no cartao administrativo sem

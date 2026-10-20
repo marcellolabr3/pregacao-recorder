@@ -2,16 +2,18 @@
 
 Esta pasta pessoal contem o estado copiado do PC de origem: configuracao,
 `.env`, token do Drive, banco/historico, gravacoes, arquivos de estudo, sessao
-WhatsApp e perfil NotebookLM. Na raiz visivel do SSD permanece somente
-`PregacaoRecorder-Pessoal`; o Windows mantem pastas de sistema ocultas.
-Use a pasta somente no seu SSD pessoal. O instalador privado foi guardado
-fora do SSD e nao e publicado no GitHub.
+WhatsApp e perfil NotebookLM. Use `PregacaoRecorder-Pessoal` no SSD pessoal.
+O instalador privado `PregacaoRecorder-Pessoal-Instalar-portable-20261020T011738Z.exe`
+tambem esta na raiz do SSD e nao e publicado no GitHub. A pasta antiga
+`PregacaoRecorder`, ainda presente na raiz, esta incompleta e nao deve ser usada.
+O Windows tambem mantem pastas de sistema ocultas.
 
 ## Instalar e usar
 
 1. Abra `Iniciar Pregacao.cmd` dentro de `PregacaoRecorder-Pessoal`. A pasta
-   ja esta instalada e inclui os runtimes, dados e APK necessarios. Ao mudar
-   a letra do SSD ou a pasta, a abertura ajusta os caminhos do banco e da
+   ja esta instalada e inclui os runtimes, dados e APK necessarios. Se a pasta
+   estiver ausente, execute o instalador da raiz do SSD e aguarde a conclusao.
+   Ao mudar a letra do SSD ou a pasta, a abertura ajusta os caminhos do banco e da
    configuracao; use sempre o mesmo arquivo `.cmd` no novo local.
 2. O painel do PC aparece no navegador. Depois da abertura, execute
    `Verificar Pacote.cmd` para conferir as dependencias e caminhos locais.
@@ -50,7 +52,7 @@ broker para o celular funcionar fora da rede local.
 
 O historico e os arquivos anteriores estao na pasta instalada. Novas
 gravacoes tambem vao para `gravador\recordings` no SSD. O instalador privado
-permanece no PC de desenvolvimento caso seja preciso reinstalar. Nao reinstale
+esta na raiz do SSD e tambem no PC de desenvolvimento. Nao reinstale
 por cima de uma pasta com tarefas em andamento; a reinstalacao preserva banco,
 gravacoes, configuracoes e sessoes que mudaram apos a primeira instalacao.
 

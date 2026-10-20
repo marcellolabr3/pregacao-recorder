@@ -3,12 +3,13 @@
 Estado: sprint 1 empacotada; implementacao da sprint 2 concluida. Em 20/10/2026 UTC, a edicao pessoal portatil com contas e dados atuais foi instalada e validada neste PC no SSD `E:`. Aceite operacional no outro PC ainda pendente. Escopo pessoal confirmado em 19/10/2026 e ampliado pelo usuario para transportar todos os dados e credenciais.
 Uso pessoal, Windows 10/11 x64. Este plano substitui integralmente o plano anterior de oito sprints.
 
-**Decisao mais recente do usuario:** somente a pasta instalada
-`E:\PregacaoRecorder-Pessoal` fica visivel na raiz do SSD. Ela leva `.env`,
-tokens, banco, gravacoes, autenticacoes, arquivos de estudo e APK. A pasta
-anterior `E:\PregacaoRecorder` e os arquivos soltos da raiz foram movidos para
-um arquivo privado ignorado pelo Git em `recovery/ssd-root-archive-20261020/`.
-O instalador privado permanece em `dist-pacote/`, fora do SSD e do GitHub.
+**Estado atual:** `E:\PregacaoRecorder-Pessoal` leva `.env`, tokens, banco,
+gravacoes, autenticacoes, arquivos de estudo e APK. O instalador privado e o
+checksum estao na raiz do SSD e em `dist-pacote/`, fora do GitHub. A pasta
+antiga `E:\PregacaoRecorder` reapareceu incompleta apos a limpeza anterior;
+o usuario ainda deve decidir sua destinacao. Nao usa-la para iniciar o app.
+Uma copia anterior da pasta antiga e dos arquivos soltos esta em
+`recovery/ssd-root-archive-20261020/`, ignorada pelo Git.
 As secoes historicas abaixo descrevem o pacote generico anterior; onde houver
 divergencia, vale a edicao pessoal. Implementacao:
 `packaging/build_personal_portable.py`, `app/portable_state.py` e

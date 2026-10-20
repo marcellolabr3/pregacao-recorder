@@ -144,9 +144,10 @@ python packaging/verify_personal_portable.py E:\PregacaoRecorder-Pessoal
 A montagem usa pasta curta por causa dos caminhos do perfil do navegador no
 Windows. `verify_personal_portable.py` confere o estado imediatamente apos a
 instalacao; dados privados podem mudar legitimamente com o uso. O instalador
-privado permanece em `dist-pacote/`, fora do SSD e do Git. A raiz visivel do
-SSD contem somente `PregacaoRecorder-Pessoal`; o instalador e a pasta antiga
-foram arquivados em `recovery/ssd-root-archive-20261020/`, ignorado pelo Git.
+privado esta na raiz do SSD e em `dist-pacote/`, fora do Git. A pasta pessoal
+foi reinstalada em 20/10/2026; a pasta antiga `E:\PregacaoRecorder` reapareceu
+incompleta e aguarda instrucao do usuario para destinacao. Uma copia anterior
+da pasta antiga foi arquivada em `recovery/ssd-root-archive-20261020/`, ignorado pelo Git.
 Nao publicar esses artefatos. Consulte
 [GUIA_SSD_PORTATIL.md](../docs/GUIA_SSD_PORTATIL.md) para uso, celular,
 contas e testes no outro PC.
