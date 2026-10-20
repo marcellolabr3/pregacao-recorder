@@ -1,3 +1,4 @@
+import sqlite3
 import time
 
 
@@ -79,6 +80,23 @@ def test_upload_queue_survives_reopen(database):
     reopened = Database(database.file)
     assert reopened.upload_stats()["PENDING"] == 1
     assert reopened.claim_pending_uploads()[0]["file_path"] == "/tmp/persistente.mp3"
+
+
+def test_existing_study_artifacts_gain_mind_map_error_without_losing_paths(tmp_path):
+    from app.db import Database
+
+    file = tmp_path / "legacy.db"
+    with sqlite3.connect(file) as conn:
+        conn.execute("CREATE TABLE study_artifacts (job_id TEXT PRIMARY KEY, pdf_path TEXT, mind_map_path TEXT, updated_at REAL NOT NULL)")
+        conn.execute("INSERT INTO study_artifacts VALUES (?, ?, ?, ?)", ("old-job", "old.pdf", "old.json", 1.0))
+
+    migrated = Database(file)
+    artifact = migrated.study_artifact("old-job")
+    assert artifact["pdf_path"] == "old.pdf"
+    assert artifact["mind_map_path"] == "old.json"
+    assert artifact["mind_map_error"] is None
+    migrated.save_study_artifact("old-job", mind_map_error="falha de teste")
+    assert Database(file).study_artifact("old-job")["mind_map_error"] == "falha de teste"
 
 
 def test_events_roundtrip(database):

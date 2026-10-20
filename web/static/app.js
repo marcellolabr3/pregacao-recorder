@@ -1163,15 +1163,19 @@
       var selected = select.value;
       select.innerHTML = "";
       (r.items || []).forEach(function (job) {
-        if (!job.pdf_available) return;
+        if (!job.pdf_available && !job.mind_map_available) return;
         var option = document.createElement("option");
         option.value = job.job_id;
         option.textContent = dataHora(job.created_at) + " · " + job.audio;
         select.appendChild(option);
       });
       if (selected) select.value = selected;
+      if (selected !== select.value) $("cfgMapViewer").classList.add("hidden");
       var found = (r.items || []).find(function (item) { return item.job_id === select.value; });
-      $("cfgWaResendStatus").textContent = found && found.sends.length
+      $("btnWaResend").disabled = !found || !found.pdf_available;
+      $("cfgWaResendStatus").textContent = found && !found.pdf_available
+        ? "PDF indisponivel; o mapa mental continua acessivel."
+        : found && found.sends.length
         ? found.sends.map(function (s) { return "+" + s.recipient + ": " + s.status.replace(/_/g, " "); }).join(" | ")
         : "O reenvio usa o PDF existente e nao refaz o estudo.";
       var hasMap = !!(found && found.mind_map_available);
@@ -1447,8 +1451,8 @@
       var id = $("cfgWaStudy").value;
       if (!id) return;
       api("/api/estudos/jobs/" + encodeURIComponent(id) + "/mapa")
-        .then(renderMindMap)
-        .catch(function (e) { $("cfgMapStatus").textContent = e.message; });
+        .then(function (data) { if ($("cfgWaStudy").value === id) renderMindMap(data); })
+        .catch(function (e) { if ($("cfgWaStudy").value === id) $("cfgMapStatus").textContent = e.message; });
     });
     $("btnPowerArm").addEventListener("click", function () {
       api("/api/power/arm", "POST").then(paintPower)
