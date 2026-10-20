@@ -41,6 +41,7 @@ log = get("api")
 # boot do painel); o /api/integracoes so declara o EMQX conectado com
 # batida recente de verdade - nada simulado.
 _agente_visto_em = 0.0
+_remote_restart_required = False
 
 
 def _registra_agente() -> None:
@@ -158,7 +159,7 @@ def remote_status() -> Dict[str, Any]:
     administrador digita uma unica vez no APK, entao este bloco so pode sair
     pela rota que ja exige PIN de administrador.
     """
-    from ..remote.agent import RemoteSettings  # import local: nao puxa o
+    from ..remote.agent import RemoteSettings, topics  # import local
     settings = RemoteSettings()                # paho-mqtt no boot do painel
 
     return {
@@ -167,9 +168,16 @@ def remote_status() -> Dict[str, Any]:
         "host": settings.host,
         "port": settings.port,
         "tls": settings.tls,
+        "username": settings.username,
+        "password_configured": bool(settings.password),
         "device_id": settings.device_id,
         "operator_token": settings.operator_token,
-        "service": "active" if _agente_visto_em and time.time() - _agente_visto_em < 180 else "inactive",
+        "operator_token_configured": bool(settings.operator_token),
+        "topics": topics(settings.device_id),
+        "restart_required": _remote_restart_required,
+        "service": "restart_required" if _remote_restart_required else (
+            "active" if _agente_visto_em and time.time() - _agente_visto_em < 180 else "inactive"
+        ),
     }
 
 
@@ -431,6 +439,9 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
                 }
             )
         cfg = config.as_dict()
+        # O bloco salvo contem a senha MQTT; somente remote_status faz o
+        # recorte administrativo e nunca devolve essa senha.
+        cfg.pop("remote", None)
         # identificador efetivo (pode estar vazio no config e ser gerado)
         cfg["device_id"] = config.device_id
         # o secret nunca sai do servidor; a interface so sabe se esta definido
@@ -472,7 +483,7 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
                 "admin_obrigatorio",
             )
 
-        applied, errors = [], []
+        pending, errors = {}, []
         for key, raw in body.items():
             caster = COERCE.get(key)
             if caster is None:
@@ -490,30 +501,28 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
             if key == "audio.device" and value:
                 known = {d["hw"] for d in audio_device.list_devices()}
                 known |= {d["card_id"] for d in audio_device.list_devices()}
-                if value not in known and value != "auto":
+                current = str(config.get("audio.device", "auto"))
+                if value not in known and value not in ("auto", current):
                     errors.append(f"dispositivo de audio inexistente: {value}")
                     continue
-            if key == "storage.recordings_dir" and value:
-                # Valida o volume e a permissao de escrita sem alterar outro destino.
-                # Reenviar o caminho atual nao impede salvar as outras configuracoes.
-                atual_cfg = str(config.get("storage.recordings_dir") or "")
-                if str(value) != atual_cfg:
-                    ok, motivo = destinos.escolher(
-                        str(value), paths.recordings_dir()
-                    )
-                    if not ok:
-                        errors.append(motivo)
-                        continue
-            config.set(key, value)
-            applied.append(key)
-            if key == "drive.client_id" and not value:
-                # limpar o Client ID remove as credenciais por completo
-                config.set("drive.client_secret", "")
-                applied.append("drive.client_secret")
+            pending[key] = value
 
         if errors:
             return _err("; ".join(errors), 422, "config_invalida")
-        config.save()
+        target = pending.get("storage.recordings_dir")
+        if target and target != str(config.get("storage.recordings_dir") or ""):
+            # Preparar a pasta ocorre somente depois de validar o lote completo.
+            ok, motivo = destinos.escolher(str(target), paths.recordings_dir())
+            if not ok:
+                return _err(motivo, 422, "config_invalida")
+        if "drive.client_id" in pending and not pending["drive.client_id"]:
+            pending["drive.client_secret"] = ""
+        try:
+            config.update_and_save(pending)
+        except OSError:
+            return _err("Nao foi possivel salvar a configuracao. Confira a permissao da pasta instalada.",
+                        500, "config_save_falhou")
+        applied = list(pending)
         notify.notify(
             "configuracao",
             "Configuracao atualizada: " + (", ".join(applied) or "nenhuma alteracao"),
@@ -521,6 +530,40 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
             payload={"keys": applied},
         )
         return jsonify({"ok": True, "applied": applied})
+
+    @app.post("/api/remote/config")
+    @auth.require_admin
+    def set_remote_config():
+        """Salva MQTT sem mexer no .env nem interromper servicos/processos."""
+        from ..remote.agent import RemoteSettings
+        from ..remote.settings import validate_update
+
+        global _remote_restart_required
+        if (state_machine.state in (State.RECORDING, State.FINALIZING, State.UPLOADING)
+                or uploader.snapshot().get("running", 0)
+                or db.job_contagens().get("EXECUTANDO", 0)
+                or estudos.status().get("login", {}).get("em_andamento")):
+            return _err(
+                "Aguarde terminar a gravacao, finalizacao, envio, estudo ou login antes de configurar MQTT.",
+                409, "sistema_ocupado",
+            )
+        try:
+            settings = validate_update(request.get_json(silent=True), RemoteSettings())
+        except ValueError as exc:
+            return _err(str(exc), 422, "remote_config_invalida")
+        previous = config.get("remote", {})
+        try:
+            config.update_and_save({"remote": settings})
+        except OSError:
+            return _err("Nao foi possivel salvar a configuracao MQTT. Confira a permissao da pasta instalada.", 500, "remote_save_falhou")
+        _remote_restart_required = _remote_restart_required or previous != settings
+        notify.notify("configuracao", "Configuracao MQTT salva; reinicio necessario para aplicar.", level="success")
+        return jsonify({
+            "ok": True,
+            "remote": remote_status(),
+            "restart_required": _remote_restart_required,
+            "message": "Configuracao salva. Aguarde todas as atividades terminarem, reinicie o Windows e abra o atalho do Pregacao Recorder para aplicar ao gravador e ao agente. Confira o ID e os topics autorizados no broker e no celular.",
+        })
 
     # ------------------------------------------------------------------
     # audio
@@ -534,11 +577,40 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
     @app.post("/api/audio/test")
     @auth.require_auth
     def audio_test():
-        device = audio_device.detect(str(config.get("audio.device", "auto")))
+        body = request.get_json(silent=True) if request.data else {}
+        if not isinstance(body, dict):
+            return _err("payload invalido")
+        if body and not auth.is_admin():
+            return _err("PIN de administrador necessario para testar outra configuracao", 403,
+                        "admin_obrigatorio")
+        if set(body) - {"device", "sample_rate", "channels"}:
+            return _err("opcao de teste de audio desconhecida", 422, "audio_invalido")
+        values = {key: config.get("audio." + key) for key in ("device", "sample_rate", "channels")}
+        for key, raw in body.items():
+            try:
+                if key == "device":
+                    if not isinstance(raw, str) or not raw.strip():
+                        raise ValueError
+                    value = raw.strip()
+                else:
+                    if isinstance(raw, bool) or not isinstance(raw, (int, str)):
+                        raise ValueError
+                    value = int(raw)
+                    if not VALIDATION["audio." + key](value):
+                        raise ValueError
+            except (ValueError, TypeError):
+                return _err(f"valor invalido para {key}", 422, "audio_invalido")
+            values[key] = value
+        device = audio_device.detect(str(values["device"] or "auto"))
+        if "device" in body and values["device"] != "auto" and device.get("selected_by") != "config":
+            return _err("dispositivo de audio selecionado indisponivel", 422, "audio_invalido")
         result = audio_device.capture_level(
-            seconds=2.0, device=device.get("hw")
+            seconds=2.0, device=device.get("hw"),
+            sample_rate=int(values["sample_rate"]), channels=int(values["channels"]),
         )
         result["device"] = device
+        result["sample_rate"] = int(values["sample_rate"])
+        result["channels"] = int(values["channels"])
         if result.get("ok"):
             level = "success" if not result.get("silent") else "warning"
             msg = (
@@ -586,8 +658,11 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
         ok, motivo = destinos.escolher(caminho, paths.recordings_dir())
         if not ok:
             return _err(motivo, 422, "destino_invalido")
-        config.set("storage.recordings_dir", caminho)
-        config.save()
+        try:
+            config.update_and_save({"storage.recordings_dir": caminho})
+        except OSError:
+            return _err("Nao foi possivel salvar o destino. Confira a permissao da pasta instalada.",
+                        500, "config_save_falhou")
         notify.notify(
             "armazenamento",
             f"Destino de gravacao: {caminho}",
@@ -906,18 +981,25 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
         settings = RemoteSettings()                # paho-mqtt no boot
 
         visto = _agente_visto_em
-        if not settings.configured:
+        if _remote_restart_required:
+            saida["emqx"] = {
+                "estado": "verificando",
+                "detalhe": "configuracao MQTT salva; reinicio pendente",
+                "acao": "aguarde as atividades terminarem, reinicie o Windows e abra o atalho do programa",
+                "visto_em": visto,
+            }
+        elif not settings.configured:
             saida["emqx"] = {
                 "estado": "nao_configurado",
-                "detalhe": "sem broker configurado (.env do agente)",
-                "acao": "siga docs/EMQX.md para apontar o agente",
+                "detalhe": "sem broker configurado",
+                "acao": "configure o controle remoto em CONFIG avancada",
                 "visto_em": visto,
             }
         elif not settings.enabled:
             saida["emqx"] = {
                 "estado": "nao_configurado",
-                "detalhe": "controle remoto desligado no .env",
-                "acao": "remova PREGACAO_REMOTE_ENABLED=0 para ligar",
+                "detalhe": "controle remoto desligado",
+                "acao": "habilite o controle remoto em CONFIG avancada",
                 "visto_em": visto,
             }
         elif visto and agora - visto < 180:

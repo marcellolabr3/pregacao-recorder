@@ -135,17 +135,31 @@ class Config:
             )
             tmp.replace(self.user_file)
 
+    def update_and_save(self, updates: Dict[str, Any]) -> None:
+        """Publica um lote validado somente se a persistencia for concluida."""
+        with self._lock:
+            previous = copy.deepcopy(self._values)
+            try:
+                for key, value in updates.items():
+                    self.set(key, value)
+                self.save()
+            except Exception:
+                self._values = previous
+                raise
+
     # -- atalhos ---------------------------------------------------------
     @property
     def device_id(self) -> str:
         """Identificador unico deste aparelho (topics MQTT, APK, painel).
 
-        Ordem de precedencia: ``PREGACAO_DEVICE_ID`` (`.env`) -> ``device_id``
+        Ordem de precedencia: ``remote.device_id`` salvo em CONFIG ->
+        ``PREGACAO_DEVICE_ID`` (`.env`) -> ``device_id``
         do config.json (CONFIGURACOES AVANCADAS) -> valor gerado a partir do
         hostname. O resultado e sempre sanitizado para ``[A-Za-z0-9_-]``.
         """
         raw = (
-            os.environ.get("PREGACAO_DEVICE_ID", "").strip()
+            str(self.get("remote.device_id", "") or "").strip()
+            or os.environ.get("PREGACAO_DEVICE_ID", "").strip()
             or str(self.get("device_id", "") or "").strip()
         )
         return sanitize_device_id(raw) if raw else _generated_device_id()

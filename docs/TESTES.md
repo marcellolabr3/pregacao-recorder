@@ -2,11 +2,15 @@
 
 ## Suite Python
 
-Sprint 1 em 19/10/2026: **350 testes passaram** em copia temporaria
+Revisao da sprint 2 em 19/10/2026: **488 testes passaram em 42,17 s** em copia temporaria
 com somente fontes, testes, defaults, empacotamento e vendor publico. Nenhuma
 credencial, banco, gravacao ou ambiente instalado real foi copiado. A base anterior
-tinha 309 testes; as novas regressoes cobrem runtime, CLI NotebookLM, vendor e
-allowlist/ZIP (incluindo raiz curta contra limite de caminhos Windows).
+tinha 350 testes na sprint 1; as regressoes novas cobrem perfil de login/pipeline,
+identidade entre instalacoes, bootstrap, pareamento administrativo e instalador.
+Os fluxos de configuracao tambem cobrem audio selecionado antes de salvar,
+interface ausente, taxa/canais, lote invalido, falha de escrita, salvar/reabrir
+destino/Drive/MQTT, permissoes, segredos vazios e porta MQTT numerica no painel.
+`node --check web/static/app.js` e `git diff --check` passaram.
 
 Para repetir com o venv preparado:
 
@@ -18,6 +22,58 @@ node --check web/static/app.js
 `tests/conftest.py` define home temporario antes dos imports e usa bancos isolados.
 Para a validacao final desta tarefa foi utilizada tambem uma copia das fontes fora
 do projeto. Nao executar scripts de teste ativo contra o servidor real por engano.
+
+## Sprint 3 iniciada - configuracao e instalacao
+
+- Instalador atualizado: `dist-pacote/PregacaoRecorder-Instalar-sprint2-20261020T000353363243Z.exe`
+  (515,9 MiB). SHA256 do `.exe.sha256` adjacente conferido; compilacao Inno passou.
+- Pacote correspondente: `dist-pacote/PregacaoRecorder-sprint2-20261020T000353363243Z/`,
+  7.858 arquivos inventariados, zero extras. Comparacao de 50 fontes/guia/vendor
+  com a arvore atual passou; `source_revision=96add70-dirty`.
+- Metadados: `.bundle-cache/sprint2-current-artifact.json`; nao e release com aceite no destino.
+- As 11 provas do instalador foram repetidas com fixtures novas e passaram:
+  instalacao com espacos/acentos/&, backup/reinstalacao, preservacao de SQLite,
+  audios/perfis e recusas por processo ativo, lock, junction e falha de backup.
+- Evidencia: `.bundle-cache/sprint3-installer-fixtures-20261019/smoke-report.json`.
+- Suite completa: `.bundle-cache/sprint2-isolated-pytest.json` e log adjacente.
+- Chromium privado offline passou no roteiro `tests/smoke_config_ui.py`: primeiro
+  uso, selecao/teste antes de salvar, taxa/canais, pasta, reabertura, interface
+  desconectada e MQTT com porta numerica, revelacao/limpeza e segredos preservados.
+  Evidencia: `.bundle-cache/sprint3-config-ui-final.log` (exit 0).
+- Smoke do pacote atualizado passou com PATH isolado: imports privados, PDF,
+  XLSX, Chromium/headless persistente, NotebookLM, Node/WhatsApp sem conexao,
+  FFmpeg/DirectShow, MP3 sintetico e diagnostico sem criar configuracao.
+- O payload real foi compilado tambem em modo de teste sem registro/atalho e
+  instalado numa pasta temporaria com espacos/acentos/&. Os 7.858 hashes
+  instalados conferem. Diagnostico com PATH sem ferramentas de desenvolvimento,
+  API administrativa, audio selecionado sem salvar, lote invalido, segredos
+  preservados, identidade/caminhos e reabertura em processo novo passaram.
+- Evidencia: `.bundle-cache/sprint3-full-install-20261020T001205Z/report.json`
+  e `.bundle-cache/sprint3-full-install-latest.json` (PASS). Hardware/contas sao
+  simulados nessa prova; ela nao inicia captura ou conexao real.
+- Limite observado: o primeiro destino de teste tinha 129 caracteres e excedia
+  MAX_PATH em recursos do Chromium. O arquivo existia via prefixo estendido,
+  mas a leitura Python comum falhou em um caminho de 264 caracteres. A prova
+  foi repetida com raiz curta (caminho maximo abaixo de 260) e passou. Preferir
+  `%LOCALAPPDATA%\PregacaoRecorder`; nao tratar pastas profundas como validadas.
+- Configuracao/aceite pessoal no PC destino e Windows limpo continuam pendentes;
+  roteiro em [ACEITE_WINDOWS.md](ACEITE_WINDOWS.md), incluido no pacote.
+- Nenhuma captura fisica, conta, broker, envio ou servidor de desenvolvimento foi
+  alterado nesta etapa. Os testes de configuracao usam fronteiras simuladas.
+
+Arquivos alterados nesta conclusao dos fluxos 2.2/2.3 e inicio da sprint 3:
+
+- `app/api/routes.py`, `app/audio/device.py`, `app/config.py`, `app/launcher.py`.
+- `app/remote/agent.py`, novo `app/remote/settings.py`.
+- `web/static/app.js`, `web/templates/index.html`.
+- `tests/test_audio.py`, `tests/test_bundled_runtime.py`, `tests/test_launcher.py`,
+  `tests/test_remote_pairing_ui.py`, novos `tests/test_config_audio_flow.py`,
+  `tests/test_remote_config.py` e `tests/smoke_config_ui.py`.
+- `packaging/build_bundle.py`, `packaging/build_installer.py`, `packaging/README.md`.
+- `docs/CODEX_CONTEXT.md`, `docs/SPRINTS.md`, `docs/TASK_DISTRIBUICAO_WINDOWS.md`,
+  `docs/TESTES.md`, `docs/GUIA_INSTALACAO_WINDOWS.md`, novo `docs/ACEITE_WINDOWS.md`.
+
+As alteracoes anteriores que ja estavam sem commit foram preservadas.
 
 ## Cobertura da retirada
 
@@ -116,7 +172,124 @@ acao real de captura, login, upload, envio ou reinicio de servicos foi executada
   Verificar Pacote.cmd passou na copia com espacos/acentos/& sem escrever config.
 - Artefato e cache locais ignorados pelo Git; instrucoes em ../packaging/README.md.
 
-Limites desta sprint: nao reiniciou a instalacao em uso, nao renovou sessoes,
+Limites daquela sprint: nao reiniciou a instalacao em uso, nao renovou sessoes,
 nao capturou audio real nem fez upload/envio. Windows limpo/outro PC e operacoes
 com contas reais seguem na sprint 3. Instalador `.exe`, G01/G02 e configuracao
-pessoal seguem na sprint 2. Smoke nao comprova login Google ou entrega WhatsApp.
+pessoal eram pendencias da sprint 2. Smoke nao comprova login Google ou entrega WhatsApp.
+
+## Instalador e configuracao - sprint 2
+
+- Suite final: 422 testes passaram em 34,02 s, em copia de fontes com home/bancos
+  temporarios. Sintaxe JS e `git diff --check` passaram.
+- Na primeira repeticao, um teste teve WinError 5 ao iniciar Node; passou isolado
+  com Node do sistema e do pacote, e a suite final passou com o Node privado.
+  A causa desse bloqueio nao foi comprovada. Apos o resumo final, uma thread de
+  upload registrou erro ao acessar banco temporario ja removido no encerramento;
+  pytest terminou com codigo zero, sem acesso ao banco real.
+- G01: quatro regressoes com threads reais e processos simulados, incluindo
+  clique apos a ultima guarda, Popen com falha e erro no monitor. A reserva do
+  perfil dura ate o filho sair. Os casos de corrida falharam com o codigo anterior.
+- G02: raiz/home absolutos na linha de comando; duas instalacoes, PID legado e
+  divergente recusados. Processo sintetico real no Windows reutilizado sem duplicar;
+  teste encerra somente o filho criado por ele. Nenhum PID real foi alterado.
+- Bootstrap: segredo e ID persistentes, dois iniciadores concorrentes, PINs/config
+  e identidade explicita preservados; homes do pacote isolados da origem;
+  `--verificar` continua sem escrita de configuracao/banco/logs.
+- UI: API de pareamento somente admin, sem senha do PC; token mascarado e
+  limpeza ao sair. Chromium privado offline com APIs simuladas confirmou boot,
+  login administrativo, ID/broker/porta/TLS, revelacao e reabertura sem erros JS.
+- `packaging/smoke_installer.py`: 11 provas reais com pequenas fixtures publicas,
+  mesma logica Inno e sem registro/atalho: instalacao com acentos/espacos/&, recusa
+  pasta arbitraria, processo vivo, lock e junction, erro de backup antes da troca,
+  reinstalacao/backup, recusa de uninstall com processo/lock e uninstall ocioso.
+  Config/.env, SQLite com job em espera, audio e perfis sinteticos foram preservados.
+- O smoke detectou Type Mismatch na data do backup; separadores corrigidos e as
+  11 provas repetidas passaram. Backup nao duplica os audios preservados no destino.
+- Na retomada, as 11 provas foram repetidas com sucesso em fixtures novas.
+- Renovacao no pacote usa o perfil dedicado, com `--allow-headless --verify`;
+  desenvolvimento preserva leitura de cookies do navegador configurado e fallback.
+  Sucesso, falha, timeout, cadencia e preservacao dos jobs foram verificados.
+- O extra opcional `rookie-cookies` foi retirado do lock (62 distribuicoes).
+  Na conferencia do pacote anterior, seu modulo nativo desapareceu: as outras
+  7.576 entradas e 52 fontes conferiam; causa da remocao nao comprovada.
+  Nenhuma protecao do Windows foi alterada nem houve restauracao de quarentena.
+- A revisao tambem detectou que NotebookLM abre contexto persistente headless
+  sem canal explicito. O pacote anterior so incluia Chromium com canal; agora
+  inclui tambem `chromium-headless-shell`. Os dois testes de cache novo falham
+  com a implementacao anterior e passam com a correcao.
+- Pacote completo final com 7.856 arquivos: smoke com Python/Node/FFmpeg/
+  Chromium privados, perfil persistente headless sem canal, PDF, XLSX, versao e
+  ajuda de login/refresh NotebookLM e MP3 sintetico/ffprobe; passou. O perfil
+  headless foi novo, offline e removido ao terminar; nenhuma conta foi acessada.
+  Fontes de bootstrap/UI e guia sincronizadas; manifesto registra snapshot
+  de trabalho com alteracoes locais.
+- Compilacao Inno 7.1.0 concluida: `dist-pacote/PregacaoRecorder-Instalar-sprint2-20261019T201816053366Z.exe`.
+  SHA256 conferido no `.exe.sha256` adjacente; todos os hashes e 52 fontes/guia
+  comparados com os arquivos finais. Nenhum arquivo extra ou dado real incluido.
+- Varredura das fontes alteradas e dos 56 arquivos publicos do produto nao
+  encontrou coincidencias com segredos locais. Dados/config reais continuam fora
+  do inventario. Essa comparacao nao certifica historico Git ou codigo de terceiros.
+
+Evidencias locais (ignoradas): `.bundle-cache/sprint2-final-validation.json`,
+`.bundle-cache/ui-pairing-smoke.json`,
+`.bundle-cache/ui-pairing-admin.png`, logs em `dist-pacote/` e
+`%TEMP%/pregacao-installer-smoke-sj80ha67/smoke-report.json`.
+Build e repeticao em [packaging/README.md](../packaging/README.md).
+
+Limites: compilacao e execucao isolada neste Windows nao substituem Windows limpo
+nem o PC destino. Nao houve novo login, captura real, upload, envio WhatsApp,
+conexao MQTT ou reinicio do desenvolvimento. 2.2/2.3 exigem selecionar audio/disco,
+autorizar contas, configurar ACL/credencial do novo ID e parear o celular no destino.
+Essas provas operacionais permanecem junto do aceite da sprint 3.
+
+## Edicao pessoal portatil no SSD (20/10/2026 UTC)
+
+- Suíte completa: 491 testes passaram. Tres testes novos cobrem importacao,
+  mudanca de pasta/letra, preservacao de credenciais e recusa de destino externo.
+- Instalador privado Inno compilado, copiado com SHA-256 conferido para o SSD
+  USB `E:` e executado com sucesso em `E:\PregacaoRecorder-Pessoal`. A pasta
+  antiga `E:\PregacaoRecorder` nao foi modificada.
+- Integridade antes do primeiro inicio: 7.859 arquivos publicos e 6.236
+  privados conferidos por SHA-256. O banco copiado pelo backup SQLite passou
+  em `integrity_check`; 12 sessoes, 12 uploads, 2 estudos, links de audio
+  presentes apos realocacao para `E:`.
+- Configuracao de Drive e `.env` originais preservados, segredo local de sessao
+  criado, token Google e `storage_state.json` do NotebookLM identicos a origem,
+  5.868 arquivos de autenticacao WhatsApp copiados. ID e broker MQTT coincidem
+  com os defaults do APK, que contem os rotulos de iniciar/encerrar e conexao.
+- `Verificar Pacote.cmd` no SSD passou com runtime privado, pasta de gravacoes,
+  Drive e dependencias MQTT. O comando nao iniciou servicos nem gravou audio.
+- O token Drive foi carregado como utilizavel pelo runtime do SSD e uma
+  consulta somente leitura `about.get` ao Drive confirmou acesso real. O
+  broker respondeu a TCP/TLS. Com token de operador copiado do SSD, um cliente
+  MQTT temporario recebeu `avail`, `state`, `jobs` retidos e ACK positivo de
+  `STATUS` do agente da origem, sem iniciar gravacao nem envio. A interface de
+  audio configurada foi encontrada e duas
+  capturas curtas consecutivas passaram; houve uma falha transitoria na
+  primeira tentativa, sem gravacao persistida.
+- O NotebookLM retornou autenticacao necessaria tanto na origem quanto no SSD.
+  Leitura de cookies do Edge e renovacao pelo perfil headless nao recuperaram
+  a sessao; falta login interativo e, se feito nesta maquina, refazer o
+  instalador privado com o estado renovado.
+
+Pendente no outro PC: testar driver/sinal de audio, gravacao real pelo PC e
+celular, conexao MQTT efetiva, validade das sessoes de Drive/NotebookLM/
+WhatsApp e envio com destinatario de teste. Uma sessao de navegador pode
+precisar de novo login ao mudar de conta Windows.
+
+## SSD limpo e APK conferido (20/10/2026)
+
+- SSD USB `E:`: somente `PregacaoRecorder-Pessoal` permanece visivel como pasta
+  de usuario na raiz. As duas pastas ocultas do Windows permanecem.
+- A instalacao antiga tinha banco integro com zero sessoes, uploads e jobs.
+  Seus nove MP3 ja existiam na instalacao pessoal com o mesmo SHA-256. A pasta
+  antiga e os arquivos soltos foram movidos para arquivo privado ignorado em
+  `recovery/ssd-root-archive-20261020/`; nenhum dado foi enviado ao Git.
+- Instalador privado arquivado tem SHA-256 identico ao de `dist-pacote/`.
+  Os 7.859 arquivos publicos da instalacao pessoal passaram novamente por
+  SHA-256. `Verificar Pacote.cmd` passou apos a limpeza sem iniciar servicos.
+- `flutter test`: 36 testes passaram. Um novo `flutter build apk --release`
+  gerou arquivo com SHA-256 identico ao APK `2.6.0+12` do projeto e do SSD:
+  `A986EC82AE37C10B9352B80684F0E3C5B27C213157E7BA953E285204498BA0C7`.
+- Windows limpo, PC destino, controle pelo celular e sessoes externas ainda
+  precisam de aceite real; NotebookLM segue exigindo login interativo.

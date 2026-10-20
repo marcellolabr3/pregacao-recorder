@@ -29,6 +29,8 @@
     }).then(function (resp) {
       if (resp.status === 401) {
         authed = false;
+        isAdmin = false;
+        renderRemotePairing(null);
         showLogin(true);
         throw new Error("PIN obrigatorio");
       }
@@ -679,6 +681,95 @@
     });
   }
 
+  function renderRemotePairing(data) {
+    var allowed = !!(data && data.admin === true && document.body.dataset.view === "advanced");
+    var remote = allowed ? (data.remote || {}) : {};
+    $("cfgRemoteCard").classList.toggle("hidden", !allowed);
+    $("cfgRemoteDevice").textContent = remote.device_id || "--";
+    $("cfgRemoteHost").textContent = remote.host || "nao configurado";
+    $("cfgRemotePort").textContent = allowed ? String(remote.port || 8883) : "--";
+    $("cfgRemoteTls").textContent = allowed ? (remote.tls ? "SIM" : "NAO") : "--";
+    $("cfgRemoteEnabled").checked = !!remote.enabled;
+    $("cfgRemoteHostInput").value = remote.host || "";
+    $("cfgRemotePortInput").value = allowed ? String(remote.port || 8883) : "";
+    $("cfgRemoteTlsInput").checked = !!remote.tls;
+    $("cfgRemoteUsername").value = remote.username || "";
+    $("cfgRemoteDeviceInput").value = remote.device_id || "";
+    $("cfgRemotePassword").value = "";
+    $("cfgRemotePassword").placeholder = remote.password_configured
+      ? "(senha definida - em branco preserva)" : "(senha nao definida)";
+    $("cfgRemoteNewToken").value = "";
+    $("cfgRemoteMessage").textContent = remote.restart_required
+      ? "Alteracoes salvas. Aguarde terminar gravacoes e filas, reinicie o Windows e abra o atalho. Depois confirme STATUS/ACK no celular."
+      : "";
+    var token = $("cfgRemoteToken");
+    token.type = "password";
+    token.value = remote.operator_token || "";
+    $("btnRemoteToken").disabled = !token.value;
+    $("btnRemoteToken").textContent = "MOSTRAR TOKEN";
+    $("btnRemoteToken").setAttribute("aria-pressed", "false");
+  }
+
+  function toggleRemoteToken() {
+    var token = $("cfgRemoteToken");
+    if (!isAdmin || !token.value) return;
+    var reveal = token.type === "password";
+    token.type = reveal ? "text" : "password";
+    $("btnRemoteToken").textContent = reveal ? "OCULTAR TOKEN" : "MOSTRAR TOKEN";
+    $("btnRemoteToken").setAttribute("aria-pressed", String(reveal));
+  }
+
+  function saveRemoteConfig() {
+    if (!isAdmin) { openAdmin(); return; }
+    var button = $("btnRemoteSave");
+    var msg = $("cfgRemoteMessage");
+    var payload = {
+      enabled: $("cfgRemoteEnabled").checked,
+      host: $("cfgRemoteHostInput").value.trim(),
+      port: Number($("cfgRemotePortInput").value),
+      tls: $("cfgRemoteTlsInput").checked,
+      username: $("cfgRemoteUsername").value.trim(),
+      device_id: $("cfgRemoteDeviceInput").value.trim()
+    };
+    // Segredos em branco sao omitidos; a senha atual nunca vem do servidor.
+    if ($("cfgRemotePassword").value) payload.password = $("cfgRemotePassword").value;
+    if ($("cfgRemoteNewToken").value.trim()) payload.operator_token = $("cfgRemoteNewToken").value.trim();
+    button.disabled = true;
+    msg.textContent = "salvando...";
+    return api("/api/remote/config", "POST", payload).then(function (r) {
+      renderRemotePairing({admin: true, remote: r.remote});
+      if (document.body.dataset.view === "advanced") {
+        msg.textContent = r.message || msg.textContent || "Controle remoto salvo";
+      }
+      toast("Controle remoto salvo", "success");
+    }).catch(function (e) {
+      msg.textContent = e.message;
+      toast(e.message, "error");
+      if (e.data && e.data.error === "admin_obrigatorio") openAdmin();
+    }).finally(function () { button.disabled = false; });
+  }
+
+  function testSelectedAudio(resultId, buttonId, payload) {
+    var el = $(resultId);
+    var button = $(buttonId);
+    button.disabled = true;
+    el.textContent = "testando (2s)...";
+    return api("/api/audio/test", "POST", payload).then(function (r) {
+      if (!r.ok) { el.textContent = "FALHA: " + r.error; return; }
+      var device = r.device || {};
+      var nome = device.name || device.hw || (payload && payload.device) || "";
+      el.textContent = (nome ? nome + ": " : "") + (r.silent
+        ? "SILENCIO - suba o fader da mesa"
+        : "Sinal OK - pico " + r.peak_db + " dBFS");
+    }).catch(function (e) {
+      el.textContent = e.message;
+      if (e.data && e.data.error === "admin_obrigatorio") {
+        if (buttonId === "wizAudioTest") openWizAdmin();
+        else openAdmin();
+      }
+    }).finally(function () { button.disabled = false; });
+  }
+
   function loadConfig() {
     api("/api/config").then(function (data) {
       var c = data.config || {};
@@ -712,20 +803,26 @@
       $("cfgDriveFolder").textContent = d.folder || "Pregacoes";
       // o payload completo (credenciais/formatos) so vem para administrador
       if (data.admin) loadAdvanced(data);
+      else renderRemotePairing(null);
       loadIntegracoes();
     }).catch(function (e) { toast(e.message, "error"); });
   }
 
   function loadAdvanced(data) {
     var apply = function (data) {
+      renderRemotePairing(data);
+      if (!data.admin) return;
       var c = data.config || {};
       var form = $("advancedForm");
 
-      fillSelect($("cfgDevice"),
-        [{ value: "auto", label: "AUTO (detectar interface USB)" }].concat(
+      var audioOptions = [{ value: "auto", label: "AUTO (detectar interface USB)" }].concat(
           (data.audio_devices || []).map(function (d) {
             return { value: d.hw, label: d.hw + " - " + d.name };
-          })), c.audio.device);
+          }));
+      if (c.audio.device && !audioOptions.some(function (opt) { return opt.value === c.audio.device; })) {
+        audioOptions.push({value: c.audio.device, label: c.audio.device + " (indisponivel - reconecte a interface)"});
+      }
+      fillSelect($("cfgDevice"), audioOptions, c.audio.device);
       fillSelect($("cfgFormat"), data.formats || [], c.audio.format);
       fillSelect($("cfgRate"), data.rates || [], c.audio.sample_rate);
       fillSelect($("cfgEncoder"), data.encoders || [], c.audio.encoder);
@@ -1182,6 +1279,16 @@
     $("configForm").addEventListener("submit", saveConfig);
     $("advancedForm").addEventListener("submit", saveAdvanced);
     $("btnAdvanced").addEventListener("click", openAdvanced);
+    $("btnRemoteToken").addEventListener("click", toggleRemoteToken);
+    $("btnRemoteSave").addEventListener("click", saveRemoteConfig);
+    $("btnConfigAudioTest").addEventListener("click", function () {
+      var form = $("advancedForm");
+      testSelectedAudio("cfgAudioTestResult", "btnConfigAudioTest", {
+        device: $("cfgDevice").value,
+        sample_rate: form.elements["audio.sample_rate"].value,
+        channels: form.elements["audio.channels"].value
+      });
+    });
     $("btnAdvancedBack").addEventListener("click", function () {
       setView("config");
       loadConfig();
@@ -1216,14 +1323,7 @@
       if (e.key === "Enter") tryWizAdmin();
     });
     $("wizAudioTest").addEventListener("click", function () {
-      var el = $("wizAudioResult");
-      el.textContent = "testando (2s)...";
-      api("/api/audio/test", "POST").then(function (r) {
-        if (!r.ok) { el.textContent = "FALHA: " + r.error; return; }
-        el.textContent = r.silent
-          ? "SILENCIO - suba o fader da mesa"
-          : "Sinal OK · pico " + r.peak_db + " dBFS";
-      }).catch(function (e) { el.textContent = e.message; });
+      testSelectedAudio("wizAudioResult", "wizAudioTest", {device: $("wizDevice").value});
     });
     $("wizDriveConnect").addEventListener("click", function () {
       api("/api/drive/connect", "POST").then(function (r) {
@@ -1332,6 +1432,7 @@
   }
 
   function setView(view) {
+    if (view !== "advanced") renderRemotePairing(null);
     document.body.dataset.view = view;
     $("viewHome").classList.toggle("hidden", view !== "home");
     $("viewConfig").classList.toggle("hidden", view !== "config");

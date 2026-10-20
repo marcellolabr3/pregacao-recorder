@@ -12,10 +12,13 @@ import pytest
 from app import launcher
 
 
+REAL_RUNNING_PID = launcher.running_pid
+
+
 @pytest.fixture
 def context(tmp_path, monkeypatch):
-    root = tmp_path / "Projeto com espacos"
-    home = tmp_path / "Dados preservados"
+    root = tmp_path / "Projeto com espaços & acentos"
+    home = tmp_path / "Dados preservados ç ã"
     root.mkdir()
     (home / "logs").mkdir(parents=True)
     env = {"PATH": "caminho-sintetico", "VAR_EXISTENTE": "preservada"}
@@ -95,7 +98,8 @@ def test_filhos_usam_mesmo_home_e_logs_separados_sem_mutar_ambiente(context):
         ("pregacao.log", "pregacao-agente.log"),
     ):
         assert command == [launcher.sys.executable, "-B", "-m", "app.launcher",
-                           "--service", component]
+                           "--service", component, "--service-root", str(context.root),
+                           "--service-home", str(context.home)]
         assert Path(opts["cwd"]) == context.root
         assert Path(opts["env"]["PREGACAO_HOME"]) == context.home
         assert opts["env"]["PREGACAO_LOG_FILE"] == logfile
@@ -127,11 +131,12 @@ def test_falha_do_agente_nao_encerra_gravador_criado(context, monkeypatch):
 @pytest.mark.parametrize("component,module", [
     ("gravador", "app.main"), ("agente", "app.remote.agent"),
 ])
-def test_pid_valido_identifica_modulo_esperado(tmp_path, monkeypatch, component, module):
+def test_pid_legado_do_modulo_nao_e_reutilizado_sem_confirmar_instalacao(tmp_path, monkeypatch, component, module):
     pidfile = tmp_path / "processo.pid"
     pidfile.write_text("12345", encoding="utf-8")
     monkeypatch.setattr(launcher, "process_command", lambda _: [launcher.sys.executable, "-m", module])
-    assert launcher.running_pid(pidfile, component) == 12345
+    with pytest.raises(launcher.LaunchError, match="servico antigo sem identidade"):
+        launcher.running_pid(pidfile, component)
 
 
 @pytest.mark.parametrize("component", ["gravador", "agente"])
@@ -139,8 +144,174 @@ def test_pid_do_servico_do_launcher_e_reconhecido(tmp_path, monkeypatch, compone
     pidfile = tmp_path / "processo.pid"
     pidfile.write_text("12345", encoding="utf-8")
     monkeypatch.setattr(launcher, "process_command", lambda _: [
+        launcher.sys.executable, "-B", "-m", "app.launcher", "--service", component,
+        "--service-root", str(tmp_path), "--service-home", str(tmp_path)])
+    assert launcher.running_pid(pidfile, component, tmp_path, tmp_path) == 12345
+
+
+@pytest.mark.parametrize("component", ["gravador", "agente"])
+def test_pid_legado_do_launcher_nao_e_reutilizado(tmp_path, monkeypatch, component):
+    pidfile = tmp_path / "processo.pid"
+    pidfile.write_text("12345", encoding="utf-8")
+    monkeypatch.setattr(launcher, "process_command", lambda _: [
         launcher.sys.executable, "-B", "-m", "app.launcher", "--service", component])
-    assert launcher.running_pid(pidfile, component) == 12345
+    with pytest.raises(launcher.LaunchError, match="servico antigo sem identidade"):
+        launcher.running_pid(pidfile, component, tmp_path, tmp_path)
+
+
+@pytest.mark.parametrize("component", ["gravador", "agente"])
+@pytest.mark.parametrize("different_root,different_home", [(True, False), (False, True), (True, True)])
+def test_pid_copiado_de_outra_instalacao_com_mesmo_python_nao_inicia_duplicata(
+        context, monkeypatch, component, different_root, different_home):
+    pidfile = context.home / "logs" / launcher.PID_FILES[component]
+    pidfile.write_text("12345", encoding="utf-8")
+    other_root = context.root.parent / "Outra cópia" if different_root else context.root
+    other_home = context.home.parent / "Outros dados" if different_home else context.home
+    monkeypatch.setattr(launcher, "process_command", lambda _: [
+        launcher.sys.executable, "-B", "-m", "app.launcher", "--service", component,
+        "--service-root", str(other_root), "--service-home", str(other_home)])
+    # O fixture substitui a consulta; restaura apenas a funcao real, sem tocar nos filhos simulados.
+    monkeypatch.setattr(launcher, "running_pid", REAL_RUNNING_PID)
+    with pytest.raises(launcher.LaunchError, match="outra instalacao ou pasta de dados"):
+        launcher.launch(component, context.root, context.home, context.env, context.url, 2)
+    assert context.spawned == []
+    assert context.ready == []
+    assert context.agents == []
+    assert pidfile.read_text(encoding="utf-8") == "12345"
+
+
+@pytest.mark.parametrize("component", ["gravador", "agente"])
+def test_pid_desta_instalacao_e_home_e_reutilizado_sem_duplicata(context, monkeypatch, component):
+    pidfile = context.home / "logs" / launcher.PID_FILES[component]
+    pidfile.write_text("12345", encoding="utf-8")
+    monkeypatch.setattr(launcher, "process_command", lambda _: [
+        launcher.sys.executable, "-B", "-m", "app.launcher", "--service", component,
+        "--service-root", str(context.root), "--service-home", str(context.home)])
+    monkeypatch.setattr(launcher, "running_pid", REAL_RUNNING_PID)
+    assert launcher.launch(component, context.root, context.home, context.env, context.url, 2) is False
+    assert context.spawned == []
+
+
+@pytest.mark.parametrize("marker", ["--service-root", "--service-home"])
+def test_marcador_relativo_nao_comprova_instalacao(tmp_path, monkeypatch, marker):
+    pidfile = tmp_path / "processo.pid"
+    pidfile.write_text("12345", encoding="utf-8")
+    command = [launcher.sys.executable, "-B", "-m", "app.launcher", "--service", "gravador",
+               "--service-root", str(tmp_path), "--service-home", str(tmp_path)]
+    command[command.index(marker) + 1] = "."
+    monkeypatch.setattr(launcher, "process_command", lambda _: command)
+    with pytest.raises(launcher.LaunchError):
+        launcher.running_pid(pidfile, "gravador", tmp_path, tmp_path)
+
+
+@pytest.mark.skipif(launcher.os.name != "nt", reason="parser nativo de linha de comando Windows")
+def test_identidade_windows_preserva_espacos_acentos_e_e_comercial(tmp_path, monkeypatch):
+    root = tmp_path / "Instalação com espaços & acentos"
+    home = tmp_path / "Dados do João"
+    command = [launcher.sys.executable, "-B", "-m", "app.launcher", "--service", "gravador",
+               "--service-root", str(root), "--service-home", str(home)]
+    monkeypatch.setattr(launcher.subprocess, "run", lambda *a, **k: SimpleNamespace(
+        stdout=launcher.json.dumps(subprocess.list2cmdline(command), ensure_ascii=False)))
+    assert launcher.process_command(12345) == command
+
+
+def test_servico_confere_marcadores_antes_de_entregar_ao_modulo(tmp_path, monkeypatch):
+    from app import bundled_runtime
+
+    root = Path(launcher.__file__).resolve().parent.parent
+    home = tmp_path / "Dados com acentos ç e espaços"
+    monkeypatch.setenv("PREGACAO_HOME", str(home))
+    monkeypatch.setattr(launcher.sys, "argv", ["argumentos-do-teste"])
+    monkeypatch.setattr(bundled_runtime, "prepare_environment", lambda **_: None)
+    services = []
+    monkeypatch.setattr(launcher, "_run_service", lambda component, selected_home:
+                        services.append((component, selected_home, list(launcher.sys.argv))) or 7)
+    assert launcher.main(["--service", "gravador", "--service-root", str(root),
+                          "--service-home", str(home)]) == 7
+    assert services == [("gravador", home, ["app.main"])]
+    assert not home.exists()
+
+
+@pytest.mark.parametrize("invalid", ["missing", "root", "home", "relative"])
+def test_servico_com_marcadores_incompativeis_nao_inicia(tmp_path, monkeypatch, capsys, invalid):
+    from app import bundled_runtime
+
+    root = Path(launcher.__file__).resolve().parent.parent
+    home = tmp_path / "Dados atuais"
+    monkeypatch.setenv("PREGACAO_HOME", str(home))
+    monkeypatch.setattr(bundled_runtime, "prepare_environment", lambda **_: None)
+
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("identidade divergente nao pode executar um servico")
+
+    monkeypatch.setattr(launcher, "_run_service", unexpected)
+    arguments = ["--service", "gravador"]
+    if invalid != "missing":
+        arguments += ["--service-root", str(tmp_path / "outra") if invalid == "root" else str(root),
+                      "--service-home", str(tmp_path / "outros") if invalid == "home"
+                      else "." if invalid == "relative" else str(home)]
+    assert launcher.main(arguments) == 1
+    assert "[ERRO]" in capsys.readouterr().out
+    assert not home.exists()
+
+
+def test_pid_nativo_em_copia_sintetica_reutiliza_apenas_mesma_instalacao(tmp_path, monkeypatch):
+    """Processo de teste so grava PID temporario; nao importa o servidor ou filas."""
+    from app import bundled_runtime
+
+    root = tmp_path / "Cópia sintética & espaços"
+    home = tmp_path / "Dados sintéticos ç"
+    app = root / "app"
+    app.mkdir(parents=True)
+    (app / "__init__.py").write_text("", encoding="utf-8")
+    launcher.shutil.copyfile(launcher.__file__, app / "launcher.py")
+    launcher.shutil.copyfile(bundled_runtime.__file__, app / "bundled_runtime.py")
+    (app / "main.py").write_text(
+        "import os\nfrom pathlib import Path\nimport time\n"
+        "pidfile = Path(os.environ['PREGACAO_HOME']) / 'logs' / 'servidor.pid'\n"
+        "pidfile.parent.mkdir(parents=True, exist_ok=True)\n"
+        "pidfile.write_text(str(os.getpid()), encoding='utf-8')\n"
+        "deadline = time.monotonic() + 45\n"
+        "while not pidfile.with_name('encerrar-teste').exists() and time.monotonic() < deadline:\n"
+        "    time.sleep(0.05)\n", encoding="utf-8")
+    env = dict(launcher.os.environ, PREGACAO_HOME=str(home), PYTHONPATH="")
+    pidfile = home / "logs" / "servidor.pid"
+    # O redirector de venv no Windows cria outro PID para o Python base.
+    python = getattr(launcher.sys, "_base_executable", None) or launcher.sys.executable
+    command = [python, "-B", "-m", "app.launcher", "--service", "gravador",
+               "--service-root", str(root), "--service-home", str(home)]
+    child = subprocess.Popen(command, cwd=root, env=env, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             creationflags=launcher._creationflags())
+    try:
+        deadline = launcher.time.monotonic() + 10
+        while not pidfile.exists() and child.poll() is None and launcher.time.monotonic() < deadline:
+            launcher.time.sleep(0.05)
+        assert pidfile.read_text(encoding="utf-8") == str(child.pid)
+
+        def unexpected(*_args, **_kwargs):
+            pytest.fail("PID validado nao pode chegar a criacao de outro processo")
+
+        monkeypatch.setattr(launcher, "dependency_check", unexpected)
+        ready = []
+        monkeypatch.setattr(launcher, "wait_ready", lambda *a, **k: ready.append((a, k)))
+        for _ in range(2):
+            assert launcher.launch("gravador", root, home, env, "http://127.0.0.1:18765", 2) is False
+        assert len(ready) == 2
+        with pytest.raises(launcher.LaunchError, match="outra instalacao ou pasta de dados"):
+            launcher.launch("gravador", tmp_path / "Outra cópia", home, env,
+                            "http://127.0.0.1:18765", 2)
+        assert child.poll() is None
+        assert pidfile.read_text(encoding="utf-8") == str(child.pid)
+    finally:
+        home.mkdir(parents=True, exist_ok=True)
+        (home / "logs").mkdir(exist_ok=True)
+        pidfile.with_name("encerrar-teste").touch()
+        try:
+            child.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            child.terminate()
+            child.wait(timeout=10)
 
 
 def test_pid_morto_nao_bloqueia_nova_inicializacao(tmp_path, monkeypatch):
@@ -201,7 +372,7 @@ def test_pid_de_outra_instalacao_python_nao_e_aceito(tmp_path, monkeypatch):
 def test_verificar_nao_inicia_servicos_navegador_ou_logs(tmp_path, monkeypatch):
     from app import config as config_mod
 
-    cfg = SimpleNamespace(port=18765)
+    cfg = SimpleNamespace(port=18765, get=lambda _key, default=None: default)
     monkeypatch.setenv("PREGACAO_HOME", str(tmp_path))
     monkeypatch.setattr(config_mod, "Config", lambda home: cfg)
     monkeypatch.setattr(config_mod, "load_env", lambda _: {})
@@ -232,7 +403,8 @@ def test_main_falha_mqtt_mantem_gravador_e_informa_resultado(tmp_path, monkeypat
     monkeypatch.setenv("PREGACAO_HOME", str(tmp_path))
     monkeypatch.setenv("PREGACAO_REMOTE_HOST", "broker.invalid")
     monkeypatch.setenv("PREGACAO_REMOTE_ENABLED", "auto")
-    monkeypatch.setattr(config_mod, "Config", lambda home: SimpleNamespace(port=18765))
+    monkeypatch.setattr(config_mod, "Config", lambda home: SimpleNamespace(
+        port=18765, get=lambda _key, default=None: default))
     monkeypatch.setattr(config_mod, "load_env", lambda _: {})
     monkeypatch.setattr(launcher, "_launch_lock", lambda _: nullcontext())
     logger = SimpleNamespace(info=lambda *a: None, warning=lambda *a: None,
@@ -265,7 +437,7 @@ def main_context(tmp_path, monkeypatch):
     from app import config as config_mod
 
     home = tmp_path / "Home configurado"
-    cfg = SimpleNamespace(port=18765, host="192.0.2.11")
+    cfg = SimpleNamespace(port=18765, host="192.0.2.11", get=lambda _key, default=None: default)
     monkeypatch.setenv("PREGACAO_HOME", str(home))
     monkeypatch.setenv("PATH", "path-original-sintetico")
     monkeypatch.delenv("PREGACAO_API_BASE", raising=False)

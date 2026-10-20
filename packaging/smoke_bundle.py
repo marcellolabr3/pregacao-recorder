@@ -23,13 +23,14 @@ def main(argv=None):
         windows = os.environ.get("SystemRoot", r"C:\Windows")
         env["PATH"] = os.pathsep.join((str(python.parent), str(node.parent), str(root / "runtime/ffmpeg/bin"), str(Path(windows) / "System32"), windows))
         code = r"""
-import importlib, json, pathlib, sys
+import importlib, importlib.util, json, pathlib, sys, tempfile
 from io import BytesIO
 expected = pathlib.Path(sys.executable).parent.resolve()
-for name in ('flask','werkzeug','waitress','googleapiclient.discovery','google_auth_oauthlib','google_auth_httplib2','paho.mqtt.client','openpyxl','notebooklm','markdown','xhtml2pdf','playwright','rookie_cookies'):
+for name in ('flask','werkzeug','waitress','googleapiclient.discovery','google_auth_oauthlib','google_auth_httplib2','paho.mqtt.client','openpyxl','notebooklm','markdown','xhtml2pdf','playwright'):
     module = importlib.import_module(name)
     if getattr(module, '__file__', None):
         assert pathlib.Path(module.__file__).resolve().is_relative_to(expected), name
+assert importlib.util.find_spec('rookie_cookies') is None, 'Package must use its dedicated NotebookLM profile'
 from xhtml2pdf import pisa
 out = BytesIO()
 assert not pisa.CreatePDF('<html><body><h1>Teste local</h1><p>Pregacao Recorder</p></body></html>', dest=out).err
@@ -49,10 +50,25 @@ with sync_playwright() as p:
     page.set_content('<h1>Runtime OK</h1>')
     assert page.locator('h1').inner_text() == 'Runtime OK'
     browser.close()
-print('Imports, PDF, XLSX and bundled Chromium: PASS')
+    # NotebookLM recovery opens a persistent headless context without a
+    # channel, which requires Playwright's separate headless-shell binary.
+    with tempfile.TemporaryDirectory(prefix='pregacao-headless-profile-') as profile:
+        context = p.chromium.launch_persistent_context(user_data_dir=profile, headless=True, offline=True)
+        try:
+            page = context.pages[0] if context.pages else context.new_page()
+            page.set_content('<h1>Headless recovery runtime OK</h1>')
+            assert page.locator('h1').inner_text() == 'Headless recovery runtime OK'
+        finally:
+            context.close()
+print('Imports, PDF, XLSX, bundled Chromium and persistent headless shell: PASS')
 """
         subprocess.run([str(python), '-B', '-c', code], cwd=root / 'gravador', env=env, check=True, timeout=300)
         subprocess.run([str(python), '-B', '-m', 'notebooklm', '--version'], cwd=temporary, env=env, check=True, timeout=300)
+        # Parse the actual login/refresh commands without opening a browser,
+        # reading an authenticated profile or starting a network request.
+        for args in (['login', '--help'], ['auth', 'refresh', '--help']):
+            subprocess.run([str(python), '-B', '-m', 'notebooklm', *args], cwd=temporary, env=env,
+                           stdout=subprocess.DEVNULL, check=True, timeout=300)
         subprocess.run([str(node), '--check', str(root / 'pipeline/whatsapp/send.js')], cwd=root / 'pipeline', env=env, check=True, timeout=300)
         subprocess.run([str(node), '-e', "const fs=require('fs'),path=require('path'); const base=fs.realpathSync('node_modules')+path.sep; for(const name of ['baileys','pino','qrcode','qrcode-terminal']) {if(!fs.realpathSync(require.resolve(name)).startsWith(base)) throw Error('Dependency outside package: '+name); require(name);} console.log('WhatsApp dependencies: PASS (no connection)')"], cwd=root / 'pipeline', env=env, check=True, timeout=300)
         ffmpeg = root / 'runtime/ffmpeg/bin/ffmpeg.exe'

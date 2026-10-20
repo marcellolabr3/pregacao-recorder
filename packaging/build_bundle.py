@@ -1,4 +1,4 @@
-"""Monta o pacote Windows de teste sem copiar ambientes ou dados pessoais."""
+"""Monta o pacote Windows sem copiar ambientes ou dados pessoais."""
 from __future__ import annotations
 
 import argparse
@@ -102,20 +102,31 @@ def write_entrypoints(target: Path) -> None:
     for name, suffix in (("Iniciar Pregacao.cmd", ""), ("Verificar Pacote.cmd", " --verificar")):
         content = '@echo off\r\nsetlocal\r\nset "PREGACAO_PACKAGE=%~dp0"\r\npushd "%PREGACAO_PACKAGE%gravador"\r\n"%PREGACAO_PACKAGE%runtime\\python\\python.exe" -B -m app.launcher' + suffix + ' %*\r\nset "PREGACAO_EXIT=%errorlevel%"\r\npopd\r\nif not "%PREGACAO_EXIT%"=="0" pause\r\nexit /b %PREGACAO_EXIT%\r\n'
         (target / name).write_bytes(content.encode("utf-8"))
+    (target / "Conectar WhatsApp.cmd").write_bytes((
+        '@echo off\r\nsetlocal\r\nset "PREGACAO_PACKAGE=%~dp0"\r\n'
+        'set "PREGACAO_PIPELINE_HOME=%PREGACAO_PACKAGE%pipeline"\r\n'
+        'set "NODE_PATH="\r\nset "NODE_OPTIONS="\r\n'
+        'pushd "%PREGACAO_PACKAGE%pipeline"\r\n'
+        '"%PREGACAO_PACKAGE%runtime\\node\\node.exe" "whatsapp\\send.js" --login\r\n'
+        'set "PREGACAO_EXIT=%errorlevel%"\r\npopd\r\n'
+        'if not "%PREGACAO_EXIT%"=="0" pause\r\nexit /b %PREGACAO_EXIT%\r\n').encode("utf-8"))
     (target / "LEIA-ME.txt").write_text(
-        "Pregacao Recorder - pacote de teste da sprint 1\n\n"
-        "Extraia a pasta inteira em uma pasta gravavel do seu usuario Windows.\n"
+        "Pregacao Recorder - pacote pessoal Windows\n\n"
+        "Use o instalador .exe para instalar em LOCALAPPDATA/PregacaoRecorder.\n"
+        "O ZIP tambem pode ser extraido em uma pasta definitiva gravavel.\n"
         "Execute Verificar Pacote.cmd para diagnostico local sem iniciar servicos.\n"
         "Iniciar Pregacao.cmd abre o programa. Configure audio, pasta e contas em CONFIG.\n"
+        "Conectar WhatsApp.cmd permite parear a conta sem enviar mensagens.\n"
+        "Leia GUIA-INSTALACAO.md para configuracao, celular e reinstalacao.\n"
         "Este pacote nao contem suas contas, sessoes ou historico.\n"
         "Gravacao local nao exige internet; integracoes precisam de login e conexao.\n"
-        "Instalador .exe e configuracao pessoal pertencem a sprint 2.\n",
+        "Antes de reinstalar, conclua as tarefas e feche os processos do programa.\n",
         encoding="utf-8")
 
 
 def copy_browsers(cache: Path, runtime: Path, target: Path, log: Path, env: dict) -> None:
     metadata = json.loads((runtime / "Lib/site-packages/playwright/driver/package/browsers.json").read_text(encoding="utf-8"))
-    needed = [b for b in metadata["browsers"] if b["name"] in {"chromium", "ffmpeg", "winldd"}]
+    needed = [b for b in metadata["browsers"] if b["name"] in {"chromium", "chromium-headless-shell", "ffmpeg", "winldd"}]
     available = []
     for browser in needed:
         rev = browser.get("revisionOverrides", {}).get("win64", browser["revision"])
@@ -128,7 +139,7 @@ def copy_browsers(cache: Path, runtime: Path, target: Path, log: Path, env: dict
             shutil.copytree(folder, target / folder.name)
     else:
         browser_env = dict(env, PLAYWRIGHT_BROWSERS_PATH=str(target))
-        run([str(runtime / "python.exe"), "-m", "playwright", "install", "chromium", "--no-shell"], log, env=browser_env)
+        run([str(runtime / "python.exe"), "-m", "playwright", "install", "chromium"], log, env=browser_env)
 
 
 def archive_bundle(target: Path) -> Path:
@@ -162,7 +173,7 @@ def main(argv=None) -> int:
     cache.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    target = output / ("PregacaoRecorder-sprint1-" + stamp)
+    target = output / ("PregacaoRecorder-sprint2-" + stamp)
     target.mkdir()
     log = output / ("build-" + stamp + ".log")
     env = public_build_env()
@@ -202,12 +213,14 @@ def main(argv=None) -> int:
     browser_cache = options.browser_cache or (cache / "browsers")
     copy_browsers(browser_cache, python, target / "runtime/browsers", log, env)
     write_entrypoints(target)
+    copy_file(ROOT / "docs/GUIA_INSTALACAO_WINDOWS.md", target / "GUIA-INSTALACAO.md")
+    copy_file(ROOT / "docs/ACEITE_WINDOWS.md", target / "ACEITE_WINDOWS.md")
     licenses = target / "licenses"
     licenses.mkdir()
     (licenses / "RUNTIME-SOURCES.txt").write_text("CPython: " + PYTHON_URL + "\nNode: https://nodejs.org/ (binary supplied at build, hash in manifest)\nFFmpeg: https://github.com/yt-dlp/FFmpeg-Builds (binary supplied at build, hash in manifest)\nPython/Node dependencies retain their distribution metadata/licenses.\n", encoding="utf-8")
     with (licenses / "FFmpeg.txt").open("w", encoding="utf-8") as stream:
         subprocess.run([str(ffmpeg), "-L"], stdout=stream, stderr=subprocess.STDOUT)
-    manifest = {"schema_version": 1, "name": "PregacaoRecorder", "version": "sprint1-" + stamp, "source_revision": revision(ROOT), "created_at": stamp,
+    manifest = {"schema_version": 1, "name": "PregacaoRecorder", "version": "sprint2-" + stamp, "source_revision": revision(ROOT), "created_at": stamp,
                 "layout": {"recorder": "gravador", "pipeline": "pipeline", "python": "runtime/python", "node": "runtime/node/node.exe", "ffmpeg": "runtime/ffmpeg/bin", "browsers": "runtime/browsers"},
                 "components": {"python": {"version": PYTHON_VERSION, "archive_sha256": PYTHON_SHA256}, "node": {"version": subprocess.check_output([str(node), "--version"], text=True).strip(), "sha256": sha256(node)}, "ffmpeg": {"sha256": sha256(ffmpeg)}, "ffprobe": {"sha256": sha256(ffprobe)}, "python_lock_sha256": sha256(lock)}}
     (target / "package-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

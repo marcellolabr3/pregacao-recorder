@@ -196,7 +196,7 @@ Pipeline configurado na auditoria: `C:\Users\Aska\Documents\Default Project\serm
 
 ## Proximo passo recomendado
 
-Corrigir as lacunas G01/G02 identificadas na revisao independente abaixo, com regressoes isoladas. Depois, renovar o login Google no PC e conferir a retomada dos estudos preservados. Revisar os itens C/D pendentes pelos IDs. Estado atual em docs/CODEX_CONTEXT.md; retirada em docs/REMOCAO_RASPBERRY.md.
+G01/G02 corrigidos na sprint 2, com regressoes isoladas; o servidor de desenvolvimento em uso nao foi reiniciado. Seguir a distribuicao pessoal em docs/TASK_DISTRIBUICAO_WINDOWS.md e concluir contas/celular no destino. Renovacao real de login e demais itens C/D continuam pendentes. Estado atual em docs/CODEX_CONTEXT.md; retirada em docs/REMOCAO_RASPBERRY.md.
 
 Nao reiniciar servicos, apagar legados, alterar credenciais, renovar login ou executar correcoes apenas por ler este documento. Consultar o codigo e o estado atual antes de implementar, pois esta auditoria representa o momento indicado no inicio.
 
@@ -208,8 +208,8 @@ da auditoria inicial acima sao historicos; a suite atual repetida tem 309 testes
 
 | ID | Achado e evidencia | Efeito/limite | Estado |
 |---|---|---|---|
-| G01 | `app/estudos.py:1039` libera `_trava_login` antes de `Popen` em `:1128`. Clique depois da guarda permite login e pipeline simultaneos. Reproducao com mocks e pasta temporaria, sem CLI real. | A cobertura atual verifica clique durante pre-flight, mas nao depois da guarda. Pode disputar a sessao NotebookLM. | Pendente: coordenar login e execucao do pipeline; adicionar regressao isolada. |
-| G02 | `app/launcher.py:112-121` aceita interpretador base/modulo esperado sem confirmar pasta do projeto ou `PREGACAO_HOME`. Reproduzido com PID e linha de comando simulados. | Um PID de outra copia usando o mesmo Python base pode ser aceito; nenhum encerramento de processo foi observado ou executado. | Pendente: vincular identidade a instalacao/home e testar duas copias. |
+| G01 | Guarda antiga liberava o perfil antes de `Popen`, permitindo login/pipeline simultaneos. | Corrigido: perfil reservado ate o subprocesso sair; login posterior aguarda. Falhas de inicio/monitoramento cobertas. | Corrigido na sprint 2; regressao falha com a implementacao anterior e passa com a atual. |
+| G02 | Identidade antiga aceitava mesmo Python/modulo sem conferir instalacao/home. | Corrigido: filhos recebem e validam raiz/home absolutos; PID estranho ou legado e recusado sem encerramento. | Corrigido na sprint 2; duas copias e processo sintetico real Windows testados. |
 | G03 | `android/app/src/main/res/values/strings.xml:58` ainda apresenta o disco do PC como alternativa quando o externo some. Comentarios em Kotlin e JS repetem a regra antiga. | O backend bloqueia captura quando o destino esta indisponivel, sem troca automatica. Fonte Kotlin e legada; nenhum APK novo foi gerado. | Pendente: alinhar texto/comentarios ao comportamento Windows. |
 
 Verificacao repetida nesta revisao: 309 testes Python passaram em 16,41 s em copia

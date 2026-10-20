@@ -99,7 +99,8 @@ def process_command(pid: int) -> list[str] | None:
         raise LaunchError("Nao foi possivel identificar um PID existente; nenhum processo foi reiniciado.") from exc
 
 
-def running_pid(pid_file: Path, component: str) -> int | None:
+def running_pid(pid_file: Path, component: str, root: Path | None = None,
+                home: Path | None = None) -> int | None:
     try:
         pid = int(pid_file.read_text(encoding="utf-8").strip())
     except (FileNotFoundError, ValueError):
@@ -109,16 +110,36 @@ def running_pid(pid_file: Path, component: str) -> int | None:
     args = process_command(pid)
     if args is None:
         return None
-    # Conferir tambem o interpretador: outro projeto nao e esta instalacao.
+    # O Python base pode ser compartilhado por varias copias. Os marcadores
+    # absolutos sao conferidos pelo proprio filho antes de iniciar o servico.
     python = Path(args[0]).resolve() if args else None
     allowed = {Path(sys.executable).resolve()}
     base_python = getattr(sys, "_base_executable", None)
     if base_python:
         allowed.add(Path(base_python).resolve())
     module_args = args[args.index("-m") + 1:] if "-m" in args else []
-    matches = module_args == [MODULES[component]] or module_args == ["app.launcher", "--service", component]
-    if python not in allowed or not matches:
+    if python not in allowed:
         raise LaunchError(f"{pid_file.name} aponta para outro processo; nenhum processo foi alterado.")
+    if module_args in ([MODULES[component]], ["app.launcher", "--service", component]):
+        raise LaunchError(
+            f"{pid_file.name} pertence a um servico antigo sem identidade verificavel. "
+            "Encerre a versao anterior pelo metodo habitual antes de abrir novamente; "
+            "nenhum processo foi alterado."
+        )
+    if (args[1:3] != ["-B", "-m"] or len(module_args) != 7
+            or module_args[:4] != ["app.launcher", "--service", component, "--service-root"]
+            or module_args[5] != "--service-home"):
+        raise LaunchError(f"{pid_file.name} aponta para outro processo; nenhum processo foi alterado.")
+    try:
+        actual_root, actual_home = Path(module_args[4]), Path(module_args[6])
+        expected_root = Path(root or Path(__file__).resolve().parent.parent).resolve()
+        expected_home = Path(home or pid_file.parent.parent).resolve()
+        matches = (actual_root.is_absolute() and actual_home.is_absolute()
+                   and actual_root.resolve() == expected_root and actual_home.resolve() == expected_home)
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise LaunchError("Nao foi possivel conferir a instalacao do PID; nenhum processo foi alterado.") from exc
+    if not matches:
+        raise LaunchError(f"{pid_file.name} pertence a outra instalacao ou pasta de dados; nenhum processo foi alterado.")
     return pid
 
 
@@ -196,20 +217,21 @@ def wait_ready(url: str, child=None, timeout: float = 30.0) -> None:
     raise LaunchError("O painel ainda nao respondeu. Consulte os logs; nenhum processo foi encerrado. Tente abrir novamente.")
 
 
-def _wait_agent(child, pid_file: Path, timeout: float) -> None:
+def _wait_agent(child, pid_file: Path, timeout: float, root: Path, home: Path) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if child.poll() is not None:
             raise LaunchError("O agente encerrou ao iniciar. Consulte logs/pregacao-agente.log e logs/inicio-agente.log.")
-        if running_pid(pid_file, "agente"):
+        if running_pid(pid_file, "agente", root, home):
             return
         time.sleep(0.2)
     raise LaunchError("O agente ainda nao confirmou a inicializacao. Consulte logs/pregacao-agente.log.")
 
 
 def launch(component: str, root: Path, home: Path, env: dict, url: str, timeout: float = 30.0) -> bool:
+    root, home = root.resolve(), home.resolve()
     pid_file = home / "logs" / PID_FILES[component]
-    if running_pid(pid_file, component):
+    if running_pid(pid_file, component, root, home):
         if component == "gravador":
             wait_ready(url, timeout=timeout)
         return False
@@ -222,7 +244,8 @@ def launch(component: str, root: Path, home: Path, env: dict, url: str, timeout:
         raise LaunchError("FFmpeg ausente no PATH. Consulte docs/WINDOWS.md.")
     child_env = dict(env, PREGACAO_HOME=str(home), PREGACAO_LOG_FILE=LOG_FILES[component])
     child = subprocess.Popen(
-        [sys.executable, "-B", "-m", "app.launcher", "--service", component],
+        [sys.executable, "-B", "-m", "app.launcher", "--service", component,
+         "--service-root", str(root), "--service-home", str(home)],
         cwd=str(root), env=child_env, stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         close_fds=True, creationflags=_creationflags(),
@@ -230,7 +253,7 @@ def launch(component: str, root: Path, home: Path, env: dict, url: str, timeout:
     if component == "gravador":
         wait_ready(url, child=child, timeout=timeout)
     else:
-        _wait_agent(child, pid_file, timeout)
+        _wait_agent(child, pid_file, timeout, root, home)
     return True
 
 
@@ -309,9 +332,23 @@ def main(argv=None) -> int:
     modes.add_argument("--somente-agente", action="store_true", help="inicia somente o controle remoto")
     parser.add_argument("--sem-navegador", action="store_true", help="inicia sem abrir o painel")
     parser.add_argument("--service", choices=MODULES, help=argparse.SUPPRESS)
+    parser.add_argument("--service-root", help=argparse.SUPPRESS)
+    parser.add_argument("--service-home", help=argparse.SUPPRESS)
     parser.add_argument("--cli", nargs=argparse.REMAINDER, default=None, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parent.parent
+    service_home = None
+    if args.service:
+        try:
+            if (not args.service_root or not args.service_home
+                    or not Path(args.service_root).is_absolute()
+                    or not Path(args.service_home).is_absolute()
+                    or Path(args.service_root).resolve() != root):
+                raise ValueError("identidade invalida")
+            service_home = Path(args.service_home).resolve()
+        except (OSError, ValueError, RuntimeError):
+            print("[ERRO] Identidade da instalacao do servico invalida; nenhum servico foi iniciado.")
+            return 1
     from . import bundled_runtime
 
     try:
@@ -321,6 +358,9 @@ def main(argv=None) -> int:
         return 1
     home = Path(os.environ.get("PREGACAO_HOME") or root).resolve()
     os.environ["PREGACAO_HOME"] = str(home)
+    if args.service and service_home != home:
+        print("[ERRO] Pasta de dados do servico diverge da inicializacao; nenhum servico foi iniciado.")
+        return 1
     if args.cli is not None:
         sys.argv = ["pregacao"] + args.cli
         try:
@@ -343,7 +383,9 @@ def main(argv=None) -> int:
     except (OSError, ValueError):
         print("[ERRO] Nao foi possivel ler a configuracao local. Confira permissoes e formato JSON.")
         return 1
-    env = dict(os.environ)
+    from .remote.settings import effective_environment
+
+    env = effective_environment(cfg, os.environ)
     # Equivale ao PATH/ambiente do activate.bat, usando o Python explicito.
     if package is None:
         env["PATH"] = str(Path(sys.executable).parent) + os.pathsep + env.get("PATH", "")

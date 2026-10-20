@@ -285,13 +285,17 @@ def parse_event(event: Dict[str, str]) -> Optional[Dict[str, Any]]:
 
 
 # ======================================================================
-# configuracao (sempre via ambiente - nada de segredo em codigo)
+# configuracao local (CONFIG tem precedencia sobre o .env legado)
 # ======================================================================
 class RemoteSettings:
-    """Configuracao do agente lida do ambiente (``.env``)."""
+    """Configuracao salva em CONFIG, com fallback para o ambiente (``.env``)."""
 
     def __init__(self, environ: Optional[Dict[str, str]] = None) -> None:
-        env = dict(os.environ) if environ is None else dict(environ)
+        if environ is None:
+            from .settings import effective_environment
+            env = effective_environment(config, os.environ)
+        else:
+            env = dict(environ)
         self.host = str(env.get("PREGACAO_REMOTE_HOST", "") or "").strip()
         self.port = _env_int(env, "PREGACAO_REMOTE_PORT", 8883)
         self.tls = _env_bool(env, "PREGACAO_REMOTE_TLS", True)

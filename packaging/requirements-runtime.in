@@ -10,4 +10,3 @@ notebooklm-py==0.8.5
 playwright==1.64.0
 Markdown==3.11.1
 xhtml2pdf==0.2.26
-rookie-cookies==0.6.0

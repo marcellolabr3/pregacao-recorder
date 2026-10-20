@@ -5,13 +5,24 @@ Gravador de pregacoes para Windows com painel local e controle Android por MQTT/
 ## Comecar
 
 1. Seguir [instalacao Windows](docs/WINDOWS.md).
-2. Executar `iniciar-tudo.bat`, a unica entrada para iniciar o programa.
+2. Executar `iniciar-tudo.bat` nesta copia de desenvolvimento.
 3. Aguardar o painel abrir no navegador (`http://127.0.0.1:8080` por padrao).
 4. Configurar audio, pasta de gravacao e Google Drive pelo painel.
 
 O iniciador verifica os requisitos e abre gravador e agente MQTT em processos
 separados, sem janelas extras. Para conferir a instalacao sem iniciar os servicos,
 executar `iniciar-tudo.bat --verificar`. Opcoes e logs: [operacao Windows](docs/WINDOWS.md).
+
+## Edicao pessoal no SSD
+
+No SSD `E:`, a unica pasta visivel do produto e `PregacaoRecorder-Pessoal`.
+Abra `E:\PregacaoRecorder-Pessoal\Iniciar Pregacao.cmd`; para conferir as
+dependencias sem iniciar os servicos, use `Verificar Pacote.cmd` na mesma pasta.
+O APK atual (`2.6.0+12`) tambem esta nela. A pasta funciona sem a instalacao
+antiga e sem o instalador na raiz do SSD. Ao usar outro PC, confira audio,
+conexao do celular e contas conforme o [guia do SSD](docs/GUIA_SSD_PORTATIL.md)
+e o [roteiro de aceite](docs/ACEITE_WINDOWS.md). O login do NotebookLM precisa
+ser renovado antes de gerar um novo estudo.
 
 ## Fluxo implementado
 

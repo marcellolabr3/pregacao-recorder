@@ -1,7 +1,19 @@
 # PR-DIST-001 - Instalar meu Pregacao Recorder em outro PC
 
-Estado: sprint 1 implementada em ZIP de teste; aceite em Windows limpo/destino pendente. Escopo pessoal confirmado em 19/10/2026.
+Estado: sprint 1 empacotada; implementacao da sprint 2 concluida. Em 20/10/2026 UTC, a edicao pessoal portatil com contas e dados atuais foi instalada e validada neste PC no SSD `E:`. Aceite operacional no outro PC ainda pendente. Escopo pessoal confirmado em 19/10/2026 e ampliado pelo usuario para transportar todos os dados e credenciais.
 Uso pessoal, Windows 10/11 x64. Este plano substitui integralmente o plano anterior de oito sprints.
+
+**Decisao mais recente do usuario:** somente a pasta instalada
+`E:\PregacaoRecorder-Pessoal` fica visivel na raiz do SSD. Ela leva `.env`,
+tokens, banco, gravacoes, autenticacoes, arquivos de estudo e APK. A pasta
+anterior `E:\PregacaoRecorder` e os arquivos soltos da raiz foram movidos para
+um arquivo privado ignorado pelo Git em `recovery/ssd-root-archive-20261020/`.
+O instalador privado permanece em `dist-pacote/`, fora do SSD e do GitHub.
+As secoes historicas abaixo descrevem o pacote generico anterior; onde houver
+divergencia, vale a edicao pessoal. Implementacao:
+`packaging/build_personal_portable.py`, `app/portable_state.py` e
+[guia do SSD](GUIA_SSD_PORTATIL.md). O app usa o mesmo ID MQTT da origem,
+portanto somente uma das copias deve operar por vez.
 
 ## Objetivo
 
@@ -61,11 +73,24 @@ runtimes do pacote, sem Python/Node/FFmpeg/Git/SDK previamente instalados.
 
 ## Sprint 2 - Instalar e configurar para meu uso
 
-- [ ] PR-DIST-001.2.1 Criar instalador com pasta gravavel, atalho unico e inicializacao dos mesmos processos; repetir a instalacao preserva configuracoes/dados, com copia de seguranca simples antes de substituir arquivos.
-- [ ] PR-DIST-001.2.2 Ajustar audio, destino, caminhos do pipeline, contas e destinatario usando CONFIG e um guia curto. Reaproveitar preferencias/PINs quando desejado; gerar segredo local se faltar, sem reformular autenticacao ou criar novo assistente.
-- [ ] PR-DIST-001.2.3 Configurar MQTT para o mesmo celular. Se os dois PCs puderem ligar, usar identidade diferente no novo PC, ajustar o pareamento e conferir acesso aos novos topics no broker; so preservar a identidade antiga ao substituir o PC anterior.
-- [ ] PR-DIST-001.2.4 Aplicar os ajustes pequenos de inicializacao/login necessarios: G01 (login/pipeline concorrentes) e G02 (PID herdado ou de outra instalacao). Nao encerrar processos nao identificados nem copiar PIDs de origem.
-- [ ] PR-DIST-001.2.5 Preservar dados existentes, gravacao sem internet e regras atuais de armazenamento. Corrigir outro defeito somente se reproduzido como impedimento ao uso das funcoes atuais no pacote.
+- [x] PR-DIST-001.2.1 Criar instalador com pasta gravavel, atalho unico e inicializacao dos mesmos processos; repetir a instalacao preserva configuracoes/dados, com copia de seguranca simples antes de substituir arquivos.
+- [ ] PR-DIST-001.2.2 Implementacao concluida: audio selecionado pode ser testado antes de salvar, CONFIG persiste por lote e preserva memoria/disco se falhar. Fluxos existentes de Drive/NotebookLM/WhatsApp e guia revisados. Falta selecionar audio/disco e autorizar contas/destinatario no PC destino para o aceite.
+- [ ] PR-DIST-001.2.3 Implementacao concluida: cartao administrativo permite salvar conexao MQTT sem editar `.env`; senha/token vazios preservam valores, ID e topics sao consistentes e ha aviso de reinicio. Falta configurar credencial/ACL e parear o mesmo celular no destino; IDs distintos com dois PCs ativos.
+- [x] PR-DIST-001.2.4 Aplicar os ajustes pequenos de inicializacao/login necessarios: G01 (login/pipeline concorrentes) e G02 (PID herdado ou de outra instalacao). Nao encerrar processos nao identificados nem copiar PIDs de origem.
+- [x] PR-DIST-001.2.5 Preservar dados existentes, gravacao sem internet e regras atuais de armazenamento. Corrigir outro defeito somente se reproduzido como impedimento ao uso das funcoes atuais no pacote.
+
+### Implementacao e limites da sprint 2 (19/10/2026)
+
+- Instalador Inno Setup 7 por usuario, atalho unico, backup anterior a substituicao e desinstalacao que preserva os dados criados no uso. Recusa programa ativo, lock e junction; nunca encerra processos.
+- Bootstrap prepara caminhos locais, segredo persistente e ID MQTT aleatorio por instalacao, preservando PINs, preferencias e identidade explicita. Nao leva configuracoes reais do PC original.
+- CONFIG avancada permite configurar conexao MQTT e mostra pareamento somente ao administrador, com token mascarado; `Conectar WhatsApp.cmd` usa Node privado para login sem envio.
+- G01 reserva o perfil ate o subprocesso do pipeline sair; login posterior aguarda. G02 exige raiz/home absolutos na identidade dos filhos, recusando PID estranho/legado sem matar processos.
+- No pacote, NotebookLM renova pelo perfil dedicado do Chromium com `--allow-headless --verify`; o extra opcional de leitura de cookies de navegadores externos foi retirado. Login e pipeline continuam usando o mesmo perfil. Desenvolvimento preserva suas duas tentativas de renovacao.
+- Guia curto: [GUIA_INSTALACAO_WINDOWS.md](GUIA_INSTALACAO_WINDOWS.md). Build e lista de arquivos: [packaging/README.md](../packaging/README.md). Evidencias: [TESTES.md](TESTES.md).
+- Lacunas reproduzidas e corrigidas: teste usava audio salvo em vez da selecao; lote invalido podia alterar configuracao em memoria; MQTT exigia editar `.env`. Testes cobrem selecao sem persistir, ausencia de interface, taxa/canais, salvar/reabrir, rollback de escrita, segredos e precedencia MQTT.
+- CONFIG MQTT salva prevalece sobre variaveis legadas. Alteracoes exigem ociosidade e reinicio completo dos servicos (guia: reiniciar Windows e abrir atalho); fechar apenas a aba nao aplica. O heartbeat antigo nao confirma a configuracao pendente.
+- 2.2/2.3 permanecem sem aceite operacional: selecionar audio/disco e autorizar contas no PC destino; definir coexistencia/substituicao, credencial/ACL no broker e parear celular. Nenhuma conta/broker ou dado real foi alterado nesta etapa.
+- Padrao seguro de coexistencia: ID proprio no destino. Reutilizar ID antigo somente ao substituir definitivamente o PC anterior. Provas reais permanecem na sprint 3.
 
 Aceite: instalar, abrir pelo atalho, selecionar audio/pasta e conectar as mesmas
 integracoes sem editar caminhos manualmente. PINs continuam funcionando; dados
@@ -102,6 +127,17 @@ Arquivos envolvidos: `app/launcher.py`, `app/paths.py`, `app/config.py`,
 `app/estudos.py`, resolucao de ferramentas de audio, manifests e arquivos do
 pipeline; novos arquivos de empacotamento e testes apenas onde necessario.
 
-Proximo passo: sprint 2, criar o instalador `.exe` a partir do pacote e preparar
-configuracao pessoal/ajustes de inicio e login. O aceite final depende da sprint 3;
-a existencia do ZIP e do smoke local nao comprova funcionamento no outro PC.
+Sprint 3 iniciada: as 11 provas do instalador com fixtures novas passaram,
+incluindo reinstalacao/backup, preservacao de SQLite/audio/perfis e recusas por
+processo ativo/lock/junction. Suite completa: 488 testes isolados passaram.
+Resultados do pacote atualizado em [TESTES.md](TESTES.md).
+Payload real instalado em pasta temporaria curta com espacos/acentos/&:
+7.858 hashes, diagnostico com PATH isolado, configuracao administrativa e
+persistencia em processo novo passaram, com hardware/contas simulados.
+Smoke visual no Chromium privado offline tambem passou. Preferir caminho
+padrao: destino muito profundo ultrapassou MAX_PATH nesta maquina de teste.
+
+Proximo passo: usar instalador/guia atualizados e executar
+[ACEITE_WINDOWS.md](ACEITE_WINDOWS.md) em Windows limpo e no PC destino.
+Concluir configuracao/aceite de 2.2/2.3 e as provas reais da sprint 3.
+O `.exe`, os mocks e os smokes locais nao comprovam entrega pronta no outro PC.

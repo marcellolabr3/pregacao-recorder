@@ -89,3 +89,21 @@ def test_capture_level_sem_backend_reporta_erro(monkeypatch):
     monkeypatch.setattr(device.shutil, "which", lambda _n: None)
     out = device.capture_level(1.0)
     assert out["ok"] is False
+
+
+def test_capture_level_uses_selected_sample_rate_and_channels(monkeypatch):
+    _patch_dshow(monkeypatch, REAL_DSHOW)
+    commands = []
+    class _Fake:
+        returncode = 0
+        stdout = b"\x00\x10" * 100
+        stderr = b""
+    def capture(cmd, **kwargs):
+        commands.append(cmd)
+        return _Fake()
+    monkeypatch.setattr(device.subprocess, "run", capture)
+    result = device.capture_level(2.0, "USB PnP Sound Device (0)", sample_rate=48000, channels=2)
+    assert result["ok"] is True
+    assert commands[0][commands[0].index("-ar") + 1] == "48000"
+    assert commands[0][commands[0].index("-ac") + 1] == "2"
+    assert commands[0][commands[0].index("-i") + 1] == "audio=USB PnP Sound Device (0)"

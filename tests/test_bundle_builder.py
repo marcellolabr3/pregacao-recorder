@@ -1,6 +1,7 @@
 """Empacotamento por allowlist: fontes sim, dados/credenciais locais nao."""
 from pathlib import Path
 import importlib.util
+import json
 import re
 import pytest
 
@@ -46,6 +47,37 @@ def test_runtime_archive_is_pinned_and_rejects_tampering(tmp_path):
     assert not (tmp_path / 'python').exists()
 
 
+@pytest.mark.parametrize("shell_cached", [False, True])
+def test_browser_cache_reused_only_when_login_and_recovery_browsers_present(tmp_path, monkeypatch, shell_cached):
+    runtime, cache, target = (tmp_path / name for name in ("python", "cache", "browsers"))
+    metadata = runtime / "Lib/site-packages/playwright/driver/package/browsers.json"
+    metadata.parent.mkdir(parents=True)
+    browsers = [
+        {"name": "chromium", "revision": "100"},
+        {"name": "chromium-headless-shell", "revision": "100"},
+        {"name": "ffmpeg", "revision": "200"},
+        {"name": "winldd", "revision": "300"},
+    ]
+    metadata.write_text(json.dumps({"browsers": browsers}))
+    for browser in browsers:
+        if browser["name"] == "chromium-headless-shell" and not shell_cached:
+            continue
+        folder = cache / (browser["name"].replace("-", "_") + "-" + browser["revision"])
+        folder.mkdir(parents=True)
+        (folder / "fixture.txt").write_text(browser["name"])
+    calls = []
+    monkeypatch.setattr(builder, "run", lambda command, log, **kwargs: calls.append((command, kwargs["env"])))
+    builder.copy_browsers(cache, runtime, target, tmp_path / "build.log", {"FIXTURE": "1"})
+    if shell_cached:
+        assert calls == []
+        assert sorted(file.read_text() for file in target.rglob("fixture.txt")) == sorted(b["name"] for b in browsers)
+    else:
+        # A cache adequate for interactive login still needs the recovery
+        # browser; provision both through the private runtime, without --no-shell.
+        assert calls == [([str(runtime / "python.exe"), "-m", "playwright", "install", "chromium"],
+                          {"FIXTURE": "1", "PLAYWRIGHT_BROWSERS_PATH": str(target)})]
+
+
 def test_runtime_lock_contains_exact_hashes_and_correct_notebooklm():
     text = (ROOT / 'packaging/requirements-runtime.lock').read_text()
     lines = [line for line in text.splitlines() if line and not line.startswith('#')]
@@ -54,6 +86,10 @@ def test_runtime_lock_contains_exact_hashes_and_correct_notebooklm():
     assert 'notebooklm-py==0.8.5 ' in text
     assert '\nnotebooklm==' not in text
     assert 'openpyxl==3.1.5 ' in text
+    # Installed NotebookLM uses its dedicated browser profile. Do not ship
+    # the optional native reader for cookies from unrelated browsers.
+    assert 'rookie-cookies' not in text
+    assert 'rookie-cookies' not in (ROOT / 'packaging/requirements-runtime.in').read_text()
 
 
 def test_entrypoints_use_relative_private_runtime(tmp_path):

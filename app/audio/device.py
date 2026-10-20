@@ -151,7 +151,10 @@ def _cache_limpa() -> None:
     _CACHE_TS = 0.0
 
 
-def capture_level(seconds: float = 2.0, device: Optional[str] = None) -> Dict[str, Any]:
+def capture_level(
+    seconds: float = 2.0, device: Optional[str] = None, *,
+    sample_rate: int = 44100, channels: int = 1,
+) -> Dict[str, Any]:
     """Captura alguns segundos e mede o nivel (RMS/peak).
 
     Usado por `pregacao check` / tela de config para provar que o equipamento
@@ -169,8 +172,8 @@ def capture_level(seconds: float = 2.0, device: Optional[str] = None) -> Dict[st
             "-f", "dshow",
             "-i", f"audio={alvo}",
             "-t", str(max(1, int(seconds))),
-            "-ac", "1",
-            "-ar", "44100",
+            "-ac", str(channels),
+            "-ar", str(sample_rate),
             "-acodec", "pcm_s16le",
             "-f", "s16le",
             "pipe:1",

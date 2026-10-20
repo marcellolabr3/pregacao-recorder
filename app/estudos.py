@@ -54,8 +54,9 @@ _evento = threading.Event()
 _trabalhador: Optional[threading.Thread] = None
 _trava_trabalhador = threading.Lock()
 
-# Um login interativo por vez. O CLI de login e os checks/refreshs usam
-# o mesmo perfil; nao podem escrever/consultar uma captura pela metade.
+# O login, os checks/refreshs e o pipeline usam o mesmo perfil. A trava
+# cobre toda a vida do subprocesso: um clique pode agendar o login,
+# mas seu navegador so abre depois de o pipeline liberar o perfil.
 _trava_nlm = threading.RLock()
 _trava_login = threading.RLock()
 _login_thread: Optional[threading.Thread] = None
@@ -265,17 +266,15 @@ def verificar_saude(force: bool = False) -> str:
 
 
 def _renovar_sessao() -> bool:
-    """Uma tentativa UNICA de recuperacao, pelos metodos oficiais da
-    biblioteca, nesta ordem:
+    """Recupera a sessao uma vez, com os metodos oficiais da biblioteca.
 
-    1. "auth refresh --browser-cookies" - re-extrai os cookies da sessao
-       ja logada no navegador instalado (o login foi feito UMA vez pelo
-       usuario; aqui so lemos o resultado) e regrava o storage;
-    2. "auth refresh --allow-headless" - recuperacao layer-3 pela sessao
-       persistida do proprio CLI.
+    No pacote, "auth refresh --allow-headless" usa somente o perfil
+    dedicado do CLI, sem importar cookies de navegadores externos.
+    Desenvolvimento preserva a tentativa "auth refresh --browser-cookies"
+    com o navegador configurado antes dessa recuperacao do perfil.
 
-    Se as duas exigirem login interativo, devolve False e o job vai para
-    a espera - nada de segurar cookie na mao nem de tentar para sempre.
+    Se a recuperacao exigir login interativo, devolve False e o job vai
+    para a espera; a cadencia impede tentativas repetidas em seguida.
     """
     global _ultima_renovacao
     if _login_ativo():
@@ -290,13 +289,12 @@ def _renovar_sessao() -> bool:
         return False
     _ultima_renovacao = agora
 
-    navegador = _nlm_navegador().lower()
-    navegador = "edge" if navegador in ("msedge", "edge") else navegador
     prefixo = _nlm_prefixo(pasta, prog)
-    tentativas = [
-        ["auth", "refresh", "--browser-cookies", navegador, "--verify"],
-        ["auth", "refresh", "--allow-headless", "--verify"],
-    ]
+    tentativas = [["auth", "refresh", "--allow-headless", "--verify"]]
+    if not bundled_runtime.is_bundled():
+        navegador = _nlm_navegador().lower()
+        navegador = "edge" if navegador in ("msedge", "edge") else navegador
+        tentativas.insert(0, ["auth", "refresh", "--browser-cookies", navegador, "--verify"])
     for args in tentativas:
         codigo, texto = _executar_nlm(prefixo + args, Path(pasta), 300)
         log.info("auth refresh %s: codigo %s", args[2], codigo)
@@ -514,7 +512,7 @@ def reconectar() -> Dict[str, Any]:
         if _login["em_andamento"]:
             return {"lancado": False, "navegador": navegador,
                     "em_andamento": True, "login": dict(_login)}
-        _login.update(em_andamento=True, estado="abrindo", detalhe="Abrindo uma nova janela para entrar na conta Google do NotebookLM...",
+        _login.update(em_andamento=True, estado="abrindo", detalhe="Preparando o login do NotebookLM. Se houver estudo em andamento, a janela abre quando ele terminar.",
                       iniciado_em=time.time(), finalizado_em=0.0, retomados=0)
         _login_thread = threading.Thread(target=_executar_login, args=(pasta, prog, navegador),
                                          name="notebooklm-login", daemon=True)
@@ -1020,9 +1018,19 @@ def _publica_falha(job_id: str, job: Dict[str, Any], descricao: str) -> None:
     )
 
 
+def _aguardar_login(job: Dict[str, Any]) -> None:
+    _aguardar(job["job_id"], "autenticacao expirada")
+    _publicar_job(
+        dict(job, estado="AGUARDANDO_INTERVENCAO", motivo="autenticacao expirada"),
+        "PRE-FLIGHT",
+        descricao="Em espera: autenticacao do NotebookLM expirada",
+        estado="AGUARDANDO_INTERVENCAO",
+        level="warning",
+    )
+
+
 def _rodar(job: Dict[str, Any]) -> None:
     job_id = job["job_id"]
-    caminho = job["audio_path"]
     python = _cfg("python")
     pasta = _cfg("pasta")
     if not python or not pasta:
@@ -1064,14 +1072,7 @@ def _rodar(job: Dict[str, Any]) -> None:
                 if _saude["estado"] == "ok":
                     estado = "ok"
         if estado == "auth":
-            _aguardar(job_id, "autenticacao expirada")
-            _publicar_job(
-                dict(job, estado="AGUARDANDO_INTERVENCAO", motivo="autenticacao expirada"),
-                "PRE-FLIGHT",
-                descricao="Em espera: autenticacao do NotebookLM expirada",
-                estado="AGUARDANDO_INTERVENCAO",
-                level="warning",
-            )
+            _aguardar_login(job)
             return
         if estado == "rede":
             # sem conexao o pipeline tambem quebraria: guarda o MP3 e o
@@ -1085,11 +1086,26 @@ def _rodar(job: Dict[str, Any]) -> None:
                 level="warning",
             )
             return
-    if estado == "ok":
-        # sessao confirmada agora: aproveita para retomar o que ficou
-        # em espera por uma falha anterior (roda depois deste job)
-        _retomar_pendentes()
+    # Ordem das travas igual ao monitor do login: perfil -> estado.
+    # A primeira guarda acima mantem a espera imediata quando ja ha login.
+    # Esta ultima guarda fecha o intervalo ate Popen; depois dela, um novo
+    # login espera a saida do pipeline sem bloquear a requisicao do painel.
+    with _trava_nlm:
+        with _trava_login:
+            if _login["em_andamento"]:
+                _aguardar_login(job)
+                return
+        if estado == "ok":
+            # sessao confirmada agora: aproveita para retomar o que ficou
+            # em espera por uma falha anterior (roda depois deste job)
+            _retomar_pendentes()
+        _rodar_pipeline(job, python, alvo)
 
+
+def _rodar_pipeline(job: Dict[str, Any], python: str, alvo: Path) -> None:
+    """Executa com o perfil reservado por _rodar, inclusive em falhas."""
+    job_id = job["job_id"]
+    caminho = job["audio_path"]
     cmd = [python, "pipeline.py", caminho, "--skip-drive"]
     numero = _cfg("whatsapp")
     if numero:
@@ -1150,16 +1166,20 @@ def _rodar(job: Dict[str, Any]) -> None:
             stderr=subprocess.STDOUT,
             creationflags=flags,
         )
-        # drena o log a cada fracao de segundo emitindo somente marcos
-        # que JA apareceram no arquivo (o pipeline grava cada passo com
-        # flush): percentual nunca e estimado por tempo decorrido
-        while True:
+        try:
+            # drena o log a cada fracao de segundo emitindo somente marcos
+            # que JA apareceram no arquivo (o pipeline grava cada passo com
+            # flush): percentual nunca e estimado por tempo decorrido
+            while True:
+                pos_log = _drenar_log(arquivo_log, pos_log, job, visto)
+                if proc.poll() is not None:
+                    break
+                time.sleep(0.4)
             pos_log = _drenar_log(arquivo_log, pos_log, job, visto)
-            if proc.poll() is not None:
-                break
-            time.sleep(0.4)
-        _drenar_log(arquivo_log, pos_log, job, visto)
-        codigo = proc.wait()
+        finally:
+            # Mesmo se a leitura/publicacao falhar, o filho ainda pode usar
+            # o perfil. Esperar sua saida antes de liberar um login agendado.
+            codigo = proc.wait()
 
     if codigo == 0:
         # 100% so com WhatsApp confirmado: o passo 8 ("Enviando PDF")

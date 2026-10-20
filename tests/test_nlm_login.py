@@ -39,6 +39,8 @@ def scenario(tmp_path, monkeypatch):
     monkeypatch.setattr(estudos, "_ultima_renovacao", 0.0)
     monkeypatch.setattr(estudos, "_login_thread", None)
     monkeypatch.setattr(estudos, "_evento", threading.Event())
+    monkeypatch.setattr(estudos, "_trava_nlm", threading.RLock())
+    monkeypatch.setattr(estudos, "_trava_login", threading.RLock())
     notifications = []
     workers = []
     tasks = []
@@ -64,6 +66,7 @@ def scenario(tmp_path, monkeypatch):
         def is_alive(self):
             return not self.done
 
+    real_thread = threading.Thread
     monkeypatch.setattr(estudos.threading, "Thread", DeferredThread)
 
     def unexpected(*_args, **_kwargs):
@@ -73,7 +76,8 @@ def scenario(tmp_path, monkeypatch):
     monkeypatch.setattr(estudos.subprocess, "run", unexpected)
     return SimpleNamespace(pipeline=pipeline, program=program, db=database,
                            tasks=tasks, notifications=notifications,
-                           workers=workers, monkeypatch=monkeypatch, values=values)
+                           workers=workers, monkeypatch=monkeypatch, values=values,
+                           real_thread=real_thread)
 
 
 def waiting_job(scenario):
@@ -327,6 +331,142 @@ def test_login_iniciado_apos_probe_ok_pausa_job_antes_do_pipeline(scenario):
     assert scenario.workers == []
 
 
+@pytest.mark.parametrize("failure", [None, "popen", "monitor"])
+def test_clique_apos_guarda_e_antes_popen_aguarda_pipeline_e_libera_perfil(scenario, failure):
+    """O login usa outra thread real; nenhum processo ou conta real e aberto."""
+    (scenario.pipeline / "pipeline.py").write_text("# pipeline simulado", encoding="utf-8")
+    audio = str(scenario.pipeline / "audio-da-corrida.mp3")
+    scenario.db.create_job(audio, metadados={"tema": "preservar"})
+    job = scenario.db.claim_job()
+    scenario.monkeypatch.setattr(estudos, "verificar_saude", lambda force=False: "ok")
+    scenario.monkeypatch.setattr(estudos, "_executar_nlm", lambda *a, **k: (0, "all checks passed"))
+    login_attempted = threading.Event()
+    login_acquired = threading.Event()
+    pipeline_finished = threading.Event()
+    profile_lock = threading.RLock()
+    threads, events = [], []
+
+    class ObservedProfile:
+        def __enter__(self):
+            login_thread = threading.current_thread().name == "login-concorrente"
+            if login_thread:
+                login_attempted.set()
+            profile_lock.acquire()
+            if login_thread:
+                login_acquired.set()
+            return self
+
+        def __exit__(self, *_args):
+            profile_lock.release()
+
+    scenario.monkeypatch.setattr(estudos, "_trava_nlm", ObservedProfile())
+
+    def notify(kind, *_args, **_kwargs):
+        scenario.notifications.append(kind)
+        if kind == "estudo_iniciando":
+            # Este aviso ocorre depois da ultima guarda e antes de Popen.
+            result = estudos.reconectar()
+            assert result["lancado"] is True
+            thread = scenario.real_thread(target=scenario.tasks[0].run,
+                                          name="login-concorrente", daemon=True)
+            threads.append(thread)
+            thread.start()
+            assert login_attempted.wait(2)
+            assert not login_acquired.wait(0.05), "login abriu antes de o pipeline liberar o perfil"
+
+    scenario.monkeypatch.setattr(estudos, "notify", notify)
+
+    class Pipeline:
+        def poll(self):
+            return 0
+
+        def wait(self):
+            events.append("pipeline_fim")
+            pipeline_finished.set()
+            return 0
+
+    class Login:
+        def wait(self):
+            return 0
+
+    def popen(command, **options):
+        if command[1] == "pipeline.py":
+            assert not login_acquired.is_set()
+            events.append("pipeline")
+            if failure == "popen":
+                pipeline_finished.set()
+                raise OSError("falha sintetica ao abrir pipeline")
+            options["stdout"].write("=== CONCLUIDO\n")
+            options["stdout"].flush()
+            return Pipeline()
+        assert command[1] == "login"
+        assert pipeline_finished.is_set(), "login e pipeline disputaram o perfil"
+        events.append("login")
+        return Login()
+
+    scenario.monkeypatch.setattr(estudos.subprocess, "Popen", popen)
+    if failure == "monitor":
+        def failed_monitor(*_args, **_kwargs):
+            raise RuntimeError("falha sintetica ao ler progresso")
+
+        scenario.monkeypatch.setattr(estudos, "_drenar_log", failed_monitor)
+    try:
+        if failure:
+            with pytest.raises(OSError if failure == "popen" else RuntimeError):
+                estudos._rodar(job)
+        else:
+            estudos._rodar(job)
+    finally:
+        for thread in threads:
+            thread.join(2)
+    assert threads and all(not thread.is_alive() for thread in threads)
+    assert events == (["pipeline", "login"] if failure == "popen" else
+                      ["pipeline", "pipeline_fim", "login"])
+    assert estudos.status()["login"]["estado"] == "concluido"
+    after = scenario.db.get_job(job["job_id"])
+    assert after["audio_path"] == job["audio_path"]
+    assert after["metadados"] == job["metadados"]
+    if not failure:
+        assert after["estado"] == "CONCLUIDO"
+
+
+def test_login_ja_executando_preserva_job_sem_esperar_navegador(scenario):
+    (scenario.pipeline / "pipeline.py").write_text("# pipeline simulado", encoding="utf-8")
+    scenario.db.create_job(str(scenario.pipeline / "audio-antes-do-login.mp3"))
+    job = scenario.db.claim_job()
+    login_opened, finish_login = threading.Event(), threading.Event()
+
+    class Login:
+        def wait(self):
+            assert finish_login.wait(2)
+            return 0
+
+    def popen(command, **_kwargs):
+        assert command[1] == "login", "pipeline nao pode abrir enquanto ha login"
+        login_opened.set()
+        return Login()
+
+    scenario.monkeypatch.setattr(estudos.subprocess, "Popen", popen)
+    scenario.monkeypatch.setattr(estudos, "_executar_nlm", lambda *a, **k: (0, "all checks passed"))
+    estudos.reconectar()
+    thread = scenario.real_thread(target=scenario.tasks[0].run, daemon=True)
+    thread.start()
+    try:
+        assert login_opened.wait(2)
+        estudos._rodar(job)
+        paused = scenario.db.get_job(job["job_id"])
+        assert paused["estado"] == "AGUARDANDO_INTERVENCAO"
+        assert paused["audio_path"] == job["audio_path"]
+        assert not finish_login.is_set()
+    finally:
+        finish_login.set()
+        thread.join(2)
+    assert not thread.is_alive()
+    resumed = scenario.db.get_job(job["job_id"])
+    assert resumed["estado"] == "PENDENTE"
+    assert resumed["job_id"] == job["job_id"]
+
+
 @pytest.mark.parametrize("configured", [True, False])
 def test_status_inclui_snapshot_do_login_sem_cli(scenario, configured):
     scenario.monkeypatch.setattr(estudos, "ligado", lambda: configured)
@@ -421,27 +561,56 @@ def test_login_no_pacote_usa_chromium_e_confirma_com_mesmo_modulo(scenario):
     assert scenario.db.get_job(before["job_id"])["estado"] == "PENDENTE"
 
 
-@pytest.mark.parametrize("browser,cookie_browser", [(None, "chromium"), ("msedge", "edge")])
-def test_refresh_no_pacote_preserva_as_duas_tentativas_e_browser_explicito(
-    scenario, browser, cookie_browser
+@pytest.mark.parametrize("browser", [None, "msedge"])
+@pytest.mark.parametrize("exit_code", [0, 1, None])
+def test_refresh_no_pacote_usa_perfil_dedicado_e_respeita_resultado_e_cadencia(
+    scenario, browser, exit_code
 ):
     prefix = _runtime_embutido(scenario)
     if browser:
         scenario.values["estudos.browser"] = browser
+    before = waiting_job(scenario)
     calls = []
 
     def refresh(command, cwd, timeout):
         calls.append((command, cwd, timeout))
-        return (1, "") if len(calls) == 1 else (0, "sessao renovada")
+        return exit_code, "sessao renovada" if exit_code == 0 else "login necessario"
 
     scenario.monkeypatch.setattr(estudos, "_executar_nlm", refresh)
-    assert estudos._renovar_sessao() is True
-    assert calls == [
-        (prefix + ["auth", "refresh", "--browser-cookies", cookie_browser, "--verify"],
-         scenario.pipeline, 300),
-        (prefix + ["auth", "refresh", "--allow-headless", "--verify"],
-         scenario.pipeline, 300),
-    ]
+    assert estudos._renovar_sessao() is (exit_code == 0)
+    assert calls == [(prefix + ["auth", "refresh", "--allow-headless", "--verify"],
+                      scenario.pipeline, 300)]
+    assert estudos._renovar_sessao() is False
+    assert len(calls) == 1
+    assert scenario.db.get_job(before["job_id"]) == before
+    assert scenario.workers == []
+
+
+@pytest.mark.parametrize("browser,cookie_browser", [("msedge", "edge"), ("chrome", "chrome")])
+@pytest.mark.parametrize("exit_codes", [(0,), (1, 0), (1, 1)])
+def test_refresh_em_desenvolvimento_preserva_browser_fallback_e_resultado(
+    scenario, browser, cookie_browser, exit_codes
+):
+    scenario.monkeypatch.setattr(estudos.bundled_runtime, "is_bundled", lambda: False)
+    scenario.values["estudos.browser"] = browser
+    before = waiting_job(scenario)
+    calls = []
+
+    def refresh(command, cwd, timeout):
+        calls.append((command, cwd, timeout))
+        code = exit_codes[len(calls) - 1]
+        return code, "sessao renovada" if code == 0 else "login necessario"
+
+    scenario.monkeypatch.setattr(estudos, "_executar_nlm", refresh)
+    assert estudos._renovar_sessao() is (exit_codes[-1] == 0)
+    expected = [([str(scenario.program), "auth", "refresh", "--browser-cookies",
+                 cookie_browser, "--verify"], scenario.pipeline, 300)]
+    if len(exit_codes) == 2:
+        expected.append(([str(scenario.program), "auth", "refresh", "--allow-headless",
+                          "--verify"], scenario.pipeline, 300))
+    assert calls == expected
+    assert scenario.db.get_job(before["job_id"]) == before
+    assert scenario.workers == []
 
 
 def test_keepalive_no_pacote_usa_modulo_e_respeita_cadencia(scenario):

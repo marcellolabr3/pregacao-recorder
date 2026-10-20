@@ -226,6 +226,8 @@
         <select name="audio.device" id="cfgDevice"></select>
       </label>
       <div class="muted" id="cfgDeviceDetected"></div>
+      <button id="btnConfigAudioTest" class="btn btn-ghost btn-sm" type="button">TESTAR AUDIO SELECIONADO</button>
+      <div class="muted" id="cfgAudioTestResult" role="status"></div>
       <div class="row">
         <label>Formato
           <select name="audio.format" id="cfgFormat"></select>
@@ -303,6 +305,59 @@
       </div>
       <p class="hint">Credenciais definidas uma unica vez pelo administrador; o
          usuario final nunca as enxerga.</p>
+    </section>
+
+    <section id="cfgRemoteCard" class="card hidden">
+      <div class="card-title">CONTROLE REMOTO</div>
+      <label class="check">
+        <input id="cfgRemoteEnabled" type="checkbox"> Habilitar controle pelo celular
+      </label>
+      <label>Servidor MQTT
+        <input id="cfgRemoteHostInput" type="text" autocomplete="off" spellcheck="false"
+               placeholder="servidor do broker">
+      </label>
+      <div class="row">
+        <label>Porta
+          <input id="cfgRemotePortInput" type="number" min="1" max="65535" value="8883">
+        </label>
+        <label class="check"><input id="cfgRemoteTlsInput" type="checkbox"> Usar TLS</label>
+      </div>
+      <label>Usuario MQTT do PC
+        <input id="cfgRemoteUsername" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <label>Senha MQTT do PC
+        <input id="cfgRemotePassword" type="password" autocomplete="new-password"
+               placeholder="(digite apenas para cadastrar ou trocar)">
+      </label>
+      <label>ID deste equipamento
+        <input id="cfgRemoteDeviceInput" type="text" maxlength="32" pattern="[A-Za-z0-9_-]+"
+               autocomplete="off" spellcheck="false">
+      </label>
+      <label>Novo token do operador
+        <input id="cfgRemoteNewToken" type="password" autocomplete="new-password"
+               placeholder="(em branco preserva o token atual)" spellcheck="false">
+      </label>
+      <button id="btnRemoteSave" class="btn btn-primary btn-sm" type="button">SALVAR CONTROLE REMOTO</button>
+      <div id="cfgRemoteMessage" class="hint" role="status"></div>
+      <p class="hint">Salve este bloco pelo botao acima. Senha e novo token em branco preservam os valores atuais.
+         Ao alterar a conexao, aguarde terminar gravacoes e filas, reinicie o Windows e abra o atalho.
+         Use IDs distintos se os dois PCs continuarem ativos.</p>
+      <p class="hint">Use estes dados nas configuracoes do aplicativo do celular.</p>
+      <dl class="meta">
+        <div><dt>ID do equipamento</dt><dd id="cfgRemoteDevice">--</dd></div>
+        <div><dt>Servidor</dt><dd id="cfgRemoteHost">--</dd></div>
+        <div><dt>Porta</dt><dd id="cfgRemotePort">--</dd></div>
+        <div><dt>TLS</dt><dd id="cfgRemoteTls">--</dd></div>
+      </dl>
+      <label>Token do operador
+        <input id="cfgRemoteToken" type="password" readonly autocomplete="off"
+               spellcheck="false" placeholder="(nao configurado)">
+      </label>
+      <button id="btnRemoteToken" class="btn btn-ghost btn-sm" type="button"
+              aria-controls="cfgRemoteToken" aria-pressed="false" disabled>MOSTRAR TOKEN</button>
+      <p class="hint">O usuario do celular deve ter permissao no broker para este ID.
+         O token do operador e diferente da senha do PC. Confirme STATUS/ACK no celular;
+         a atividade local do agente nao comprova conexao ao broker.</p>
     </section>
 
     <!-- ===== PROGRAMACAO DE PREGACOES (S4) ===== -->
@@ -471,6 +526,6 @@
   <span id="clock">--:--</span>
 </footer>
 
-<script src="/static/app.js?v=20261019-nlm2"></script>
+<script src="/static/app.js?v=20261019-dist2-config"></script>
 </body>
 </html>

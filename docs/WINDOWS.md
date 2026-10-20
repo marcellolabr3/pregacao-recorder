@@ -1,16 +1,18 @@
 # Windows - instalacao e operacao
 
-Este guia descreve a instalacao manual atual. O instalador para uso pessoal em
-outro PC esta planejado na task [PR-DIST-001](TASK_DISTRIBUICAO_WINDOWS.md):
+Este guia descreve a instalacao manual de desenvolvimento. Para instalar o
+pacote pessoal `.exe`, seguir [GUIA_INSTALACAO_WINDOWS.md](GUIA_INSTALACAO_WINDOWS.md).
+Plano e criterios em [PR-DIST-001](TASK_DISTRIBUICAO_WINDOWS.md):
 tres sprints para empacotar, instalar/configurar e testar as funcionalidades atuais.
 Indice e criterios de aceite em [SPRINTS.md](SPRINTS.md).
 
-## Pacote pessoal de teste
+## Pacote pessoal
 
-A sprint 1 gerou ZIP com runtimes proprios, sem contas ou dados do PC original.
-Para gerar/extrair/verificar, seguir [packaging/README.md](../packaging/README.md).
-O instalador `.exe` e configuracao pessoal ficam na sprint 2; a validacao no PC
-destino fica na sprint 3. As instrucoes abaixo continuam sendo a instalacao manual.
+As sprints 1/2 geram ZIP e instalador com runtimes proprios, sem contas ou dados
+do PC original. Para gerar/verificar, seguir [packaging/README.md](../packaging/README.md).
+O `.exe` instala por usuario, cria atalho e preserva dados na reinstalacao.
+A validacao em Windows limpo e no PC destino continua na sprint 3.
+As instrucoes abaixo continuam sendo a instalacao manual de desenvolvimento.
 
 ## Requisitos
 
