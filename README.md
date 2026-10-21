@@ -43,11 +43,17 @@ O pacote Windows atualizado esta em
 pessoal pronto em
 `dist-pacote/PregacaoRecorder-Pessoal-Atualizar-update-20261021T120614Z.exe`.
 O atualizador foi compilado, mas nao aplicado: a unidade `E:` acessivel agora
-nao contem `PregacaoRecorder-Pessoal`. Depois de acessar a pasta pessoal atual,
-o instalador completo pode ser reconstruido com os dados mais recentes.
+esta vazia e nao contem `PregacaoRecorder-Pessoal`. Uma versao de prova do
+instalador completo 2.8 foi montada a partir da copia pessoal verificada de
+20/10/2026. Ela tem 583 MB, inclui o APK 2.8, 16 gravacoes e as contas dessa
+copia. Ainda nao foi entregue na `E:` porque nao foi confirmado se houve novas
+gravacoes ou alteracoes de conta depois dessa data. O montador agora inclui
+somente os dados ativos e descarta backups, logs, caches e arquivos de teste;
+na unidade de entrega bastam o `.exe` e seu `.exe.sha256`.
 
-A pasta `PregacaoRecorder-Pessoal` no SSD continua disponivel para uso portatil
-e backup. Nao inicie as duas copias ao mesmo tempo: elas conservam a mesma
+A pasta `PregacaoRecorder-Pessoal`, quando estiver acessivel no SSD original,
+continua sendo a copia portatil e um backup. Nao inicie as duas copias ao
+mesmo tempo: elas conservam a mesma
 identidade MQTT. Alteracoes feitas em uma nao sao sincronizadas automaticamente
 com a outra. O laboratorio usa identidade MQTT propria (`pregacao-lab-aska`).
 No PC de destino, confira audio, contas e dois celulares conforme o
@@ -71,10 +77,10 @@ uma foto escolhida pelo usuario pode ser usada em um atalho da tela inicial.
 Instale ou atualize o APK manualmente em **cada celular**; o instalador Windows
 nao instala aplicativos Android. O app nao pede PIN, mas a conexao MQTT
 conserva senha e token. O instalador completo anterior ainda inclui o APK 2.7.
-O SSD pessoal nao estava disponivel para copiar a versao 2.8 ou reconstruir o
-instalador completo nesta etapa. O usuario relatou que o teste funcional anterior
-foi bem-sucedido; a instalacao do APK 2.8 nos dois celulares e sua prova real
-com o novo PC ainda precisam ser conferidas.
+O SSD pessoal com os dados mais recentes ainda nao estava disponivel nesta
+etapa. O usuario relatou que o teste funcional anterior foi bem-sucedido; a
+instalacao do APK 2.8 nos dois celulares e sua prova real com o novo PC ainda
+precisam ser conferidas.
 
 ## Fluxo implementado
 

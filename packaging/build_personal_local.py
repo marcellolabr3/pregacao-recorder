@@ -27,6 +27,19 @@ TRANSIENT_NAMES = {
     "pregacao.db-wal", "pregacao.db-shm", "SingletonLock", "SingletonCookie",
     "SingletonSocket", "DevToolsActivePort",
 }
+PRIVATE_TREES = (
+    ("gravador", "config"), ("gravador", "data"),
+    ("gravador", "recordings"), ("pipeline", "whatsapp", "auth"),
+    ("pipeline", "audio"), ("pipeline", "gravacoes"),
+    ("pipeline", "output"), ("pipeline", "recorder", "recordings"),
+)
+PRIVATE_FILES = {"gravador/.env", "pipeline/.env", "pipeline/config.json"}
+NOTEBOOKLM_CACHE_DIRS = {
+    "Cache", "Code Cache", "GPUCache", "DawnGraphiteCache",
+    "DawnWebGPUCache", "GrShaderCache", "ShaderCache", "BrowserMetrics",
+    "Crashpad", "component_crx_cache", "extensions_crx_cache",
+    "GPUPersistentCache", "AutofillAiModelCache",
+}
 
 
 def _backup_database(source: Path, target: Path) -> None:
@@ -50,32 +63,33 @@ def _backup_database(source: Path, target: Path) -> None:
 
 def _skip_directory(relative: Path) -> bool:
     parts = relative.parts
-    return (
-        parts[0] in {"runtime", "licenses"}
-        or parts[:2] in {
-            ("gravador", "app"), ("gravador", "web"), ("gravador", "logs"),
-            ("pipeline", "node_modules"),
-        }
-        or (parts[:2] == ("gravador", "recovery")
-            and len(parts) >= 3 and parts[2].startswith("update-"))
-    )
+    if not any(parts[:len(tree)] == tree or tree[:len(parts)] == parts
+               for tree in PRIVATE_TREES):
+        return True
+    return (parts[:3] == ("gravador", "data", "notebooklm")
+            and any(part in NOTEBOOKLM_CACHE_DIRS for part in parts[3:]))
 
 
 def _skip_file(relative: Path) -> bool:
     name = relative.name
-    if name in TRANSIENT_NAMES or name.startswith("Singleton"):
+    if (name in TRANSIENT_NAMES or name.startswith("Singleton")
+            or name.lower().endswith((".log", ".tmp", ".lock", ".pid"))):
         return True
     if relative.as_posix() in {
         "package-manifest.json", "personal-manifest.json", "portable-state.json",
-        "gravador/data/pregacao.db",
+        "gravador/data/pregacao.db", "pipeline/audio/_teste_voz.wav",
     }:
         return True
-    if len(relative.parts) == 1 and (
-        name.startswith("PregacaoRecorder-Pessoal-Atualizar-")
-        or re.fullmatch(r"PregacaoControle-[0-9]+(?:\.[0-9]+)*\.apk", name)
+    if "_teste_voz" in name and relative.parts[:2] == ("pipeline", "output"):
+        return True
+    parts = relative.parts
+    if parts[:3] == ("gravador", "data", "notebooklm") and (
+        any(part in NOTEBOOKLM_CACHE_DIRS for part in parts[3:])
+        or name.startswith("BrowserMetrics")
     ):
         return True
-    return False
+    return (relative.as_posix() not in PRIVATE_FILES
+            and not any(parts[:len(tree)] == tree for tree in PRIVATE_TREES))
 
 
 def _copy_private_state(source: Path, target: Path, public: set[str], apk: Path) -> None:
@@ -125,12 +139,13 @@ def prepare_snapshot(source: Path, stage: Path, version: str, apk: Path,
         raise ValueError("Manifesto pessoal invalido")
     source_manifest = json.loads((source / "package-manifest.json").read_text(encoding="utf-8"))
     manifest, files = validated_files(base)
-    if not source_manifest.get("personal_portable"):
+    if (source_manifest.get("schema_version") != 1
+            or source_manifest.get("name") != "PregacaoRecorder"
+            or not source_manifest.get("personal_portable")
+            or not isinstance(source_manifest.get("files"), dict)):
         raise ValueError("A origem nao e uma instalacao pessoal")
-    if source_manifest.get("files") != manifest.get("files"):
-        raise ValueError("O pacote publico nao corresponde a instalacao pessoal")
-    if not apk.is_file() or apk.parent.resolve() != source:
-        raise ValueError("APK atual ausente na pasta pessoal")
+    if not apk.is_file():
+        raise ValueError("APK atual ausente")
     if stage.resolve().is_relative_to(source) or stage.resolve().is_relative_to(base):
         raise ValueError("A montagem nao pode ficar dentro da pasta pessoal")
     stage.mkdir(parents=True, exist_ok=False)
@@ -196,7 +211,9 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path, help="pasta pessoal atual no SSD")
     parser.add_argument("--base", type=Path, required=True,
-                        help="pacote publico validado com o mesmo inventario do SSD")
+                        help="pacote publico final validado")
+    parser.add_argument("--apk", type=Path,
+                        help="APK atual; por padrao, procura na pasta pessoal")
     parser.add_argument("--iscc", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=ROOT / "dist-pacote")
     parser.add_argument("--stage-root", type=Path, help="pasta curta fora do SSD")
@@ -209,7 +226,10 @@ def main(argv=None) -> int:
     match = re.search(r"^version:\s*(\d+)\.(\d+)\.\d+\+\d+\s*$", pubspec, re.MULTILINE)
     if not match:
         parser.error("Versao Flutter invalida")
-    apk = source / f"PregacaoControle-{match[1]}.{match[2]}.apk"
+    expected_apk = f"PregacaoControle-{match[1]}.{match[2]}.apk"
+    apk = (options.apk or source / expected_apk).resolve()
+    if apk.name != expected_apk:
+        parser.error("Informe o APK da versao Flutter atual: " + expected_apk)
     output = options.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     stage_root = (options.stage_root or Path(output.anchor) / "PRL").resolve()

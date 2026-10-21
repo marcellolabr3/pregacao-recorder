@@ -204,16 +204,20 @@ no Windows com o SSD conectado volta a iniciar automaticamente.
 
 ## Instalar a copia pessoal completa no PC
 
-`build_personal_local.py` usa a pasta pessoal atual no SSD como origem das
-contas e dos dados. Usa como `--base` o pacote publico validado com exatamente
-o mesmo inventario; assim nao incorpora estado privado do laboratorio.
-Gravacoes, historico, estudos, perfis e autenticacoes vao para o instalador.
-Backups antigos de atualizacao permanecem no SSD.
+`build_personal_local.py` usa uma pasta pessoal instalada como origem das contas
+e dos dados. `--base` fornece o pacote publico validado da versao final, mesmo
+quando a copia pessoal ainda tem codigo anterior; `--apk` fornece o APK atual.
+O montador inclui configuracao, banco por backup SQLite, perfis de autenticacao,
+gravacoes e estudos. Ele limita a copia privada a essas pastas e descarta
+backups, logs, caches do navegador, arquivos temporarios, audio de teste,
+atalhos antigos, atualizadores e APKs anteriores. Os arquivos incluidos sao
+inventariados e conferidos por SHA-256. Nao usa o estado privado do laboratorio.
 
 ```powershell
 .venv\Scripts\python.exe -B packaging/build_personal_local.py `
-  E:\PregacaoRecorder-Pessoal `
-  --base dist-pacote\PregacaoRecorder-release-20261020T214011232587Z `
+  CAMINHO\PregacaoRecorder-Pessoal `
+  --base dist-pacote\PregacaoRecorder-release-20261021T115915854351Z `
+  --apk dist-pacote\PregacaoControle-2.8.apk `
   --iscc .bundle-cache\inno-7.1.0\compiler\ISCC.exe `
   --stage-root D:\PRL
 ```
@@ -225,9 +229,12 @@ copia local e continua funcionando sem o SSD. A pasta local preexistente e
 recusada para evitar sobrescrever dados; para atualizacoes posteriores, use
 um atualizador adequado depois de fechar as tarefas.
 
-O instalador completo foi copiado para a raiz do SSD com seu `.exe.sha256`.
-O instalador publico e o ZIP sem contas foram preservados em
-`Pacote-Publico-Sem-Dados`. Consulte
+Para entrega em outra unidade, copie apenas o `.exe` completo e o
+`.exe.sha256`. O APK 2.8 ja vai dentro do instalador e fica disponivel na pasta
+local instalada. Nao copie a pasta de montagem, runtimes avulsos, ZIP publico
+nem backups para a unidade de entrega. Confira que a copia pessoal usada como
+origem contem todas as gravacoes atuais; uma origem antiga produz um instalador
+com dados antigos. Consulte
 [GUIA_INSTALACAO_LOCAL.md](../docs/GUIA_INSTALACAO_LOCAL.md) e os resultados em
 [TESTES.md](../docs/TESTES.md). Nao publicar o instalador completo: ele contem
 credenciais e dados pessoais. As copias local e SSD usam o mesmo ID MQTT e nao

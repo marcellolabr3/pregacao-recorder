@@ -1,14 +1,13 @@
 # Instalacao completa no PC Windows
 
 Este instalador traz o programa, os runtimes, as contas configuradas, o banco,
-o historico, os estudos e as gravacoes da pasta pessoal atual do SSD. Ele
+o historico, os estudos e as gravacoes da copia pessoal usada na montagem. Ele
 instala uma copia em %LOCALAPPDATA%\PregacaoRecorder-Pessoal para o usuario
 Windows atual. Depois da instalacao, a copia local funciona sem o SSD.
 
-O instalador completo gerado antes da interface 2.8 ainda inclui o painel e
-APK anteriores. O pacote e o atualizador 2.8 ja foram compilados, mas um novo
-instalador completo depende da pasta pessoal atual do SSD. Nao use um backup
-antigo como origem se deseja levar todas as contas e gravacoes recentes.
+Confira a data da origem informada junto ao instalador: uma copia antiga nao
+leva gravacoes nem alteracoes feitas depois dela. A versao 2.8 inclui a nova
+CONFIG, o botao DESCARTAR GRAVACAO no PC e o APK Android 2.8.
 
 1. Feche o programa no SSD antes de instalar e antes de abrir a copia local.
    As duas copias usam a mesma identidade MQTT e nao devem rodar juntas.
@@ -23,8 +22,8 @@ antigo como origem se deseja levar todas as contas e gravacoes recentes.
    da letra ou da presenca do SSD. O SSD pode ser removido apos fechar a copia
    portatil e concluir a instalacao.
 
-O aplicativo Android 2.7.0+13 esta em PregacaoControle-2.7.apk na raiz do SSD,
-na pasta pessoal do SSD e na copia local instalada. O instalador Windows nao
+O aplicativo Android 2.8.0+14 esta em PregacaoControle-2.8.apk na copia local
+instalada. O instalador Windows nao
 instala o APK nos celulares: abra o arquivo em cada um para instalar ou
 atualizar o aplicativo. A assinatura e a mesma da versao anterior; atualize
 sem desinstalar o aplicativo antigo para preservar sua configuracao. O APK nao

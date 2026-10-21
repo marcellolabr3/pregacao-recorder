@@ -1,5 +1,25 @@
 # Validacao - Windows
 
+## Instalador completo enxuto (21/10/2026)
+
+- A unidade E: estava vazia. A copia pessoal local mais recente, datada de
+  20/10, passou em `verify_personal_portable.py` (7.861 arquivos publicos,
+  6.263 privados). Ainda falta confirmar se ela contem os dados pessoais mais
+  recentes antes de entregar o instalador como definitivo na E:.
+- O novo montador passou em 35 testes de empacotamento/instalador e em
+  `git diff --check`. Ele usa o pacote Windows 2.8 e APK 2.8 com a configuracao
+  pessoal antiga, preservando os dados ativos e descartando backups, logs,
+  cache Chromium, arquivos temporarios e testes.
+- A prova compilada e
+  `PregacaoRecorder-Completo-Instalar-local-20261021T123058021736Z-snapshot-20261020.exe`:
+  582.581.299 bytes, SHA-256
+  `978084DD1C3808C2BA56CF8621AAD78D7B06FA9831B15DD99C80E757E28CF643`.
+  O `.exe.sha256` foi conferido. Inventario do conteudo: 7.863 publicos e
+  6.059 privados. Banco `integrity_check=ok`, com 16 sessoes, 16 uploads e
+  6 jobs; 16 gravacoes do gravador, 9 audios do pipeline, 18 saidas/estudos,
+  perfis WhatsApp e NotebookLM. O APK interno coincide com o release 2.8 e o
+  guia interno descreve esta versao. Nenhum instalador/backup foi copiado para E:.
+
 ## Interface, cancelamento e APK 2.8 (21/10/2026)
 
 - Suite Python completa com `pytest -q` passou; testes direcionados de

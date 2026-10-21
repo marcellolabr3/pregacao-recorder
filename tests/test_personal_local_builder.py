@@ -61,6 +61,20 @@ def source_package(tmp_path):
     backup = source / "gravador/recovery/update-antigo/runtime/old.bin"
     backup.parent.mkdir(parents=True)
     backup.write_bytes(b"backup-redundante")
+    (source / "gravador/recovery/falha-antiga.log").write_bytes(b"log-inutil")
+    cache = source / "gravador/data/notebooklm/profiles/default/browser_profile/Default/Cache/data"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(b"cache-recriavel")
+    cookies = source / "gravador/data/notebooklm/profiles/default/browser_profile/Default/Network/Cookies"
+    cookies.parent.mkdir(parents=True)
+    cookies.write_bytes(b"conta-sintetica")
+    old_log = source / "pipeline/logs/handoff.log"
+    old_log.parent.mkdir(parents=True)
+    old_log.write_bytes(b"log-inutil")
+    test_audio = source / "pipeline/audio/_teste_voz.wav"
+    test_audio.parent.mkdir(parents=True)
+    test_audio.write_bytes(b"teste-inutil")
+    (source / "Ativar Inicio Automatico.cmd").write_bytes(b"atalho-antigo")
     apk = source / "PregacaoControle-2.7.apk"
     apk.write_bytes(b"apk-atual")
     (source / "PregacaoControle-2.6.apk").write_bytes(b"apk-antigo")
@@ -90,9 +104,15 @@ def test_local_snapshot_preserves_active_state_and_relocates_without_ssd(
     assert "PregacaoControle-2.7.apk" in private
     assert "PregacaoControle-2.6.apk" not in private
     assert not (stage / "gravador/recovery/update-antigo").exists()
+    assert not (stage / "gravador/recovery/falha-antiga.log").exists()
+    assert not (stage / "gravador/data/notebooklm/profiles/default/browser_profile/Default/Cache").exists()
+    assert not (stage / "pipeline/logs").exists()
+    assert not (stage / "pipeline/audio/_teste_voz.wav").exists()
+    assert not (stage / "Ativar Inicio Automatico.cmd").exists()
     assert (stage / "gravador/.env").read_bytes() == (source / "gravador/.env").read_bytes()
     assert (stage / "pipeline/whatsapp/auth/creds.json").read_bytes() == b"credencial-sintetica"
     assert (stage / "gravador/data/notebooklm/state.json").read_bytes() == b"perfil-sintetico"
+    assert (stage / "gravador/data/notebooklm/profiles/default/browser_profile/Default/Network/Cookies").read_bytes() == b"conta-sintetica"
     assert (stage / "gravador/recordings/audio.mp3").read_bytes() == b"audio-sintetico"
     assert "package-manifest.json" in public
     assert json.loads((stage / "package-manifest.json").read_text())["local_install"]
@@ -118,7 +138,7 @@ def test_local_snapshot_rejects_work_in_progress(source_package, tmp_path, monke
         builder.prepare_snapshot(source, tmp_path / "destino", "local-test", apk)
 
 
-def test_local_snapshot_uses_matching_validated_public_bundle(
+def test_local_snapshot_uses_validated_new_public_bundle(
     source_package, tmp_path, monkeypatch,
 ):
     monkeypatch.syspath_prepend(str(ROOT / "packaging"))
@@ -127,9 +147,15 @@ def test_local_snapshot_uses_matching_validated_public_bundle(
     base = tmp_path / "pacote publico"
     shutil.copytree(source, base)
     (source / "runtime/python/python.exe").unlink()
+    changed = base / "gravador/app/launcher.py"
+    changed.write_bytes(b"new-public-version")
+    manifest = json.loads((base / "package-manifest.json").read_text(encoding="utf-8"))
+    manifest["files"]["gravador/app/launcher.py"] = hashlib.sha256(changed.read_bytes()).hexdigest()
+    (base / "package-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     stage = tmp_path / "local completo"
     builder.prepare_snapshot(source, stage, "local-test", apk, base=base)
 
     assert (stage / "runtime/python/python.exe").read_bytes() == b"public-fixture"
+    assert (stage / "gravador/app/launcher.py").read_bytes() == b"new-public-version"
     assert (stage / "gravador/recordings/audio.mp3").read_bytes() == b"audio-sintetico"

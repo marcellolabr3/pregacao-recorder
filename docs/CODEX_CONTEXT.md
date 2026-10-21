@@ -9,6 +9,36 @@
 - `.env`, configuracao pessoal, tokens/perfis, banco, logs e gravacoes nunca entram no Git.
 - `docs/CODEX_CONTEXT.local.md` contem legado sensivel; nunca imprimir/commitar.
 
+## Instalador enxuto na unidade E: (21/10/2026)
+
+- Pedido: entregar na `E:` apenas o instalador completo necessario para rodar
+  no novo PC sem SSD, sem os mais de 12 GB de backups e residuos anteriores.
+  A `E:` (`Pregacoes`, 480 GB) apareceu vazia, sem a pasta pessoal. Foi pedido
+  ao usuario o caminho dos dados atuais; nao presumir que o snapshot local
+  contem gravacoes posteriores a 20/10.
+- Fonte pessoal local mais recente encontrada e verificada:
+  `D:\PRL\PRL-local-20261021T024329576035Z`, criada a partir do SSD em
+  20/10/2026. `verify_personal_portable.py`: 7.861 publicos e 6.263 privados.
+  Banco: 16 sessoes, 16 uploads, 6 estudos/jobs.
+- `packaging/build_personal_local.py` aceita `--base` publico 2.8 e `--apk`
+  2.8 mesmo que a origem tenha codigo/APK 2.7. Copia privada passou a usar
+  lista de pastas de estado; exclui recovery/backups, logs, cache Chromium,
+  arquivos temporarios, audio/estudos de teste, atalhos antigos, atualizadores
+  e APKs antigos. Preserva configuracao, banco consistente, perfil NotebookLM,
+  sessao WhatsApp, gravacoes, estudos e imagens configuradas. Testes de
+  montagem/inventario: 35 passaram.
+- Prova final local (ainda NAO colocada em E:):
+  `dist-pacote/PregacaoRecorder-Completo-Instalar-local-20261021T123058021736Z-snapshot-20261020.exe`,
+  582.581.299 bytes; SHA-256
+  `978084DD1C3808C2BA56CF8621AAD78D7B06FA9831B15DD99C80E757E28CF643`.
+  Inventario: 7.863 publicos, 6.059 privados; banco `integrity_check=ok`;
+  16 audios de gravador, 9 audios no pipeline, 18 arquivos de estudo/saida,
+  5.879 arquivos de sessao WhatsApp e 129 de NotebookLM; APK 2.8 conferido.
+  Guia interno 2.8 presente. Sem recovery, logs, cache/teste ou APK 2.7.
+- A copia de prova so deve ir para E: como entrega final se o usuario confirmar
+  que o snapshot 20/10 e a origem desejada. Se houver pasta pessoal mais atual,
+  montar novamente dela e colocar so `.exe` e `.exe.sha256` na raiz da E:.
+
 ## Interface e descarte (21/10/2026)
 
 - O usuario confirmou que o teste funcional anterior deu certo e pediu
