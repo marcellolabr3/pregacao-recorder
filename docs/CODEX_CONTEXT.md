@@ -9,7 +9,41 @@
 - `.env`, configuracao pessoal, tokens/perfis, banco, logs e gravacoes nunca entram no Git.
 - `docs/CODEX_CONTEXT.local.md` contem legado sensivel; nunca imprimir/commitar.
 
-## Entrega final no SSD (20/10/2026)
+## Instalacao completa local a partir do SSD (21/10/2026)
+
+- O usuario corrigiu a entrega: o instalador publico nao atendia ao objetivo
+  de levar todas as contas, banco, estudos e gravacoes ao novo PC e continuar
+  funcionando sem o SSD. O SSD e a origem/backup; a copia local usa
+  `%LOCALAPPDATA%\PregacaoRecorder-Pessoal` e nao depende dele apos instalar.
+- `packaging/build_personal_local.py` monta o instalador somente a partir do
+  estado pessoal atual no SSD e do pacote publico validado com o mesmo
+  inventario. Nao usa o estado privado do laboratorio. Copia dados ativos,
+  perfis, autenticacoes, banco por backup SQLite, estudos, gravacoes e APK.
+  Backups antigos de atualizacao (cerca de 6 GB) permanecem no SSD.
+- Auditoria encontrou 32 arquivos publicos ausentes no runtime Playwright do
+  SSD, sem arquivos publicos com hash diferente. Os 32 foram restaurados do
+  pacote publico cujo inventario/hashes correspondem exatamente ao manifesto
+  pessoal. A pasta pessoal segue no SSD.
+- Instalador completo na raiz do SSD:
+  `PregacaoRecorder-Completo-Instalar-local-20261021T024329576035Z.exe`,
+  SHA-256 `FB6DC3C0028DF480C02A4438C0C3144A7EC32DF76919C0C86E1AB7ED37FFE0FC`.
+  Publico/ZIP sem contas foram movidos para `Pacote-Publico-Sem-Dados`; o
+  `INSTALAR-NO-OUTRO-PC.txt` agora aponta primeiro para o instalador completo.
+- A variante de prova instalou em `D:\PRLT21` sem criar atalho/autostart real:
+  7.861 arquivos publicos e 6.263 privados conferidos. A migracao ajustou
+  config, 16 sessoes, 16 uploads e 6 jobs para caminhos locais existentes;
+  SQLite `quick_check` ficou `ok`, e `app.launcher --verificar` saiu 0. Inicio
+  automatico foi testado com pastas isoladas e resolveu o volume local.
+- Ainda depende do PC destino: driver de audio, sessoes externas que possam
+  exigir novo login, dois celulares, estudo real, novo logon sem SSD.
+  As duas copias tem a mesma identidade MQTT e nao podem operar simultaneamente.
+  Alteracoes feitas no PC e no SSD nao sincronizam automaticamente.
+
+## Entrega anterior no SSD (20/10/2026)
+
+As linhas deste bloco registram o estado antes da instalacao completa local
+descrita acima. O instalador publico e o ZIP agora estao em
+`Pacote-Publico-Sem-Dados` no SSD.
 
 - O usuario autorizou expressamente gerar todos os artefatos e concluir a
   entrega quando conectou o SSD. Flutter 2.7.0+13, pacote publico, instalador
@@ -18,8 +52,9 @@
   passaram. As duas goldens da tela principal foram atualizadas em `f526656`.
 - O SSD `Pregacoes` esta em `E:` neste PC. A pasta pessoal foi recuperada da
   Lixeira, identificada por manifestos e banco. A pasta antiga permanece na
-  Lixeira, fora da raiz ativa. O SSD contem na raiz instalador publico, ZIP,
-  APK 2.7, sidecars SHA-256 e `INSTALAR-NO-OUTRO-PC.txt`.
+  Lixeira, fora da raiz ativa. Na entrega daquele dia, a raiz continha
+  instalador publico, ZIP, APK 2.7, sidecars SHA-256 e
+  `INSTALAR-NO-OUTRO-PC.txt`.
 - A instalacao pessoal foi atualizada no SSD com o pacote publico e o APK 2.7.
   7.861 arquivos publicos e o APK conferem por SHA-256; seis arquivos privados
   criticos permaneceram identicos antes da abertura. O banco passou em
@@ -214,10 +249,10 @@ As linhas abaixo registram o estado antes da entrega final descrita acima.
 
 1. Conferir as linhas do log do envio no outro PC para fechar a causa exata;
    autenticar WhatsApp em CONFIG no proprio PC se a sessao estiver ausente.
-2. Testar driver e gravacao com audio real, instalar o APK nos dois celulares,
-   conferir conexao e programacao, concluir um estudo real a 100% e verificar
-   o inicio automatico apos nova entrada no Windows. Ative o inicio automatico
-   para o usuario Windows desse PC com o comando incluido na pasta pessoal.
+2. Instalar a copia completa local, retirar o SSD e testar driver e gravacao
+   com audio real, os dois celulares, programacao, estudo real a 100% e inicio
+   automatico apos nova entrada no Windows. O instalador completo registra
+   o inicio local; o comando de ativacao no SSD e somente para uso portatil.
 3. Confirmar, com destinatarios de teste escolhidos pelo usuario, o recebimento
    WhatsApp, o estudo NotebookLM, o mapa mental e o desligamento configurado.
    Essas provas tem efeitos externos; nao foram executadas nesta entrega.

@@ -5,14 +5,28 @@ gravacoes, arquivos de estudo, sessao WhatsApp e perfil NotebookLM. Use somente
 `PregacaoRecorder-Pessoal` para a operacao configurada. Em 20/10/2026, a pasta
 pessoal foi recuperada da Lixeira do SSD e atualizada; a pasta antiga continua
 somente na Lixeira, fora da raiz ativa. O Windows mantem pastas de sistema
-ocultas. A raiz tambem contem o instalador publico, o ZIP, o APK 2.7 e um
-guia curto para instalar em outro PC.
+ocultas. A raiz contem o instalador completo para o novo PC, o APK 2.7 e
+`INSTALAR-NO-OUTRO-PC.txt`. O instalador publico sem dados e o ZIP foram
+preservados em `Pacote-Publico-Sem-Dados`.
 
-## Instalar e usar
+## Instalar no PC sem depender do SSD
+
+Execute `PregacaoRecorder-Completo-Instalar-local-20261021T024329576035Z.exe`
+na raiz do SSD. Ele copia programa, runtimes, contas, banco, estudos e gravacoes
+para `%LOCALAPPDATA%\PregacaoRecorder-Pessoal` no novo PC. Depois, abra o atalho
+`Pregacao Recorder Pessoal` no desktop e teste o audio e as contas. O inicio
+automatico desse PC aponta para a copia local; retirar o SSD nao remove o
+programa nem seus dados locais. Consulte o
+[guia da instalacao local](GUIA_INSTALACAO_LOCAL.md).
+
+A copia no SSD permanece disponivel. As duas copias usam o mesmo ID MQTT e
+nao devem ficar abertas juntas. Novas gravacoes e alteracoes feitas no PC
+local nao sao sincronizadas automaticamente com o SSD.
+
+## Usar diretamente do SSD
 
 1. Abra `Iniciar Pregacao.cmd` dentro de `PregacaoRecorder-Pessoal`. A pasta
-   instalada inclui runtimes e dados. O instalador publico da raiz cria uma
-   instalacao separada; a pasta pessoal ja esta pronta para uso.
+   instalada inclui runtimes e dados.
    Ao mudar a letra do SSD, a abertura ajusta os caminhos do banco e da
    configuracao; use sempre o `.cmd` na pasta pessoal.
 2. O painel do PC aparece no navegador. Depois da abertura, execute
@@ -30,13 +44,14 @@ Contas, credenciais, historico, banco e gravacoes foram preservados. Os backups
 publicos anteriores ficam em `gravador/recovery/update-*`. Nao e necessario
 executar o atualizador novamente ao conectar o SSD no outro PC.
 
-No outro PC, execute `Ativar Inicio Automatico.cmd` dentro da pasta pessoal uma
-vez, com o SSD conectado. Esse comando registra a abertura automatica para o
-usuario Windows daquele PC, sem abrir o navegador. Ele localiza o SSD pelo
-numero de serie do volume, mesmo que a letra mude. Deixe o SSD conectado ao
-entrar no Windows. Se ele estiver ausente por mais de 60 segundos, conecte-o e abra
-`Iniciar Pregacao.cmd` nessa sessao. As opcoes para conferir, ativar e desativar
-estao na pasta pessoal e nas [instrucoes de empacotamento](../packaging/README.md#atualizar-a-pasta-pessoal-existente).
+Se a copia do SSD for a instalacao principal, execute
+`Ativar Inicio Automatico.cmd` dentro da pasta pessoal no PC onde ela sera
+usada. Ele localiza o SSD pelo numero de serie do volume, mesmo que a letra
+mude. Se o SSD estiver ausente por mais de 60 segundos ao entrar no Windows,
+abra `Iniciar Pregacao.cmd` ao conecta-lo. Se instalou a copia completa local,
+o instalador ja registrou o inicio local: nao ative tambem o inicio pelo SSD.
+As opcoes estao na pasta pessoal e nas
+[instrucoes de empacotamento](../packaging/README.md#atualizar-a-pasta-pessoal-existente).
 
 O programa inclui Python, Node, FFmpeg e navegador proprios e exige Windows
 10/11 x64. A interface de audio ainda precisa ser reconhecida pelo Windows
@@ -71,9 +86,10 @@ broker para o celular funcionar fora da rede local.
 ## Contas e arquivos
 
 O historico e os arquivos anteriores estao na pasta instalada. Novas
-gravacoes tambem vao para `gravador\recordings` no SSD. O instalador publico
-na raiz cria uma nova instalacao sem esses dados. Nao reinstale por cima de uma
-pasta com tarefas em andamento; a reinstalacao preserva banco,
+gravacoes da copia portatil vao para `gravador\recordings` no SSD; na copia
+completa local, vao para a pasta instalada no PC. O instalador publico em
+`Pacote-Publico-Sem-Dados` cria uma instalacao vazia. Nao reinstale por cima de
+uma pasta com tarefas em andamento; a reinstalacao preserva banco,
 gravacoes, configuracoes e sessoes que mudaram apos a primeira instalacao.
 
 O token do Drive, a sessao WhatsApp e o estado do NotebookLM foram copiados
@@ -91,10 +107,12 @@ que foi gerado.
 
 ## Conferencia no outro PC
 
-1. Abra pelo SSD e confirme que CONFIG mostra a mesma identidade e contas.
+1. Instale a copia completa local e confirme que CONFIG mostra a mesma
+   identidade e contas da copia do SSD.
 2. Teste sinal, inicie e encerre uma gravacao curta no PC e no celular;
    confira timer, estado, evento, arquivo e audio reproduzido.
 3. Confirme o envio ao Drive e, se usados, NotebookLM/PDF e WhatsApp com
    destinatario de teste.
-4. Mova o SSD para outro PC com Windows x64 e repita a abertura e o teste de
-   sinal. Confira que os arquivos continuam no SSD.
+4. Feche a copia do SSD, remova a unidade e abra a copia local. Confira
+   historico, gravacoes, pasta de destino e inicio apos nova entrada no Windows.
+   Se usar a copia portatil em outro PC, repita a abertura e o teste de sinal.

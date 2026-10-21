@@ -94,3 +94,17 @@ O inicio automatico do laboratorio permanece registrado neste usuario Windows.
 O inicio automatico pessoal foi testado e desativado apenas neste PC para nao
 disputar a porta 8080; no PC de destino, use o comando incluido no SSD.
 "Sem senha" significa sem PIN no APK; a senha e o token MQTT permanecem.
+
+## Correcao da instalacao completa (21/10/2026)
+
+- [x] Montar instalador local completo a partir do estado pessoal atual do
+  SSD, incluindo contas, banco, estudos, gravacoes e runtimes, sem dados do
+  laboratorio. Destino: `%LOCALAPPDATA%\PregacaoRecorder-Pessoal`.
+- [x] Testar instalacao isolada, hashes, migracao dos caminhos para disco
+  local, diagnostico do runtime e registro isolado do inicio automatico.
+- [x] Repor 32 arquivos publicos ausentes do runtime no SSD a partir do
+  pacote com manifesto identico. Preservar o instalador publico/ZIP em
+  `Pacote-Publico-Sem-Dados`.
+- [ ] No novo PC, instalar e provar funcionamento apos retirar o SSD;
+  conferir audio, contas, dois celulares e novo logon. Usar somente uma copia
+  por vez, pois SSD e PC conservam a mesma identidade MQTT.

@@ -12,12 +12,18 @@ dispositivos/contas simulados nao comprova captura nem acesso a contas reais.
 ## Instalar e configurar
 
 - [ ] Registrar PC/Windows e nome do instalador; conferir o `.exe.sha256`.
+- [ ] Para reproduzir a instalacao pessoal atual sem o SSD, usar
+  `PregacaoRecorder-Completo-Instalar-local-20261021T024329576035Z.exe`.
+  O instalador publico em `Pacote-Publico-Sem-Dados` cria uma copia vazia.
+- [ ] Apos instalar a copia completa, retirar o SSD e abrir pelo atalho local;
+  conferir banco, gravacoes, estudos, contas e inicio apos novo logon.
 - [ ] Instalar em Windows x64 sem Python/Node/FFmpeg/Git de desenvolvimento.
 - [ ] Abrir pelo atalho, conferir porta e executar `Verificar Pacote.cmd`.
 - [ ] Selecionar dispositivo, testar sinal, salvar e conferir apos reabrir.
 - [ ] Selecionar pasta/disco com espaco livre; salvar e conferir apos reabrir.
 - [ ] Configurar MQTT no cartao administrativo; manter ID distinto se dois PCs
-  puderem ligar. Conferir credencial/ACL dos topics no broker.
+  puderem ligar. A copia completa local herda o ID do SSD: usar somente uma
+  delas por vez. Conferir credencial/ACL dos topics no broker.
 - [ ] Reiniciar Windows com tarefas concluidas, abrir atalho e conferir CONFIG.
 
 ## Funcionalidades atuais

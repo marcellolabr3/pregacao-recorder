@@ -391,3 +391,35 @@ precisar de novo login ao mudar de conta Windows.
   nos dois celulares e confirmar a interface, concluir um estudo real e
   verificar o inicio apos nova entrada no Windows. Nenhuma mensagem WhatsApp
   foi enviada nesta entrega.
+
+## Instalacao completa local a partir do SSD (21/10/2026)
+
+- O instalador publico anterior nao levava contas nem dados e nao atendia ao
+  uso sem SSD. O novo montador usa a pasta pessoal atual do SSD como origem
+  privada e o pacote publico da mesma revisao como origem dos runtimes.
+  O manifesto publico do SSD e o do pacote base tem 7.861 entradas identicas.
+- A verificacao do SSD encontrou 32 arquivos publicos ausentes no driver do
+  Playwright e nenhum arquivo presente com hash alterado. Os 32 foram repostos
+  do pacote publico com hash conferido. Os backups de atualizacao continuam
+  no SSD, fora do instalador completo.
+- `pytest tests/test_personal_local_builder.py tests/test_portable_state.py
+  tests/test_installer_builder.py -q`: 30 testes passaram. O teste inclui
+  contas sinteticas, banco, gravacao, estado de erro encerrado, recusa de
+  trabalho pendente e migracao de caminhos para outra pasta.
+- Fixture Inno Setup 7 compilou, instalou arquivos publicos/privados com
+  codigo 0 e recusou reinstalacao sobre a pasta usada (codigo 7), preservando
+  seu arquivo privado. O instalador completo e a variante de prova compilaram.
+- A variante completa de prova instalou em `D:\PRLT21` com codigo 0, sem
+  registrar o autostart real deste PC. `verify_personal_portable.py` conferiu
+  7.861 arquivos publicos e 6.263 privados. A realocacao deixou caminhos
+  locais para 16 sessoes, 16 uploads e 6 jobs; todos os arquivos apontados
+  existem. As 16 gravacoes estao presentes e SQLite `quick_check` retornou
+  `ok`. `app.launcher --verificar` pelo runtime instalado saiu 0, inclusive
+  com homes externos herdados apontados de proposito para uma unidade ausente.
+- O script de inicio automatico, testado com pastas locais isoladas, registrou
+  um atalho de prova e resolveu a copia local sem o SSD. O instalador real foi
+  copiado para a raiz do SSD e o SHA-256 coincide com a origem:
+  `FB6DC3C0028DF480C02A4438C0C3144A7EC32DF76919C0C86E1AB7ED37FFE0FC`.
+- Pendente no novo PC: instalacao real, abertura sem SSD, driver de audio,
+  validade das sessoes dos provedores e teste com os dois celulares. Nao foi
+  feito envio WhatsApp nem estudo real.

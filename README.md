@@ -14,18 +14,22 @@ O iniciador verifica os requisitos e abre gravador e agente MQTT em processos
 separados, sem janelas extras. Para conferir a instalacao sem iniciar os servicos,
 executar `iniciar-tudo.bat --verificar`. Opcoes e logs: [operacao Windows](docs/WINDOWS.md).
 
-## Edicao pessoal no SSD
+## Instalacao completa no novo PC
 
-No SSD, use `PregacaoRecorder-Pessoal\Iniciar Pregacao.cmd` sob a letra atribuida
-pelo Windows. `Verificar Pacote.cmd` confere as dependencias. A pasta pessoal
-foi atualizada no SSD com o pacote final e preservou contas, banco, gravacoes
-e sessoes. O APK 2.7.0+13, o instalador publico Windows e o ZIP estao na raiz
-do SSD, junto dos arquivos SHA-256 e de `INSTALAR-NO-OUTRO-PC.txt`.
-O laboratorio usa identidade MQTT propria (`pregacao-lab-aska`); a instalacao
-pessoal conserva a identidade real. Ao usar o SSD, confira audio, conexao dos
-dois celulares e contas conforme o [guia do SSD](docs/GUIA_SSD_PORTATIL.md)
-e o [roteiro de aceite](docs/ACEITE_WINDOWS.md). O inicio automatico pessoal
-deve ser ativado uma vez no outro PC pelo comando incluido na pasta do SSD.
+Na raiz do SSD, `PregacaoRecorder-Completo-Instalar-local-20261021T024329576035Z.exe`
+leva programa, runtimes, contas, banco, estudos e gravacoes da edicao pessoal
+para `%LOCALAPPDATA%\PregacaoRecorder-Pessoal` no novo PC. Essa copia funciona
+sem o SSD e registra o inicio automatico para o usuario Windows local. Leia
+`INSTALAR-NO-OUTRO-PC.txt` na raiz e o [guia local](docs/GUIA_INSTALACAO_LOCAL.md).
+O instalador publico sem dados foi preservado em `Pacote-Publico-Sem-Dados`.
+
+A pasta `PregacaoRecorder-Pessoal` no SSD continua disponivel para uso portatil
+e backup. Nao inicie as duas copias ao mesmo tempo: elas conservam a mesma
+identidade MQTT. Alteracoes feitas em uma nao sao sincronizadas automaticamente
+com a outra. O laboratorio usa identidade MQTT propria (`pregacao-lab-aska`).
+No PC de destino, confira audio, contas e dois celulares conforme o
+[guia do SSD](docs/GUIA_SSD_PORTATIL.md) e o
+[roteiro de aceite](docs/ACEITE_WINDOWS.md).
 
 ## Fluxo implementado
 

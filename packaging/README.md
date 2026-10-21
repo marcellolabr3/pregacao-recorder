@@ -193,6 +193,37 @@ Se o SSD nao estiver conectado ao entrar no Windows, o iniciador espera ate
 Conecte o SSD e abra `Iniciar Pregacao.cmd` para essa sessao. A proxima entrada
 no Windows com o SSD conectado volta a iniciar automaticamente.
 
+## Instalar a copia pessoal completa no PC
+
+`build_personal_local.py` usa a pasta pessoal atual no SSD como origem das
+contas e dos dados. Usa como `--base` o pacote publico validado com exatamente
+o mesmo inventario; assim nao incorpora estado privado do laboratorio.
+Gravacoes, historico, estudos, perfis e autenticacoes vao para o instalador.
+Backups antigos de atualizacao permanecem no SSD.
+
+```powershell
+.venv\Scripts\python.exe -B packaging/build_personal_local.py `
+  E:\PregacaoRecorder-Pessoal `
+  --base dist-pacote\PregacaoRecorder-release-20261020T214011232587Z `
+  --iscc .bundle-cache\inno-7.1.0\compiler\ISCC.exe `
+  --stage-root D:\PRL
+```
+
+O instalador resultante cria `%LOCALAPPDATA%\PregacaoRecorder-Pessoal` para o
+usuario Windows atual. A primeira abertura ajusta caminhos do banco, das
+gravacoes e do pipeline para essa pasta. O inicio automatico aponta para a
+copia local e continua funcionando sem o SSD. A pasta local preexistente e
+recusada para evitar sobrescrever dados; para atualizacoes posteriores, use
+um atualizador adequado depois de fechar as tarefas.
+
+O instalador completo foi copiado para a raiz do SSD com seu `.exe.sha256`.
+O instalador publico e o ZIP sem contas foram preservados em
+`Pacote-Publico-Sem-Dados`. Consulte
+[GUIA_INSTALACAO_LOCAL.md](../docs/GUIA_INSTALACAO_LOCAL.md) e os resultados em
+[TESTES.md](../docs/TESTES.md). Nao publicar o instalador completo: ele contem
+credenciais e dados pessoais. As copias local e SSD usam o mesmo ID MQTT e nao
+devem executar juntas; nao ha sincronizacao automatica entre elas.
+
 ## Inventario da sprint 1
 
 - `.gitignore`
