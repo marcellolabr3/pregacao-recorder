@@ -31,6 +31,24 @@ No PC de destino, confira audio, contas e dois celulares conforme o
 [guia do SSD](docs/GUIA_SSD_PORTATIL.md) e o
 [roteiro de aceite](docs/ACEITE_WINDOWS.md).
 
+## APK Android desta entrega
+
+O aplicativo para os dois celulares e `PregacaoControle-2.7.apk`, versao
+`2.7.0+13`. Ele esta na raiz do SSD (atualmente `E:\PregacaoControle-2.7.apk`),
+na pasta `PregacaoRecorder-Pessoal` do SSD e no instalador completo para o PC.
+As duas copias do SSD conferem pelo SHA-256
+`CEC2A680D8738099F1FDEAA459B390B25D6F9789D2C6608922D0EEC1D889C0C1`.
+O release foi assinado com a mesma chave do APK anterior, para atualizar o
+aplicativo ja instalado sem apagar sua configuracao.
+
+Instale ou atualize o APK manualmente em **cada celular**; o instalador Windows
+nao instala aplicativos Android. Esta versao mostra a programacao na tela
+inicial, o progresso concluido a 100% com etapas opcionais identificadas e a
+distincao entre aceite pelo servidor e envio incerto do WhatsApp. O aplicativo
+nao pede PIN, mas a conexao MQTT conserva senha e token. O ajuste do instalador
+Windows de 21/10/2026 nao alterou o codigo Android nem exigiu outro APK.
+A instalacao e o teste real nos dois celulares no novo PC ainda estao pendentes.
+
 ## Fluxo implementado
 
 ```text
@@ -51,9 +69,6 @@ confira **DESTINOS SALVOS**. Conecte o WhatsApp pelo QR no proprio painel e use
 sem ela, o PDF nao e enviado. O sistema distingue tentativa, aceite pelo servidor
 e falha. Aceite pelo servidor ainda nao comprova entrega no telefone. Um estudo
 pronto pode ser reenviado a outros numeros pelo painel, usando o PDF existente.
-
-O codigo do aplicativo Android tambem distingue aceite e envio incerto na
-barra de progresso. O APK 2.7.0+13 gerado para esta entrega inclui esse texto.
 
 O mapa mental e opcional: marque a caixa em CONFIG e escreva as instrucoes no
 campo proprio. O NotebookLM gera um mapa do mesmo estudo; o painel permite

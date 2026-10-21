@@ -423,3 +423,8 @@ precisar de novo login ao mudar de conta Windows.
 - Pendente no novo PC: instalacao real, abertura sem SSD, driver de audio,
   validade das sessoes dos provedores e teste com os dois celulares. Nao foi
   feito envio WhatsApp nem estudo real.
+- As copias de `PregacaoControle-2.7.apk` na raiz e na pasta pessoal do SSD
+  foram reconferidas em 21/10/2026: ambas tem SHA-256
+  `CEC2A680D8738099F1FDEAA459B390B25D6F9789D2C6608922D0EEC1D889C0C1`.
+  O ajuste posterior foi somente no instalador Windows; nenhum novo APK foi
+  compilado ou instalado nos celulares neste ciclo.

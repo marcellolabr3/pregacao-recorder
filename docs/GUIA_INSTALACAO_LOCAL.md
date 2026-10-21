@@ -18,7 +18,11 @@ Windows atual. Depois da instalacao, a copia local funciona sem o SSD.
    da letra ou da presenca do SSD. O SSD pode ser removido apos fechar a copia
    portatil e concluir a instalacao.
 
-O aplicativo Android continua em PregacaoControle-2.7.apk no SSD. O APK nao
+O aplicativo Android 2.7.0+13 esta em PregacaoControle-2.7.apk na raiz do SSD,
+na pasta pessoal do SSD e na copia local instalada. O instalador Windows nao
+instala o APK nos celulares: abra o arquivo em cada um para instalar ou
+atualizar o aplicativo. A assinatura e a mesma da versao anterior; atualize
+sem desinstalar o aplicativo antigo para preservar sua configuracao. O APK nao
 pede PIN, mas conserva a configuracao e o token MQTT. Como a identidade do
 gravador foi preservada, os celulares devem apontar para o PC que estiver
 ligado. Nao execute a copia local e a copia do SSD ao mesmo tempo.

@@ -39,6 +39,22 @@
   As duas copias tem a mesma identidade MQTT e nao podem operar simultaneamente.
   Alteracoes feitas no PC e no SSD nao sincronizam automaticamente.
 
+## APK Android atual (21/10/2026)
+
+- `PregacaoControle-2.7.apk` e o release Flutter `2.7.0+13` gerado em
+  20/10/2026. Esta na raiz do SSD e em `PregacaoRecorder-Pessoal` no SSD; ambas
+  as copias foram conferidas novamente por SHA-256
+  `CEC2A680D8738099F1FDEAA459B390B25D6F9789D2C6608922D0EEC1D889C0C1`.
+  O instalador local completo tambem leva o APK, mas nao o instala nos celulares.
+- `apksigner` ja confirmou a mesma assinatura do APK anterior. O app nao pede
+  PIN; a autenticacao MQTT por senha/token permanece. Inclui programacao na
+  tela inicial, estados de progresso e distincao entre aceite do WhatsApp pelo
+  servidor e envio incerto. Suite Flutter de 40 testes e `flutter analyze`
+  passaram no build documentado em `docs/TESTES.md`.
+- A correcao do instalador Windows de 21/10 nao alterou a fonte Flutter; nao
+  houve novo build do APK. Ainda e necessario instalar/atualizar manualmente
+  nos dois celulares e validar a conexao com a copia local no PC destino.
+
 ## Entrega anterior no SSD (20/10/2026)
 
 As linhas deste bloco registram o estado antes da instalacao completa local
