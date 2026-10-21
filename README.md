@@ -14,14 +14,30 @@ O iniciador verifica os requisitos e abre gravador e agente MQTT em processos
 separados, sem janelas extras. Para conferir a instalacao sem iniciar os servicos,
 executar `iniciar-tudo.bat --verificar`. Opcoes e logs: [operacao Windows](docs/WINDOWS.md).
 
+## Uso da interface
+
+CONFIG agora separa **Equipamento**, **Google e estudos**, **WhatsApp**,
+**Automacao**, **Aparencia** e **Avancado**. Cada aba salva somente os seus
+campos. A programacao na tela principal usa **NOVA PREGACAO** para inclusao
+manual; o antigo modelo/importador deixou de aparecer no painel. Icone e imagem
+de fundo podem ser escolhidos localmente no painel e no celular.
+
+Durante **GRAVANDO**, **DESCARTAR GRAVACAO** pede confirmacao e elimina a captura
+sem consolidar MP3, enfileirar upload ou gerar estudo. **FINALIZAR GRAVACAO**
+continua o fluxo normal. A barra do estudo avanca do dourado ao verde; se uma
+etapa falhar, mostra vermelho e identifica a etapa. Detalhes no
+[manual do operador](GUIA-USUARIO.md).
+
 ## Instalacao completa no novo PC
 
-Na raiz do SSD, `PregacaoRecorder-Completo-Instalar-local-20261021T024329576035Z.exe`
+O instalador completo anterior, `PregacaoRecorder-Completo-Instalar-local-20261021T024329576035Z.exe`,
 leva programa, runtimes, contas, banco, estudos e gravacoes da edicao pessoal
 para `%LOCALAPPDATA%\PregacaoRecorder-Pessoal` no novo PC. Essa copia funciona
 sem o SSD e registra o inicio automatico para o usuario Windows local. Leia
 `INSTALAR-NO-OUTRO-PC.txt` na raiz e o [guia local](docs/GUIA_INSTALACAO_LOCAL.md).
 O instalador publico sem dados foi preservado em `Pacote-Publico-Sem-Dados`.
+Esse instalador foi montado antes da reorganizacao de CONFIG e ainda precisa
+ser atualizado a partir do SSD pessoal atual para incluir esta interface.
 
 A pasta `PregacaoRecorder-Pessoal` no SSD continua disponivel para uso portatil
 e backup. Nao inicie as duas copias ao mesmo tempo: elas conservam a mesma
@@ -31,23 +47,25 @@ No PC de destino, confira audio, contas e dois celulares conforme o
 [guia do SSD](docs/GUIA_SSD_PORTATIL.md) e o
 [roteiro de aceite](docs/ACEITE_WINDOWS.md).
 
-## APK Android desta entrega
+## APK Android 2.8
 
-O aplicativo para os dois celulares e `PregacaoControle-2.7.apk`, versao
-`2.7.0+13`. Ele esta na raiz do SSD (atualmente `E:\PregacaoControle-2.7.apk`),
-na pasta `PregacaoRecorder-Pessoal` do SSD e no instalador completo para o PC.
-As duas copias do SSD conferem pelo SHA-256
-`CEC2A680D8738099F1FDEAA459B390B25D6F9789D2C6608922D0EEC1D889C0C1`.
-O release foi assinado com a mesma chave do APK anterior, para atualizar o
-aplicativo ja instalado sem apagar sua configuracao.
+O novo aplicativo para os dois celulares e
+`dist-pacote/PregacaoControle-2.8.apk`, versao
+`2.8.0+14`. SHA-256:
+`CC3D4E3DBC3E1F3A2AF4F592C98F975330A22E60DE574CAB9FB7FD20F3779CC2`.
+`apksigner` validou o APK e confirmou o mesmo certificado da versao anterior;
+atualize por cima do aplicativo instalado para preservar a configuracao.
+O APK traz descarte da gravacao, barra dourada ate verde, indicacao vermelha de
+falha, tela escura e imagens configuraveis. O icone de fabrica e preto/dourado;
+uma foto escolhida pelo usuario pode ser usada em um atalho da tela inicial.
 
 Instale ou atualize o APK manualmente em **cada celular**; o instalador Windows
-nao instala aplicativos Android. Esta versao mostra a programacao na tela
-inicial, o progresso concluido a 100% com etapas opcionais identificadas e a
-distincao entre aceite pelo servidor e envio incerto do WhatsApp. O aplicativo
-nao pede PIN, mas a conexao MQTT conserva senha e token. O ajuste do instalador
-Windows de 21/10/2026 nao alterou o codigo Android nem exigiu outro APK.
-A instalacao e o teste real nos dois celulares no novo PC ainda estao pendentes.
+nao instala aplicativos Android. O app nao pede PIN, mas a conexao MQTT
+conserva senha e token. O instalador completo anterior ainda inclui o APK 2.7.
+O SSD pessoal nao estava disponivel para copiar a versao 2.8 ou reconstruir o
+instalador completo nesta etapa. O usuario relatou que o teste funcional anterior
+foi bem-sucedido; a instalacao do APK 2.8 nos dois celulares e sua prova real
+com o novo PC ainda precisam ser conferidas.
 
 ## Fluxo implementado
 

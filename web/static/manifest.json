@@ -3,8 +3,8 @@
   "short_name": "Gravador",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0d1117",
-  "theme_color": "#0d1117",
+  "background_color": "#080807",
+  "theme_color": "#d6ad53",
   "description": "Estacao de gravacao de pregacoes",
-  "icons": []
+  "icons": [{"src":"/static/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
 }

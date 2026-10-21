@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -43,7 +44,8 @@ def main():
             return
         if path.startswith("/static/"):
             asset = ROOT / "web" / path.lstrip("/")
-            kind = "application/javascript" if path.endswith(".js") else "text/css"
+            kind = ("application/javascript" if path.endswith(".js")
+                    else "image/svg+xml" if path.endswith(".svg") else "text/css")
             route.fulfill(content_type=kind, body=asset.read_text(encoding="utf-8") if asset.is_file() else "")
             return
         body = request.post_data_json if request.method == "POST" and request.post_data else {}
@@ -80,6 +82,14 @@ def main():
                         "audio_devices": devices, "detected": devices[0], "drive": {},
                         "formats": ["S16_LE"], "rates": [44100, 48000],
                         "encoders": ["mp3"], "bitrates": [128], "has_ffmpeg": True}
+        elif path == "/api/appearance":
+            response = {"logo": False, "background": False}
+        elif path == "/api/whatsapp/status":
+            response = {"session_saved": False, "connection": "desconectada"}
+        elif path == "/api/estudos/jobs":
+            response = {"items": []}
+        elif path == "/api/power/status":
+            response = {"state": "desabilitado"}
         elif path == "/api/storage":
             current = config["storage"]["recordings_dir"]
             response = {"current": current, "situacao": {"disponivel": True},
@@ -128,6 +138,21 @@ def main():
         print("PASS: selecao/teste de audio e destino no assistente existente", flush=True)
 
         page.click("#navConfig")
+        expect(page.locator("#configPanelEquipment")).to_be_visible()
+        page.fill('input[name="device_name"]', "Mesa Principal")
+        page.click('[data-config-save="equipment"]')
+        assert posts[-1] == ("/api/config", {"device_name": "Mesa Principal"})
+        page.click("#configTabWhatsapp")
+        page.fill('textarea[name="estudos.whatsapp"]', "5511999999999")
+        page.click('[data-config-save="whatsapp"]')
+        assert posts[-1] == ("/api/config", {"estudos.whatsapp": "5511999999999"})
+        page.click("#configTabGoogle")
+        expect(page.locator("#btnNlmCheck")).to_be_visible()
+        expect(page.locator("#btnWaResend")).not_to_be_visible()
+        if os.environ.get("PREGACAO_SMOKE_SCREENSHOT"):
+            page.wait_for_timeout(3500)
+            page.screenshot(path=os.environ["PREGACAO_SMOKE_SCREENSHOT"], full_page=True)
+        page.click("#configTabAdvanced")
         page.click("#btnAdvanced")
         expect(page.locator("#cfgDevice")).to_have_value("dshow:mesa-b")
         expect(page.locator("#cfgDestino")).to_have_value("C:\\Teste\\Outro destino")
@@ -176,6 +201,7 @@ def main():
         devices[:] = [devices[1]]
         page.reload(wait_until="domcontentloaded")
         page.click("#navConfig")
+        page.click("#configTabAdvanced")
         page.click("#btnAdvanced")
         expect(page.locator("#cfgDevice")).to_have_value("dshow:mesa-a")
         expect(page.locator("#cfgDevice option:checked")).to_contain_text("indisponivel")

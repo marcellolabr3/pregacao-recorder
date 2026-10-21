@@ -3,6 +3,7 @@
 // Exibe o estado que chega por MQTT, controla a gravacao e permite manter
 // a programacao do PC. O audio continua sendo gravado no equipamento.
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -34,7 +35,10 @@ class _TelaPrincipalState extends State<TelaPrincipal>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+    _ticker = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => setState(() {}),
+    );
     PackageInfo.fromPlatform()
         .then((info) {
           if (mounted) setState(() => _versao = info.version);
@@ -86,17 +90,63 @@ class _TelaPrincipalState extends State<TelaPrincipal>
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(cfg.aparelho, style: const TextStyle(fontSize: 18)),
-            if (_versao.isNotEmpty)
-              Text('v$_versao', style: const TextStyle(fontSize: 12)),
+            if (cfg.logoPath.isNotEmpty) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(7),
+                child: Image.file(
+                  File(cfg.logoPath),
+                  width: 30,
+                  height: 30,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const Icon(Icons.auto_stories),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    cfg.aparelho,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                  if (_versao.isNotEmpty)
+                    Text('v$_versao', style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
           ],
         ),
         actions: [_menu()],
       ),
-      body: !cfg.pronto ? _semConfiguracao(context) : _conteudo(context, estado, ligado),
+      body: _withBackground(
+        cfg.backgroundPath,
+        !cfg.pronto
+            ? _semConfiguracao(context)
+            : _conteudo(context, estado, ligado),
+      ),
+    );
+  }
+
+  Widget _withBackground(String path, Widget content) {
+    if (path.isEmpty) return content;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Image.file(
+            File(path),
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
+        ),
+        const Positioned.fill(child: ColoredBox(color: Color(0xD9000000))),
+        Positioned.fill(child: content),
+      ],
     );
   }
 
@@ -150,7 +200,10 @@ class _TelaPrincipalState extends State<TelaPrincipal>
   }
 
   Widget _conteudo(
-      BuildContext context, EstadoEquipamento? estado, bool ligado) {
+    BuildContext context,
+    EstadoEquipamento? estado,
+    bool ligado,
+  ) {
     final st = estado;
     final state = st?.state ?? '';
     final banner = st?.banner ?? '';
@@ -165,14 +218,17 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         // Assim "PC OFF" com "BROKER OK" = problema e' do PC, nao do celular.
         Row(
           children: [
-            _badge(mqtt.conectadoBroker ? 'BROKER OK' : 'BROKER OFF',
-                mqtt.conectadoBroker ? Colors.green : Colors.red),
+            _badge(
+              mqtt.conectadoBroker ? 'BROKER OK' : 'BROKER OFF',
+              mqtt.conectadoBroker ? Colors.green : Colors.red,
+            ),
             const SizedBox(width: 8),
             _badge(
-                mqtt.equipamentoOnline ? 'PC ONLINE' : 'PC OFF',
-                mqtt.equipamentoOnline
-                    ? Colors.green
-                    : (mqtt.conectadoBroker ? Colors.orange : Colors.red)),
+              mqtt.equipamentoOnline ? 'PC ONLINE' : 'PC OFF',
+              mqtt.equipamentoOnline
+                  ? Colors.green
+                  : (mqtt.conectadoBroker ? Colors.orange : Colors.red),
+            ),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
@@ -203,8 +259,10 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         if (st != null && st.detail.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Text(st.detail,
-                style: const TextStyle(fontSize: 13, color: Colors.grey)),
+            child: Text(
+              st.detail,
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+            ),
           ),
         const SizedBox(height: 12),
 
@@ -221,25 +279,46 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         const SizedBox(height: 8),
 
         // botao de acao
-        FilledButton(
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            backgroundColor:
-                state == 'RECORDING' ? Colors.red : Colors.indigo,
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 270),
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 10,
+                ),
+                backgroundColor: const Color(0xFFD6AD53),
+                foregroundColor: const Color(0xFF171106),
+              ),
+              onPressed: _acaoHabilitada(state, ligado) && !_aguardandoAck
+                  ? _aoApertarAcao
+                  : null,
+              child: Text(
+                _rotuloBotao(state, ligado),
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
           ),
-          onPressed: _acaoHabilitada(state, ligado) && !_aguardandoAck
-              ? _aoApertarAcao
-              : null,
-          child: Text(_rotuloBotao(state, ligado),
-              style: const TextStyle(fontSize: 16)),
         ),
+        if (state == 'RECORDING')
+          Center(
+            child: TextButton.icon(
+              onPressed: ligado && !_aguardandoAck ? _confirmarDescarte : null,
+              icon: const Icon(Icons.delete_outline, size: 18),
+              label: const Text('DESCARTAR GRAVACAO'),
+              style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            ),
+          ),
         const SizedBox(height: 12),
 
         // upload
         Row(
           children: [
-            Text(_uploadTexto(st),
-                style: TextStyle(fontSize: 14, color: _corUpload(st))),
+            Text(
+              _uploadTexto(st),
+              style: TextStyle(fontSize: 14, color: _corUpload(st)),
+            ),
             if (st != null && st.uploadRunning > 0) ...[
               const SizedBox(width: 12),
               const SizedBox(
@@ -255,7 +334,9 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(
-            mqtt.nomeArquivo.isEmpty ? 'Nenhuma gravacao ainda' : mqtt.nomeArquivo,
+            mqtt.nomeArquivo.isEmpty
+                ? 'Nenhuma gravacao ainda'
+                : mqtt.nomeArquivo,
             style: const TextStyle(fontSize: 13, color: Colors.grey),
           ),
         ),
@@ -272,22 +353,30 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         if (mqtt.ultimaMensagem.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 12),
-            child: Text(mqtt.ultimaMensagem,
-                style: const TextStyle(fontSize: 13, color: Colors.red)),
+            child: Text(
+              mqtt.ultimaMensagem,
+              style: const TextStyle(fontSize: 13, color: Colors.red),
+            ),
           ),
 
         const SizedBox(height: 16),
-        const Text('Eventos',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const Text(
+          'Eventos',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
         const SizedBox(height: 4),
         if (mqtt.eventos.isEmpty)
           const Text('-', style: TextStyle(color: Colors.grey))
         else
-          ...mqtt.eventos.map((linha) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1),
-                child: Text(linha,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              )),
+          ...mqtt.eventos.map(
+            (linha) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Text(
+                linha,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -305,7 +394,8 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         builder: (context) => AlertDialog(
           title: const Text('Encerrar gravacao?'),
           content: const Text(
-              'A gravacao sera finalizada e o arquivo comecara a ser salvo.'),
+            'A gravacao sera finalizada e o arquivo comecara a ser salvo.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -324,6 +414,31 @@ class _TelaPrincipalState extends State<TelaPrincipal>
     }
   }
 
+  void _confirmarDescarte() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Descartar gravacao?'),
+        content: const Text(
+          'O audio capturado sera apagado. Nenhum estudo ou upload sera criado.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('VOLTAR'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _enviar('CANCEL');
+            },
+            child: const Text('DESCARTAR AUDIO'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _enviar(String cmd) async {
     setState(() {
       _aguardandoAck = true;
@@ -335,8 +450,9 @@ class _TelaPrincipalState extends State<TelaPrincipal>
       _aguardandoAck = false;
       _enviandoComando = false;
       if (!ack.ok) {
-        mqtt.ultimaMensagem =
-            ack.error.isEmpty ? 'resposta sem detalhe' : ack.error;
+        mqtt.ultimaMensagem = ack.error.isEmpty
+            ? 'resposta sem detalhe'
+            : ack.error;
       } else if (ack.detail.isNotEmpty) {
         mqtt.ultimaMensagem = ack.detail;
       } else {
@@ -370,7 +486,9 @@ class _TelaPrincipalState extends State<TelaPrincipal>
 
   bool _acaoHabilitada(String state, bool ligado) {
     if (!ligado || state.isEmpty || _enviandoComando) return false;
-    return state == 'IDLE' || state == 'COMPLETED' || state == 'ERROR' ||
+    return state == 'IDLE' ||
+        state == 'COMPLETED' ||
+        state == 'ERROR' ||
         state == 'RECORDING';
   }
 
@@ -397,7 +515,7 @@ class _TelaPrincipalState extends State<TelaPrincipal>
 
   Color _corUpload(EstadoEquipamento? st) {
     if (st == null) return Colors.grey;
-    if (st.uploadRunning > 0) return Colors.blue;
+    if (st.uploadRunning > 0) return const Color(0xFFD6AD53);
     if (st.uploadPending > 0) return Colors.orange;
     if (st.uploadFailed > 0) return Colors.red;
     if (st.uploadDone > 0) return Colors.green;
@@ -411,21 +529,23 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         color: cor,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(texto,
-          style: const TextStyle(color: Colors.white, fontSize: 12)),
+      child: Text(
+        texto,
+        style: const TextStyle(color: Colors.white, fontSize: 12),
+      ),
     );
   }
 
   Color _cor(TomEstado tom) {
     switch (tom) {
       case TomEstado.gravando:
-        return Colors.red;
+        return const Color(0xFFD6AD53);
       case TomEstado.pronto:
-        return Colors.green;
+        return const Color(0xFFD6AD53);
       case TomEstado.atencao:
-        return Colors.orange;
+        return Colors.redAccent;
       case TomEstado.enviando:
-        return Colors.blue;
+        return const Color(0xFFD6AD53);
       case TomEstado.enviado:
         return Colors.teal;
       case TomEstado.fraco:
@@ -450,7 +570,10 @@ class _TelaPrincipalState extends State<TelaPrincipal>
           const Text(
             'PROGRESSO DO ESTUDO',
             style: TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey),
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              color: Colors.grey,
+            ),
           ),
           const SizedBox(height: 6),
           LinearProgressIndicator(
@@ -462,8 +585,13 @@ class _TelaPrincipalState extends State<TelaPrincipal>
           const SizedBox(height: 6),
           Row(
             children: [
-              Text('${pj.percentual}%  ',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+              Text(
+                '${pj.percentual}%  ',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               Expanded(
                 child: Text(
                   pj.descricao.isNotEmpty ? pj.descricao : pj.rotuloEtapa,
@@ -476,11 +604,26 @@ class _TelaPrincipalState extends State<TelaPrincipal>
                   padding: const EdgeInsets.only(left: 8),
                   child: Text(
                     pj.motivo,
-                    style: const TextStyle(fontSize: 11, color: Colors.orange),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: pj.falhou ? Colors.redAccent : Colors.orange,
+                    ),
                   ),
                 ),
             ],
           ),
+          if (pj.falhou)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'FALHA EM: ${pj.rotuloEtapa}',
+                style: const TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -499,8 +642,10 @@ class _TelaPrincipalState extends State<TelaPrincipal>
             Row(
               children: [
                 const Expanded(
-                  child: Text('PROGRAMACAO DE PREGACOES',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'PROGRAMACAO DE PREGACOES',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
                 IconButton(
                   tooltip: 'Nova pregacao',
@@ -520,22 +665,30 @@ class _TelaPrincipalState extends State<TelaPrincipal>
             ),
             if (mqtt.carregandoPregacoes) const LinearProgressIndicator(),
             if (mqtt.erroPregacoes.isNotEmpty)
-              Text(mqtt.erroPregacoes,
-                  style: const TextStyle(color: Colors.red)),
-            if (itens.isEmpty && !mqtt.carregandoPregacoes && mqtt.erroPregacoes.isEmpty)
-              Text(mqtt.equipamentoOnline
-                  ? 'Nenhuma pregacao cadastrada'
-                  : 'Conecte ao PC para consultar a programacao'),
+              Text(
+                mqtt.erroPregacoes,
+                style: const TextStyle(color: Colors.red),
+              ),
+            if (itens.isEmpty &&
+                !mqtt.carregandoPregacoes &&
+                mqtt.erroPregacoes.isEmpty)
+              Text(
+                mqtt.equipamentoOnline
+                    ? 'Nenhuma pregacao cadastrada'
+                    : 'Conecte ao PC para consultar a programacao',
+              ),
             for (final p in visiveis)
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 title: Text('${p.data} ${p.horario}  ${p.pregador}'),
-                subtitle: Text([
-                  p.igreja,
-                  if (p.tema.isNotEmpty) p.tema,
-                  if (p.textoBase.isNotEmpty) p.textoBase,
-                ].join(' - ')),
+                subtitle: Text(
+                  [
+                    p.igreja,
+                    if (p.tema.isNotEmpty) p.tema,
+                    if (p.textoBase.isNotEmpty) p.textoBase,
+                  ].join(' - '),
+                ),
                 trailing: mqtt.equipamentoOnline
                     ? PopupMenuButton<String>(
                         tooltip: 'Opcoes da pregacao',
@@ -545,7 +698,10 @@ class _TelaPrincipalState extends State<TelaPrincipal>
                         },
                         itemBuilder: (context) => const [
                           PopupMenuItem(value: 'editar', child: Text('EDITAR')),
-                          PopupMenuItem(value: 'excluir', child: Text('EXCLUIR')),
+                          PopupMenuItem(
+                            value: 'excluir',
+                            child: Text('EXCLUIR'),
+                          ),
                         ],
                       )
                     : null,
@@ -553,16 +709,21 @@ class _TelaPrincipalState extends State<TelaPrincipal>
             if (itens.length > 3)
               TextButton(
                 onPressed: () => setState(
-                    () => _mostrarTodasPregacoes = !_mostrarTodasPregacoes),
-                child: Text(_mostrarTodasPregacoes
-                    ? 'MOSTRAR MENOS'
-                    : (mqtt.totalPregacoes > itens.length
-                        ? 'VER ${itens.length} DE ${mqtt.totalPregacoes}'
-                        : 'VER TODAS (${itens.length})')),
+                  () => _mostrarTodasPregacoes = !_mostrarTodasPregacoes,
+                ),
+                child: Text(
+                  _mostrarTodasPregacoes
+                      ? 'MOSTRAR MENOS'
+                      : (mqtt.totalPregacoes > itens.length
+                            ? 'VER ${itens.length} DE ${mqtt.totalPregacoes}'
+                            : 'VER TODAS (${itens.length})'),
+                ),
               ),
             if (!mqtt.equipamentoOnline)
-              const Text('PC offline: exibindo a ultima programacao recebida',
-                  style: TextStyle(color: Colors.grey, fontSize: 12)),
+              const Text(
+                'PC offline: exibindo a ultima programacao recebida',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              ),
           ],
         ),
       ),
@@ -580,7 +741,8 @@ class _TelaPrincipalState extends State<TelaPrincipal>
     final mensagem = resultado == 'ok'
         ? 'Programacao salva'
         : 'Outro aparelho alterou esta programacao. Confira a lista atualizada.';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagem)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(mensagem)));
   }
 
   Future<void> _excluirPregacao(Pregacao p) async {
@@ -602,22 +764,28 @@ class _TelaPrincipalState extends State<TelaPrincipal>
       ),
     );
     if (confirmado != true || !mounted) return;
-    final resposta = await mqtt.executar(ComandoPregacao.deletar.valor,
-        extras: {'id': '${p.id}', 'versao': '${p.versao}'});
+    final resposta = await mqtt.executar(
+      ComandoPregacao.deletar.valor,
+      extras: {'id': '${p.id}', 'versao': '${p.versao}'},
+    );
     if (!mounted) return;
     await mqtt.carregarPregacoes();
     if (!mounted) return;
     final mensagem = resposta.ok
         ? 'Pregacao excluida'
-        : (resposta.error.isEmpty ? 'Nao foi possivel excluir' : resposta.error);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagem)));
+        : (resposta.error.isEmpty
+              ? 'Nao foi possivel excluir'
+              : resposta.error);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(mensagem)));
   }
 
   Color _corProgresso(ProgressoJob pj) {
     if (pj.falhou) return Colors.red;
     if (pj.emEspera) return Colors.orange;
     if (pj.concluido) return Colors.green;
-    return Colors.blue;
+    final hue = 42 + pj.percentual.clamp(0, 100) * .78;
+    return HSVColor.fromAHSV(1, hue, .68, .85).toColor();
   }
 }
 
@@ -670,7 +838,8 @@ class _DialogoPregacaoState extends State<_DialogoPregacao> {
 
   Future<void> _escolherData() async {
     final informada = DateTime.tryParse(_data.text);
-    final inicial = informada != null &&
+    final inicial =
+        informada != null &&
             !informada.isBefore(DateTime(1900)) &&
             !informada.isAfter(DateTime(2200))
         ? informada
@@ -690,20 +859,29 @@ class _DialogoPregacaoState extends State<_DialogoPregacao> {
     final minuto = partes.length == 2 ? int.tryParse(partes[1]) : null;
     final escolha = await showTimePicker(
       context: context,
-      initialTime: hora != null && minuto != null &&
-              hora >= 0 && hora < 24 && minuto >= 0 && minuto < 60
+      initialTime:
+          hora != null &&
+              minuto != null &&
+              hora >= 0 &&
+              hora < 24 &&
+              minuto >= 0 &&
+              minuto < 60
           ? TimeOfDay(hour: hora, minute: minuto)
           : const TimeOfDay(hour: 19, minute: 0),
     );
     if (escolha != null && mounted) {
-      _horario.text = '${escolha.hour.toString().padLeft(2, '0')}:'
+      _horario.text =
+          '${escolha.hour.toString().padLeft(2, '0')}:'
           '${escolha.minute.toString().padLeft(2, '0')}';
     }
   }
 
   Future<void> _salvar() async {
     if (!_form.currentState!.validate() || _salvando) return;
-    setState(() { _salvando = true; _erro = ''; });
+    setState(() {
+      _salvando = true;
+      _erro = '';
+    });
     final atual = widget.atual;
     final extras = <String, String>{
       'data': _data.text,
@@ -717,10 +895,11 @@ class _DialogoPregacaoState extends State<_DialogoPregacao> {
     };
     try {
       final resposta = await widget.mqtt.executar(
-          atual == null
-              ? ComandoPregacao.criar.valor
-              : ComandoPregacao.atualizar.valor,
-          extras: extras);
+        atual == null
+            ? ComandoPregacao.criar.valor
+            : ComandoPregacao.atualizar.valor,
+        extras: extras,
+      );
       if (!mounted) return;
       if (resposta.ok) {
         Navigator.pop(context, 'ok');
@@ -756,31 +935,38 @@ class _DialogoPregacaoState extends State<_DialogoPregacao> {
                   controller: _data,
                   readOnly: true,
                   onTap: _escolherData,
-                  decoration: const InputDecoration(labelText: 'Data',
-                      suffixIcon: Icon(Icons.calendar_today)),
-                  validator: (v) => v == null || v.isEmpty ? 'Informe a data' : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Data',
+                    suffixIcon: Icon(Icons.calendar_today),
+                  ),
+                  validator: (v) =>
+                      v == null || v.isEmpty ? 'Informe a data' : null,
                 ),
                 TextFormField(
                   controller: _horario,
                   readOnly: true,
                   onTap: _escolherHorario,
-                  decoration: const InputDecoration(labelText: 'Horario',
-                      suffixIcon: Icon(Icons.access_time)),
-                  validator: (v) => v == null || v.isEmpty ? 'Informe o horario' : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Horario',
+                    suffixIcon: Icon(Icons.access_time),
+                  ),
+                  validator: (v) =>
+                      v == null || v.isEmpty ? 'Informe o horario' : null,
                 ),
                 TextFormField(
                   controller: _pregador,
                   maxLength: 120,
                   decoration: const InputDecoration(labelText: 'Pregador'),
                   validator: (v) => v == null || v.trim().isEmpty
-                      ? 'Informe o pregador' : null,
+                      ? 'Informe o pregador'
+                      : null,
                 ),
                 TextFormField(
                   controller: _igreja,
                   maxLength: 120,
                   decoration: const InputDecoration(labelText: 'Igreja'),
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? 'Informe a igreja' : null,
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'Informe a igreja' : null,
                 ),
                 TextFormField(
                   controller: _textoBase,

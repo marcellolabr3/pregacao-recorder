@@ -199,6 +199,41 @@ class RecordingManager:
         ).start()
         return {"session_id": session_id, "segments": progress["segments"]}
 
+    def cancel(self) -> Dict[str, Any]:
+        """Descarta a captura ativa sem gerar arquivo, upload ou estudo."""
+        with self._lock:
+            state_machine.require(State.RECORDING)
+            recorder = self.recorder
+            session_id = self.session_id
+            if recorder is None or not session_id:
+                raise ManagerError("Nenhuma gravacao ativa para descartar.")
+            state_machine.set(State.FINALIZING, detail="descartando gravacao")
+            try:
+                recorder.stop()
+                session_dir = self.root / ".sessions" / session_id
+                if session_dir.exists():
+                    shutil.rmtree(session_dir)
+                self.db.delete_session(session_id)
+            except Exception as exc:
+                self.db.update_session(
+                    session_id, state=State.RECOVERY_REQUIRED,
+                    error=f"falha ao descartar: {exc}", interrupted=1,
+                )
+                state_machine.set(State.RECOVERY_REQUIRED,
+                                  detail="falha ao descartar; confira o audio preservado")
+                self.recorder = None
+                self.session_id = None
+                raise ManagerError(
+                    "Nao foi possivel descartar totalmente. Confira a gravacao em recuperacao."
+                ) from exc
+            self.recorder = None
+            self.session_id = None
+            state_machine.set(State.IDLE, detail="", session_id="")
+
+        notify("gravacao_cancelada", "Gravacao descartada pelo usuario",
+               level="warning", payload={"session_id": session_id})
+        return {"session_id": session_id, "status": "DISCARDED"}
+
     # ------------------------------------------------------------------
     # consolidacao / recuperacao
     # ------------------------------------------------------------------

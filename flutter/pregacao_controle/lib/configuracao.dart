@@ -15,6 +15,8 @@ class Configuracao {
   String aparelho;
   String usuario;
   String token;
+  String logoPath;
+  String backgroundPath;
 
   Configuracao({
     this.servidor = padraoServidor,
@@ -23,6 +25,8 @@ class Configuracao {
     this.aparelho = padraoAparelho,
     this.usuario = 'operador',
     this.token = '',
+    this.logoPath = '',
+    this.backgroundPath = '',
   });
 
   // valores de fabrica: identificadores PUBLICOS do servico remoto
@@ -38,22 +42,26 @@ class Configuracao {
       token.trim().isNotEmpty;
 
   Map<String, dynamic> toJson() => {
-        'servidor': servidor.trim(),
-        'porta': porta,
-        'tls': tls,
-        'aparelho': aparelho.trim(),
-        'usuario': usuario.trim(),
-        'token': token,
-      };
+    'servidor': servidor.trim(),
+    'porta': porta,
+    'tls': tls,
+    'aparelho': aparelho.trim(),
+    'usuario': usuario.trim(),
+    'token': token,
+    'logo_path': logoPath,
+    'background_path': backgroundPath,
+  };
 
   factory Configuracao.fromJson(Map<String, dynamic> json) => Configuracao(
-        servidor: (json['servidor'] as String?) ?? padraoServidor,
-        porta: (json['porta'] as num?)?.toInt() ?? 8883,
-        tls: json['tls'] != false,
-        aparelho: (json['aparelho'] as String?) ?? padraoAparelho,
-        usuario: (json['usuario'] as String?) ?? 'operador',
-        token: (json['token'] as String?) ?? '',
-      );
+    servidor: (json['servidor'] as String?) ?? padraoServidor,
+    porta: (json['porta'] as num?)?.toInt() ?? 8883,
+    tls: json['tls'] != false,
+    aparelho: (json['aparelho'] as String?) ?? padraoAparelho,
+    usuario: (json['usuario'] as String?) ?? 'operador',
+    token: (json['token'] as String?) ?? '',
+    logoPath: (json['logo_path'] as String?) ?? '',
+    backgroundPath: (json['background_path'] as String?) ?? '',
+  );
 }
 
 /// Persistencia protegida (uma entrada so, em JSON).

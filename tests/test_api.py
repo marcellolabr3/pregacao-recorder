@@ -1,3 +1,6 @@
+import base64
+from io import BytesIO
+
 import pytest
 
 flask = pytest.importorskip("flask")
@@ -79,6 +82,7 @@ def test_me_reports_pin_required(client):
 def test_critical_operations_require_pin(client):
     assert client.post("/api/start").status_code == 401
     assert client.post("/api/stop").status_code == 401
+    assert client.post("/api/cancel").status_code == 401
     assert client.get("/api/config").status_code == 401
     assert client.get("/api/recovery").status_code == 401
 
@@ -162,6 +166,37 @@ def test_stop_while_idle_is_refused(client):
     _login(client)
     resp = client.post("/api/stop")
     assert resp.status_code == 409
+
+
+def test_cancel_while_idle_is_refused(client):
+    _login(client)
+    assert client.post("/api/cancel").status_code == 409
+
+
+def test_appearance_upload_is_local_authenticated_and_limited(client, monkeypatch, tmp_path):
+    from app import appearance
+
+    monkeypatch.setattr(appearance, "folder", lambda: tmp_path / "appearance")
+    image = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6"
+        "nAAAAABJRU5ErkJggg=="
+    )
+    assert client.get("/api/appearance").status_code == 401
+    assert client.post("/api/appearance/logo", data={"image": (BytesIO(image), "logo.png")}).status_code == 401
+    _login(client)
+    assert client.get("/api/appearance").get_json() == {"logo": False, "background": False}
+    assert client.post("/api/appearance/logo", data={"image": (BytesIO(b"<script>"), "bad.png")}).status_code == 422
+    assert client.post("/api/appearance/logo", data={"image": (BytesIO(b"x" * (appearance.MAX_IMAGE_BYTES + 1)), "big.png")}).status_code == 422
+    saved = client.post("/api/appearance/logo", data={"image": (BytesIO(image), "logo.png")})
+    assert saved.status_code == 200
+    assert saved.get_json()["logo"] is True
+    loaded = client.get("/api/appearance/logo")
+    assert loaded.data == image
+    assert loaded.mimetype == "image/png"
+    assert loaded.headers["X-Content-Type-Options"] == "nosniff"
+    loaded.close()
+    assert client.delete("/api/appearance/logo").status_code == 200
+    assert client.get("/api/appearance/logo").status_code == 404
 
 
 def test_config_validation_rejects_bad_values(client):

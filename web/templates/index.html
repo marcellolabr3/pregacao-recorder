@@ -3,16 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d1117">
+<meta name="theme-color" content="#080807">
 <title>pregacao-recorder</title>
-<link rel="stylesheet" href="/static/style.css?v=20261020-ops">
+<link rel="stylesheet" href="/static/style.css?v=20261021-ui">
 <link rel="manifest" href="/static/manifest.json">
+<link id="appFavicon" rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 </head>
 <body data-view="home">
 
 <header class="topbar">
   <div class="brand">
-    <span class="logo">●</span>
+    <span id="logoFallback" class="logo">●</span>
+    <img id="brandLogo" class="brand-logo hidden" alt="Icone personalizado do equipamento">
     <span id="deviceName">{{ device_name }}</span>
   </div>
   <nav class="topnav">
@@ -79,7 +81,7 @@
   <section class="card hidden" id="progressoCard">
     <div class="card-title">PROGRESSO DO ESTUDO</div>
     <div class="progresso-etapas" id="progressoEtapas"></div>
-    <div class="bar"><span id="progressoBar"></span></div>
+    <div class="bar"><span id="progressoBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Progresso do estudo"></span></div>
     <div class="muted" id="progressoDesc">--</div>
   </section>
 
@@ -88,9 +90,11 @@
     <button id="btnStart" class="btn btn-start btn-block" type="button">
       INICIAR GRAVACAO
     </button>
-    <div class="separator"></div>
     <button id="btnStop" class="btn btn-stop btn-block" type="button" disabled>
       FINALIZAR GRAVACAO
+    </button>
+    <button id="btnCancelRecording" class="btn btn-ghost btn-block hidden" type="button" disabled>
+      DESCARTAR GRAVACAO
     </button>
   </section>
 
@@ -99,8 +103,6 @@
     <p class="muted">Consulte as proximas pregacoes diretamente no painel.</p>
     <div class="btn-row">
       <button id="btnAddPregacao" class="btn btn-primary btn-sm" type="button">NOVA PREGACAO</button>
-      <button id="btnImportPregacao" class="btn btn-ghost btn-sm" type="button">IMPORTAR CSV/XLSX</button>
-      <a id="btnDownloadModelo" class="btn btn-ghost btn-sm" type="button" download="modelo_pregacoes.csv">BAIXAR MODELO</a>
       <button id="btnScheduleAdmin" class="btn btn-ghost btn-sm" type="button">LIBERAR EDICAO</button>
     </div>
     <div id="pregacaoMsg" class="muted" role="status"></div>
@@ -164,115 +166,157 @@
 
 <!-- ===================== CONFIGURACAO (USUARIO COMUM) ===================== -->
 <main id="viewConfig" class="hidden">
+  <nav class="config-tabs" role="tablist" aria-label="Categorias de configuracao">
+    <button id="configTabEquipment" class="config-tab active" type="button" role="tab" data-config-tab="equipment" aria-selected="true" aria-controls="configPanelEquipment">EQUIPAMENTO</button>
+    <button id="configTabGoogle" class="config-tab" type="button" role="tab" data-config-tab="google" aria-selected="false" aria-controls="configPanelGoogle">GOOGLE E ESTUDOS</button>
+    <button id="configTabWhatsapp" class="config-tab" type="button" role="tab" data-config-tab="whatsapp" aria-selected="false" aria-controls="configPanelWhatsapp">WHATSAPP</button>
+    <button id="configTabAutomation" class="config-tab" type="button" role="tab" data-config-tab="automation" aria-selected="false" aria-controls="configPanelAutomation">AUTOMACAO</button>
+    <button id="configTabAppearance" class="config-tab" type="button" role="tab" data-config-tab="appearance" aria-selected="false" aria-controls="configPanelAppearance">APARENCIA</button>
+    <button id="configTabAdvanced" class="config-tab" type="button" role="tab" data-config-tab="advanced" aria-selected="false" aria-controls="configPanelAdvanced">AVANCADO</button>
+  </nav>
   <form id="configForm" class="stack">
-    <section class="card">
-      <div class="card-title">EQUIPAMENTO</div>
-      <label>Nome do equipamento
-        <input name="device_name" type="text" maxlength="40">
-      </label>
-    </section>
+    <div id="configMsg" class="muted" role="status" aria-live="polite"></div>
 
-    <section class="card">
-      <div class="card-title">GOOGLE DRIVE</div>
-      <div class="big" id="cfgDriveState">--</div>
-      <dl class="meta">
-        <div><dt>Conta</dt><dd id="cfgDriveAccount">--</dd></div>
-        <div><dt>Pasta</dt><dd id="cfgDriveFolder">--</dd></div>
-      </dl>
-      <div class="btn-row">
-        <button id="btnDriveConnect" class="btn btn-primary" type="button">CONECTAR CONTA GOOGLE</button>
-        <button id="btnDriveTest" class="btn btn-ghost" type="button">TESTAR CONEXAO</button>
-        <button id="btnDriveDisconnect" class="btn btn-ghost" type="button">DESCONECTAR</button>
-      </div>
-      <p class="hint">O Google abre a janela oficial de login. Nenhuma senha e
-         guardada neste equipamento - apenas a autorizacao da conta.</p>
-    </section>
-
-    <section class="card">
-      <div class="card-title">ESTUDO AUTOMATICO (NOTEBOOKLM)</div>
-      <label><input name="estudos.ativo" type="checkbox">
-        Gerar estudo e enviar o PDF por WhatsApp apos gravar</label>
-      <label><input name="estudos.mind_map_enabled" type="checkbox">
-        Gerar tambem um mapa mental deste estudo</label>
-      <label>Como deve ser o mapa mental
-        <textarea name="estudos.mind_map_prompt" rows="4" maxlength="2000" placeholder="Tema central, pontos principais, referencias biblicas e aplicacoes..."></textarea>
-      </label>
-      <p class="hint">O mapa sera criado no NotebookLM e ficara disponivel aqui para visualizar e baixar.</p>
-      <label>Destinatarios do WhatsApp (DDI + DDD, um por linha)
-        <textarea name="estudos.whatsapp" rows="3" maxlength="340" placeholder="5521999999999&#10;5511888888888"></textarea>
-      </label>
-      <p class="hint" id="cfgWaDestinos" role="status">Nenhum numero salvo.</p>
-      <div class="big" id="cfgWaState">--</div>
-      <div class="btn-row">
-        <button id="btnWaLogin" class="btn btn-primary" type="button">CONECTAR WHATSAPP (QR)</button>
-        <button id="btnWaCheck" class="btn btn-ghost" type="button">VERIFICAR CONEXAO</button>
-      </div>
-      <p class="hint" id="cfgWaDetail" role="status">A sessao fica neste computador. Conecte no WhatsApp &gt; Aparelhos conectados.</p>
-      <img id="cfgWaQr" class="hidden" alt="QR para conectar o WhatsApp" style="width:min(100%,320px);height:auto">
-      <p class="hint">"Aceito pelo servidor" nao garante entrega. Confira o recebimento no telefone.</p>
-      <div class="card-title">REENVIAR ESTUDO PRONTO</div>
-      <label>Estudo
-        <select id="cfgWaStudy"></select>
-      </label>
-      <label>Destinos do reenvio (DDI + DDD, um por linha)
-        <textarea id="cfgWaResendNumbers" rows="2" maxlength="340"></textarea>
-      </label>
-      <button id="btnWaResend" class="btn btn-ghost" type="button">REENVIAR PDF EXISTENTE</button>
-      <p class="hint" id="cfgWaResendStatus" role="status">O reenvio nao refaz o estudo.</p>
-      <div class="card-title">MAPA MENTAL DO ESTUDO</div>
-      <div class="btn-row">
-        <button id="btnMapOpen" class="btn btn-ghost" type="button">VISUALIZAR MAPA</button>
-        <a id="btnMapDownload" class="btn btn-ghost hidden" href="#" download>BAIXAR MAPA (JSON)</a>
-      </div>
-      <p class="hint" id="cfgMapStatus" role="status">Selecione um estudo com mapa gerado.</p>
-      <div id="cfgMapViewer" class="mindmap-tree hidden" aria-label="Mapa mental do estudo"></div>
-      <div class="big" id="cfgNlmState">--</div>
-      <dl class="meta">
-        <div><dt>Estudos</dt><dd id="cfgNlmPend">--</dd></div>
-      </dl>
-      <div class="btn-row">
-        <button id="btnNlmCheck" class="btn btn-ghost" type="button">DIAGNOSTICAR SESSAO</button>
-        <button id="btnNlmLogin" class="btn btn-primary" type="button">RENOVAR LOGIN</button>
-      </div>
-      <p class="hint" id="cfgNlmLogin" role="status" aria-live="polite" aria-atomic="true">Para renovar o login, entre na sua conta na janela do navegador do PC.</p>
-      <p class="hint">A sessao do NotebookLM e separada da conta Google do
-         Drive. Se expirar, os estudos ficam em espera (nada se perde) e
-         retomam sozinhos apos o login. Apos parar a gravacao, o NotebookLM
-         monta o estudo, gera o PDF e envia para este numero - pode levar
-         alguns minutos.</p>
-    </section>
-
-    <section class="card">
-      <div class="card-title">DESLIGAMENTO APOS AS TAREFAS</div>
-      <label><input name="power.shutdown_after_tasks" type="checkbox">
-        Desligar este computador quando gravacao, uploads e estudos terminarem</label>
-      <label>Esperar quantos minutos apos tudo terminar
-        <input name="power.shutdown_delay_minutes" type="number" min="1" max="1440" step="1" value="30">
-      </label>
-      <p class="hint">Se uma nova tarefa comecar, a contagem reinicia depois que ela terminar. Tarefas pendentes de login ou upload impedem o desligamento.</p>
-      <div class="big" id="cfgPowerState">--</div>
-      <p class="hint" id="cfgPowerDetail" role="status"></p>
-      <div class="btn-row">
-        <button id="btnPowerArm" class="btn btn-ghost" type="button">ARMAR PARA AS TAREFAS ATUAIS</button>
-        <button id="btnPowerCancel" class="btn btn-ghost" type="button">CANCELAR CONTAGEM</button>
-      </div>
-    </section>
-
-    <!-- ===== SAUDE DAS INTEGRACOES (S3) ===== -->
-    <section class="card">
-      <div class="card-title">SAUDE DAS INTEGRACOES</div>
-      <div id="integracoesLista" class="muted">carregando...</div>
-    </section>
-
-    <div class="btn-row">
-      <button class="btn btn-primary btn-block" type="submit">SALVAR</button>
+    <div id="configPanelEquipment" class="config-panel" role="tabpanel" aria-labelledby="configTabEquipment">
+      <section class="card">
+        <div class="card-title">EQUIPAMENTO</div>
+        <label>Nome do equipamento
+          <input name="device_name" type="text" maxlength="40">
+        </label>
+        <button class="btn btn-primary btn-sm" type="submit" data-config-save="equipment">SALVAR NOME</button>
+      </section>
+      <section class="card">
+        <div class="card-title">SAUDE DAS INTEGRACOES</div>
+        <div id="integracoesLista" class="muted">carregando...</div>
+      </section>
     </div>
-    <div id="configMsg" class="muted"></div>
 
-    <button id="btnAdvanced" class="btn btn-ghost btn-block" type="button">
-      CONFIGURACOES AVANCADAS
-    </button>
-    <p class="hint">Audio, armazenamento e credenciais: somente para o administrador.</p>
+    <div id="configPanelGoogle" class="config-panel hidden" role="tabpanel" aria-labelledby="configTabGoogle">
+      <section class="card">
+        <div class="card-title">GOOGLE DRIVE</div>
+        <div class="big" id="cfgDriveState">--</div>
+        <dl class="meta">
+          <div><dt>Conta</dt><dd id="cfgDriveAccount">--</dd></div>
+          <div><dt>Pasta</dt><dd id="cfgDriveFolder">--</dd></div>
+        </dl>
+        <div class="btn-row">
+          <button id="btnDriveConnect" class="btn btn-primary" type="button">CONECTAR CONTA GOOGLE</button>
+          <button id="btnDriveTest" class="btn btn-ghost" type="button">TESTAR CONEXAO</button>
+          <button id="btnDriveDisconnect" class="btn btn-ghost" type="button">DESCONECTAR</button>
+        </div>
+        <p class="hint">O Google abre a janela oficial de login. Apenas a autorizacao da conta fica salva neste equipamento.</p>
+        <button id="btnDriveTechnical" class="btn btn-ghost btn-sm" type="button">CREDENCIAIS E PASTA (ADMIN)</button>
+      </section>
+      <section class="card">
+        <div class="card-title">ESTUDO AUTOMATICO (NOTEBOOKLM)</div>
+        <label><input name="estudos.ativo" type="checkbox"> Gerar estudo e PDF apos gravar</label>
+        <label><input name="estudos.mind_map_enabled" type="checkbox"> Gerar tambem um mapa mental</label>
+        <label>Como deve ser o mapa mental
+          <textarea name="estudos.mind_map_prompt" rows="4" maxlength="2000" placeholder="Tema central, pontos principais, referencias biblicas e aplicacoes..."></textarea>
+        </label>
+        <button class="btn btn-primary btn-sm" type="submit" data-config-save="google">SALVAR ESTUDO</button>
+        <p class="hint">O mapa sera criado no NotebookLM e ficara disponivel aqui para visualizar e baixar.</p>
+        <div class="big" id="cfgNlmState">--</div>
+        <dl class="meta"><div><dt>Estudos</dt><dd id="cfgNlmPend">--</dd></div></dl>
+        <div class="btn-row">
+          <button id="btnNlmCheck" class="btn btn-ghost" type="button">DIAGNOSTICAR SESSAO</button>
+          <button id="btnNlmLogin" class="btn btn-primary" type="button">RENOVAR LOGIN</button>
+        </div>
+        <p class="hint" id="cfgNlmLogin" role="status" aria-live="polite" aria-atomic="true">Para renovar o login, entre na sua conta na janela do navegador do PC.</p>
+        <p class="hint">A sessao do NotebookLM e separada da conta Google do Drive. Se expirar, os estudos ficam em espera e retomam apos o login.</p>
+      </section>
+      <section class="card">
+        <div class="card-title">MAPA MENTAL DO ESTUDO</div>
+        <label>Estudo <select id="cfgMapStudy"></select></label>
+        <div class="btn-row">
+          <button id="btnMapOpen" class="btn btn-ghost" type="button">VISUALIZAR MAPA</button>
+          <a id="btnMapDownload" class="btn btn-ghost hidden" href="#" download>BAIXAR MAPA (JSON)</a>
+        </div>
+        <p class="hint" id="cfgMapStatus" role="status">Selecione um estudo com mapa gerado.</p>
+        <div id="cfgMapViewer" class="mindmap-tree hidden" aria-label="Mapa mental do estudo"></div>
+      </section>
+    </div>
+
+    <div id="configPanelWhatsapp" class="config-panel hidden" role="tabpanel" aria-labelledby="configTabWhatsapp">
+      <section class="card">
+        <div class="card-title">DESTINATARIOS DO WHATSAPP</div>
+        <label>Numeros para receber o PDF (DDI + DDD, um por linha)
+          <textarea name="estudos.whatsapp" rows="3" maxlength="340" placeholder="5521999999999&#10;5511888888888"></textarea>
+        </label>
+        <button class="btn btn-primary btn-sm" type="submit" data-config-save="whatsapp">SALVAR DESTINATARIOS</button>
+        <p class="hint" id="cfgWaDestinos" role="status">Nenhum numero salvo.</p>
+      </section>
+      <section class="card">
+        <div class="card-title">SESSAO DO WHATSAPP</div>
+        <div class="big" id="cfgWaState">--</div>
+        <div class="btn-row">
+          <button id="btnWaLogin" class="btn btn-primary" type="button">CONECTAR WHATSAPP (QR)</button>
+          <button id="btnWaCheck" class="btn btn-ghost" type="button">VERIFICAR CONEXAO</button>
+        </div>
+        <p class="hint" id="cfgWaDetail" role="status">A sessao fica neste computador. Conecte no WhatsApp &gt; Aparelhos conectados.</p>
+        <img id="cfgWaQr" class="hidden" alt="QR para conectar o WhatsApp" style="width:min(100%,320px);height:auto">
+        <p class="hint">"Aceito pelo servidor" nao garante entrega. Confira o recebimento no telefone.</p>
+      </section>
+      <section class="card">
+        <div class="card-title">REENVIAR ESTUDO PRONTO</div>
+        <label>Estudo <select id="cfgWaStudy"></select></label>
+        <label>Destinos do reenvio (DDI + DDD, um por linha)
+          <textarea id="cfgWaResendNumbers" rows="2" maxlength="340"></textarea>
+        </label>
+        <button id="btnWaResend" class="btn btn-ghost btn-sm" type="button">REENVIAR PDF EXISTENTE</button>
+        <p class="hint" id="cfgWaResendStatus" role="status">O reenvio nao refaz o estudo.</p>
+      </section>
+    </div>
+
+    <div id="configPanelAutomation" class="config-panel hidden" role="tabpanel" aria-labelledby="configTabAutomation">
+      <section class="card">
+        <div class="card-title">DESLIGAMENTO APOS AS TAREFAS</div>
+        <label><input name="power.shutdown_after_tasks" type="checkbox"> Desligar este computador quando gravacao, uploads e estudos terminarem</label>
+        <label>Esperar quantos minutos apos tudo terminar
+          <input name="power.shutdown_delay_minutes" type="number" min="1" max="1440" step="1" value="30">
+        </label>
+        <button class="btn btn-primary btn-sm" type="submit" data-config-save="automation">SALVAR AUTOMACAO</button>
+        <p class="hint">Uma nova tarefa reinicia a contagem. Login ou upload pendente impede o desligamento.</p>
+        <div class="big" id="cfgPowerState">--</div>
+        <p class="hint" id="cfgPowerDetail" role="status"></p>
+        <div class="btn-row">
+          <button id="btnPowerArm" class="btn btn-ghost" type="button">ARMAR PARA AS TAREFAS ATUAIS</button>
+          <button id="btnPowerCancel" class="btn btn-ghost" type="button">CANCELAR CONTAGEM</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="configPanelAppearance" class="config-panel hidden" role="tabpanel" aria-labelledby="configTabAppearance">
+      <section class="card">
+        <div class="card-title">ICONE DO PAINEL</div>
+        <p class="hint">Escolha uma imagem para o cabecalho e a aba do navegador.</p>
+        <input id="cfgLogoFile" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Imagem do icone">
+        <div class="btn-row">
+          <button id="btnLogoSave" class="btn btn-primary btn-sm" type="button">SALVAR ICONE</button>
+          <button id="btnLogoRemove" class="btn btn-ghost btn-sm" type="button">REMOVER</button>
+        </div>
+        <img id="cfgLogoPreview" class="appearance-preview hidden" alt="Previa do icone">
+      </section>
+      <section class="card">
+        <div class="card-title">IMAGEM DE FUNDO</div>
+        <p class="hint">A imagem fica neste PC. O painel aplica uma camada escura para manter a leitura.</p>
+        <input id="cfgBackgroundFile" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Imagem de fundo">
+        <div class="btn-row">
+          <button id="btnBackgroundSave" class="btn btn-primary btn-sm" type="button">SALVAR FUNDO</button>
+          <button id="btnBackgroundRemove" class="btn btn-ghost btn-sm" type="button">REMOVER</button>
+        </div>
+        <img id="cfgBackgroundPreview" class="appearance-preview hidden" alt="Previa do fundo">
+      </section>
+      <div id="appearanceMsg" class="muted" role="status" aria-live="polite"></div>
+    </div>
+
+    <div id="configPanelAdvanced" class="config-panel hidden" role="tabpanel" aria-labelledby="configTabAdvanced">
+      <section class="card">
+        <div class="card-title">CONFIGURACOES AVANCADAS</div>
+        <p class="hint">Audio, armazenamento, credenciais do Google Drive, controle remoto e logs: acesso do administrador.</p>
+        <button id="btnAdvanced" class="btn btn-ghost btn-sm" type="button">ABRIR CONFIGURACOES AVANCADAS</button>
+      </section>
+    </div>
   </form>
 </main>
 
@@ -336,7 +380,7 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" id="advancedDriveCard">
       <div class="card-title">GOOGLE DRIVE (TECNICO)</div>
       <label class="check">
         <input name="drive.enabled" type="checkbox"> Habilitar integracao com Drive
@@ -476,21 +520,6 @@
         </div>
       </div>
 
-      <!-- Modal importacao -->
-      <div id="importOverlay" class="overlay hidden">
-        <div class="overlay-card wide">
-          <h2>IMPORTAR PROGRAMACAO (CSV/XLSX)</h2>
-          <p class="hint">Colunas: data, horario, pregador, igreja, texto_base, tema</p>
-          <input type="file" id="importFile" accept=".csv,.xlsx,.xls">
-          <div id="importPreview" class="hint" style="display:none"></div>
-          <div id="importMsg" class="muted"></div>
-          <div class="btn-row">
-            <button type="button" id="importCancel" class="btn btn-ghost">CANCELAR</button>
-            <button type="button" id="importConfirm" class="btn btn-primary" disabled>CONFIRMAR GRAVACAO</button>
-          </div>
-        </div>
-      </div>
-
 <!-- ============================ CONFIRMACAO ============================ -->
 <div id="confirmOverlay" class="overlay hidden">
   <div class="overlay-card">
@@ -499,6 +528,17 @@
     <div class="btn-row">
       <button id="confirmCancel" class="btn btn-ghost" type="button">CANCELAR</button>
       <button id="confirmOk" class="btn btn-stop" type="button">FINALIZAR</button>
+    </div>
+  </div>
+</div>
+
+<div id="cancelRecordingOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <h2>Descartar esta gravacao?</h2>
+    <p>O audio capturado sera apagado. Nenhum estudo ou upload sera criado.</p>
+    <div class="btn-row">
+      <button id="cancelRecordingBack" class="btn btn-ghost" type="button">VOLTAR</button>
+      <button id="cancelRecordingOk" class="btn btn-stop" type="button">DESCARTAR AUDIO</button>
     </div>
   </div>
 </div>
@@ -572,6 +612,6 @@
   <span id="clock">--:--</span>
 </footer>
 
-<script src="/static/app.js?v=20261020-ops"></script>
+<script src="/static/app.js?v=20261021-ui"></script>
 </body>
 </html>

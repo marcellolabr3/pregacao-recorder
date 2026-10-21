@@ -9,6 +9,37 @@
 - `.env`, configuracao pessoal, tokens/perfis, banco, logs e gravacoes nunca entram no Git.
 - `docs/CODEX_CONTEXT.local.md` contem legado sensivel; nunca imprimir/commitar.
 
+## Interface e descarte (21/10/2026)
+
+- O usuario confirmou que o teste funcional anterior deu certo e pediu
+  reorganizacao visual: CONFIG em abas funcionais, campos menores, tema preto e
+  dourado, progresso ate verde e vermelho na etapa de falha. O painel usa abas
+  Equipamento, Google/Estudos, WhatsApp, Automacao, Aparencia e Avancado, com
+  botoes de salvar por assunto. Google Drive e NotebookLM ficam juntos;
+  destinatarios, sessao e reenvio WhatsApp ficam juntos.
+- Programacao exposta na tela principal apenas pelo cadastro manual NOVA
+  PREGACAO. O modelo CSV era retornado como blob, mas a funcao antiga tentava
+  le-lo como JSON; modelo/importacao foram retirados da interface. As APIs
+  legadas permanecem para compatibilidade.
+- Captura acidental: POST `/api/cancel` autenticado e comando MQTT `CANCEL`
+  param o gravador e eliminam sessao/segmentos antes de MP3, upload e estudo.
+  Um erro no descarte marca a sessao para recuperacao. O painel e o APK pedem
+  confirmacao. Nao cancela jobs ja iniciados apos FINALIZAR.
+- Imagens do painel: POST/GET/DELETE `/api/appearance/<logo|background>`;
+  arquivos PNG/JPEG/WebP de ate 5 MB em `data/appearance`, fora do Git.
+  Favicon/cabecalho e fundo usam esses arquivos. Android copia a imagem para
+  arquivos privados, guarda caminhos na configuracao segura e pode pedir ao
+  launcher um atalho fixado com o logo; o icone do APK na lista de apps usa um
+  desenho preto/dourado fixo. O Android nao troca esse icone em tempo de
+  execucao. O novo APK e `2.8.0+14`.
+- Testes: suite Python, testes direcionados de cancelamento/API/agente,
+  smoke Playwright isolado, 40 testes Flutter e analise Flutter passaram.
+  A build release e a copia para o SSD sao registradas em `docs/TESTES.md`.
+- Durante esta tarefa, o SSD pessoal nao estava montado (somente C: e D:).
+  Nao afirmar que a versao nova esta no SSD ou no instalador completo anterior
+  ate atualizar e conferir esses artefatos. Manter gravador/agente fechados,
+  conforme pedido do usuario.
+
 ## Instalacao completa local a partir do SSD (21/10/2026)
 
 - O usuario corrigiu a entrega: o instalador publico nao atendia ao objetivo

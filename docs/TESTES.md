@@ -1,5 +1,28 @@
 # Validacao - Windows
 
+## Interface, cancelamento e APK 2.8 (21/10/2026)
+
+- Suite Python completa com `pytest -q` passou; testes direcionados de
+  cancelamento, API e agente MQTT passaram depois do ajuste de recuperacao.
+  A suite nao fez captura real, upload ou envio.
+- `node --check web/static/app.js` e smoke Playwright isolado passaram. O
+  navegador confirmou navegacao pelas abas e que cada botao salva somente os
+  campos da propria aba; audio, destino e MQTT avancados continuam operaveis.
+- `flutter test --no-pub` passou com 40 testes, inclusive as tres referencias
+  visuais atualizadas; `flutter analyze --no-pub` informou zero problemas.
+  A referencia GRAVANDO foi inspecionada em tela estreita e o corte da barra
+  superior foi corrigido.
+- `flutter build apk --release --no-pub` produziu
+  `dist-pacote/PregacaoControle-2.8.apk` (2.8.0+14, versionCode 14).
+  `apksigner verify -v` passou e o certificado SHA-256 coincide com o APK
+  2.6 anterior (`0035d8609e5f6456cb558cce23224d753737f31e010d7b2dae9ece985d3572e5`).
+  SHA-256 do arquivo: `CC3D4E3DBC3E1F3A2AF4F592C98F975330A22E60DE574CAB9FB7FD20F3779CC2`.
+- O usuario relatou que o teste funcional anterior foi bem-sucedido. Esta
+  versao do descarte e do novo visual foi validada em testes isolados; falta
+  confirmar em uma gravacao real e nos dois celulares. A unidade E: vista
+  neste PC estava vazia, sem a pasta pessoal; por isso o instalador completo
+  anterior ainda contem a versao anterior ate o SSD correto ser conectado.
+
 ## Ciclo de envio, desligamento e mapa mental (20/10/2026)
 
 - A suite Python completa passou com `.venv\Scripts\python.exe -B -m pytest -p no:cacheprovider --tb=short -q`.

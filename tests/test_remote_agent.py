@@ -90,6 +90,10 @@ class FakeApi:
         self.calls.append("stop")
         return self.stop_code, {"state": State.IDLE}
 
+    def cancel(self):
+        self.calls.append("cancel")
+        return 200, {"state": State.IDLE}
+
     def drive_status(self):
         self.calls.append("drive_status")
         return 200, {
@@ -461,6 +465,24 @@ def test_stop_quando_gravando_chama_a_api():
     assert ack["ok"] is True
     assert "stop" in api.calls
     assert ack["state"] == State.IDLE
+
+
+def test_cancel_somente_quando_gravando():
+    api = FakeApi(snapshot=base_snapshot(state=State.RECORDING))
+    agent, _client, _api = make_agent(api=api)
+    assert parse_command("CANCEL")["cmd"] == "CANCEL"
+
+    ack = agent.handle_command({"cmd": "CANCEL", "req_id": "acidental"})
+    assert ack["ok"] is True
+    assert "cancel" in api.calls
+    assert "nenhum estudo" in ack["detail"]
+
+    api.snapshot = base_snapshot(state=State.IDLE)
+    api.calls.clear()
+    recusado = agent.handle_command({"cmd": "CANCEL"})
+    assert recusado["ok"] is False
+    assert recusado["code"] == "estado_invalido"
+    assert "cancel" not in api.calls
 
 
 def test_status_devolve_o_estado_projetado():

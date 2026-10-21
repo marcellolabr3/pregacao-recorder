@@ -39,9 +39,11 @@ void main() {
     });
 
     test('extras (ssid, password, path...) viajam junto', () {
-      final cmd = montarComando('WIFI_CONNECT',
-          extras: {'ssid': 'Igreja', 'password': '12345678'},
-          reqId: 'x');
+      final cmd = montarComando(
+        'WIFI_CONNECT',
+        extras: {'ssid': 'Igreja', 'password': '12345678'},
+        reqId: 'x',
+      );
       expect(cmd['ssid'], 'Igreja');
       expect(cmd['password'], '12345678');
       expect(cmd['cmd'], 'WIFI_CONNECT');
@@ -116,8 +118,10 @@ void main() {
     });
 
     test('formatarTempo zera negativos e conta direito', () {
-      expect(formatarTempo(const Duration(hours: 1, minutes: 2, seconds: 3)),
-          '01:02:03');
+      expect(
+        formatarTempo(const Duration(hours: 1, minutes: 2, seconds: 3)),
+        '01:02:03',
+      );
       expect(formatarTempo(const Duration(seconds: 65)), '00:01:05');
       expect(formatarTempo(const Duration(seconds: -10)), '00:00:00');
       expect(formatarTempo(Duration.zero), '00:00:00');
@@ -158,10 +162,13 @@ void main() {
         'ok': true,
         'req_id': 'r3',
         'networks': [
-          {'ssid': 'Igreja', 'signal': 80, 'security': 'WPA2',
-           'in_use': true},
-          {'ssid': 'Convidados', 'signal': 40, 'security': '--',
-           'in_use': false},
+          {'ssid': 'Igreja', 'signal': 80, 'security': 'WPA2', 'in_use': true},
+          {
+            'ssid': 'Convidados',
+            'signal': 40,
+            'security': '--',
+            'in_use': false,
+          },
         ],
       });
       expect(ack.networks.length, 2);
@@ -192,8 +199,14 @@ void main() {
         'cmd': 'PREGACAO_LISTAR',
         'total': 1,
         'pregacoes': [
-          {'id': 7, 'data': '2026-11-01', 'horario': '19:00',
-           'pregador': 'Ana', 'igreja': 'Central', 'versao': 2},
+          {
+            'id': 7,
+            'data': '2026-11-01',
+            'horario': '19:00',
+            'pregador': 'Ana',
+            'igreja': 'Central',
+            'versao': 2,
+          },
         ],
       });
       expect(ack.totalPregacoes, 1);
@@ -265,15 +278,21 @@ void main() {
         aparelho: 'igreja-02',
         usuario: 'operador',
         token: 'token-com "aspas" e \\ barras',
+        logoPath: '/privado/logo.png',
+        backgroundPath: '/privado/fundo.jpg',
       );
       final volta = Configuracao.fromJson(
-          Map<String, dynamic>.from(jsonDecode(jsonEncode(cfg.toJson()))));
+        Map<String, dynamic>.from(jsonDecode(jsonEncode(cfg.toJson()))),
+      );
       expect(volta.servidor, cfg.servidor);
       expect(volta.porta, cfg.porta);
       expect(volta.tls, isFalse);
       expect(volta.aparelho, 'igreja-02');
       expect(volta.usuario, cfg.usuario);
       expect(volta.token, cfg.token);
+      expect(volta.logoPath, cfg.logoPath);
+      expect(volta.backgroundPath, cfg.backgroundPath);
+      expect(Configuracao.fromJson(const {}).logoPath, isEmpty);
     });
   });
 

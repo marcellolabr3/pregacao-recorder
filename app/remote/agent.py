@@ -59,7 +59,7 @@ TOPIC_ROOT = "pregacao"
 ONLINE = "online"
 OFFLINE = "offline"
 COMMANDS = (
-    "START", "STOP", "STATUS",
+    "START", "STOP", "CANCEL", "STATUS",
     # espelho do painel: conta Google e destino de gravacao
     "DRIVE_STATUS", "DRIVE_CONNECT", "DRIVE_FINISH",
     "DRIVE_DISCONNECT", "DRIVE_TEST",
@@ -454,6 +454,9 @@ class LocalApi:
     def stop(self) -> Tuple[int, Dict[str, Any]]:
         return self._authed("POST", "/api/stop", {})
 
+    def cancel(self) -> Tuple[int, Dict[str, Any]]:
+        return self._authed("POST", "/api/cancel", {})
+
     # -- google drive (o conector do APK) --------------------------------
     def drive_status(self) -> Tuple[int, Dict[str, Any]]:
         return self._authed("GET", "/api/drive/status")
@@ -797,6 +800,12 @@ class RemoteAgent:
                     ack["detail"] = "nenhuma gravacao em andamento"
                     return ack
                 code, payload = self.api.stop()
+            elif cmd == "CANCEL":
+                if state != State.RECORDING:
+                    ack["error"] = "nenhuma gravacao ativa para descartar"
+                    ack["code"] = "estado_invalido"
+                    return ack
+                code, payload = self.api.cancel()
             # -- espelho do painel: google drive --------------------------
             elif cmd == "DRIVE_STATUS":
                 code, payload = self.api.drive_status()
@@ -897,6 +906,8 @@ class RemoteAgent:
                 elif cmd == "STORAGE_SET":
                     ack["current"] = str(payload.get("current") or "")
                     ack["detail"] = "destino de gravacao atualizado"
+                elif cmd == "CANCEL":
+                    ack["detail"] = "gravacao descartada; nenhum estudo ou upload criado"
                 elif cmd == "PREGACAO_LISTAR":
                     hoje = date.today().isoformat()
                     registros = list(payload.get("pregacoes") or [])

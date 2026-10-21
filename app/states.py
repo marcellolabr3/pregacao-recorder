@@ -39,7 +39,10 @@ class InvalidTransition(Exception):
 TRANSITIONS: Dict[str, Iterable[str]] = {
     State.IDLE: (State.RECORDING, State.RECOVERY_REQUIRED, State.ERROR, State.UPLOADING),
     State.RECORDING: (State.FINALIZING, State.IDLE, State.ERROR, State.RECOVERY_REQUIRED),
-    State.FINALIZING: (State.COMPLETED, State.UPLOADING, State.ERROR, State.IDLE),
+    State.FINALIZING: (
+        State.COMPLETED, State.UPLOADING, State.ERROR,
+        State.RECOVERY_REQUIRED, State.IDLE,
+    ),
     State.UPLOADING: (State.COMPLETED, State.ERROR, State.IDLE),
     State.COMPLETED: (
         State.IDLE,

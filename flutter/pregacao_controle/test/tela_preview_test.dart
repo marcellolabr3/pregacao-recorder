@@ -15,22 +15,31 @@ import 'package:pregacao_controle/mqtt_controlador.dart';
 import 'package:pregacao_controle/protocolo.dart';
 import 'package:pregacao_controle/tela_principal.dart';
 
-Future<void> _capturar(WidgetTester tester, MqttControlador controlador,
-    String arquivo) async {
+Future<void> _capturar(
+  WidgetTester tester,
+  MqttControlador controlador,
+  String arquivo,
+) async {
   // celular 4.7" - mesma faixa dos aparelhos dos operadores
   tester.view.physicalSize = const Size(393 * 3, 852 * 3);
   tester.view.devicePixelRatio = 3.0;
   addTearDown(tester.view.resetPhysicalSize);
-  await tester.pumpWidget(MaterialApp(
-    theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
-    home: AppScope(
-      controlador: controlador,
-      child: const TelaPrincipal(),
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: ThemeData(
+        colorSchemeSeed: const Color(0xFFD6AD53),
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF080807),
+        useMaterial3: true,
+      ),
+      home: AppScope(controlador: controlador, child: const TelaPrincipal()),
     ),
-  ));
+  );
   await tester.pump(const Duration(milliseconds: 100));
   await expectLater(
-    find.byType(Scaffold), matchesGoldenFile('goldens/$arquivo'));
+    find.byType(Scaffold),
+    matchesGoldenFile('goldens/$arquivo'),
+  );
 }
 
 void main() {

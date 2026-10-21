@@ -46,7 +46,9 @@ class _PregacaoAppState extends State<PregacaoApp> {
         title: 'Pregacao Controle',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          colorSchemeSeed: Colors.indigo,
+          colorSchemeSeed: const Color(0xFFD6AD53),
+          brightness: Brightness.dark,
+          scaffoldBackgroundColor: const Color(0xFF080807),
           useMaterial3: true,
         ),
         home: const TelaPrincipal(),

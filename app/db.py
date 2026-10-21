@@ -204,7 +204,7 @@ class Database:
         return dict(row) if row else None
 
     def delete_session(self, session_id: str) -> None:
-        """Remove uma sessao vazia (nenhum audio capturado)."""
+        """Remove uma sessao vazia ou descartada pelo operador."""
         with self.connection() as conn:
             conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
 

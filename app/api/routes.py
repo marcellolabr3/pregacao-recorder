@@ -14,7 +14,7 @@ from urllib.parse import quote
 
 from flask import Response, jsonify, request, send_file, stream_with_context
 
-from .. import estudos, notify, paths, power, whatsapp
+from .. import appearance, estudos, notify, paths, power, whatsapp
 from ..audio import device as audio_device
 from ..config import config
 from ..db import db
@@ -425,6 +425,52 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
         except (ManagerError, InvalidTransition) as exc:
             return _err(str(exc), 409, "estado_invalido")
         return jsonify({"ok": True, **result, "state": state_machine.state})
+
+    @app.post("/api/cancel")
+    @auth.require_auth
+    def cancel_recording():
+        try:
+            result = manager.cancel()
+        except (ManagerError, InvalidTransition) as exc:
+            return _err(str(exc), 409, "estado_invalido")
+        return jsonify({"ok": True, **result, "state": state_machine.state})
+
+    @app.get("/api/appearance")
+    @auth.require_auth
+    def appearance_status():
+        return jsonify(appearance.snapshot())
+
+    @app.route("/api/appearance/<kind>", methods=["GET", "POST", "DELETE"])
+    @auth.require_auth
+    def appearance_image(kind: str):
+        if kind not in appearance.KINDS:
+            return _err("tipo de imagem invalido", 404)
+        path = appearance.image_path(kind)
+        if request.method == "GET":
+            if not path.is_file():
+                return _err("imagem nao configurada", 404)
+            with path.open("rb") as image_file:
+                mime = appearance.image_mime(image_file.read(16))
+            if mime is None:
+                return _err("imagem invalida", 404)
+            response = send_file(path, mimetype=mime)
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            return response
+        if request.method == "DELETE":
+            appearance.remove(kind)
+            return jsonify({"ok": True, **appearance.snapshot()})
+        uploaded = request.files.get("image")
+        if uploaded is None:
+            return _err("selecione uma imagem", 422)
+        data = uploaded.read(appearance.MAX_IMAGE_BYTES + 1)
+        try:
+            appearance.save(kind, data)
+        except ValueError as exc:
+            return _err(str(exc), 422, "imagem_invalida")
+        except OSError:
+            return _err("nao foi possivel salvar a imagem", 500)
+        return jsonify({"ok": True, **appearance.snapshot()})
 
     # ------------------------------------------------------------------
     # recuperacao

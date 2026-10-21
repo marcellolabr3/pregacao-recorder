@@ -18,6 +18,8 @@
   var nlmLoginPedido = false;
   var nlmDiagnostico = false;
   var waSaved = [];
+  var activeConfigTab = "equipment";
+  var advancedTarget = null;
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -179,6 +181,10 @@
     $("btnStart").disabled = (st === "RECORDING" || st === "FINALIZING" ||
                               st === "UPLOADING" || recovery);
     $("btnStop").disabled = (st !== "RECORDING");
+    $("btnCancelRecording").disabled = (st !== "RECORDING");
+    $("btnStart").classList.toggle("hidden", st === "RECORDING");
+    $("btnStop").classList.toggle("hidden", st !== "RECORDING");
+    $("btnCancelRecording").classList.toggle("hidden", st !== "RECORDING");
 
     // armazenamento
     var disk = status.storage || {};
@@ -416,6 +422,15 @@
     }).catch(function (e) { toast(e.message, "error"); refresh(); });
   }
 
+  function doCancelRecording() {
+    $("cancelRecordingOverlay").classList.add("hidden");
+    $("btnCancelRecording").disabled = true;
+    api("/api/cancel", "POST").then(function () {
+      toast("Gravacao descartada; nada foi enviado", "warning");
+      refresh();
+    }).catch(function (e) { toast(e.message, "error"); refresh(); });
+  }
+
   function refresh() {
     return api("/api/status").then(function (data) {
       status = data;
@@ -450,7 +465,7 @@
       } catch (e) { /* ignora */ }
     });
 
-    ["gravacao_iniciada", "gravacao_finalizada", "gravacao_pronta",
+    ["gravacao_iniciada", "gravacao_finalizada", "gravacao_cancelada", "gravacao_pronta",
      "upload_inicio", "upload_concluido", "upload_pendente", "upload_falho", "erro",
      "recuperacao", "recuperacao_descartada", "servico_parado", "capture_gap",
      "configuracao", "drive_conectado", "drive_desconectado", "audio_teste",
@@ -481,7 +496,12 @@
     card.classList.remove("hidden");
     var bar = $("progressoBar");
     var pct = Math.max(0, Math.min(100, Number(b.percentual) || 0));
-    if (bar) bar.style.width = pct + "%";
+    var failed = b.estado === "ERRO" || (b.etapas || []).some(function (e) { return e.tom === "erro"; });
+    if (bar) {
+      bar.style.width = pct + "%";
+      bar.style.background = failed ? "var(--red2)" : "hsl(" + (42 + Math.round(pct * .78)) + " 65% 45%)";
+      bar.setAttribute("aria-valuenow", String(pct));
+    }
     var desc = $("progressoDesc");
     if (desc) desc.textContent = pct + "% - " + (b.descricao || "");
     var et = $("progressoEtapas");
@@ -516,6 +536,21 @@
   }
 
   // ---------------------------------------------------------------- config
+  function setConfigTab(name) {
+    var names = ["equipment", "google", "whatsapp", "automation", "appearance", "advanced"];
+    if (names.indexOf(name) < 0) return;
+    activeConfigTab = name;
+    names.forEach(function (item) {
+      var tab = document.querySelector('[data-config-tab="' + item + '"]');
+      var panel = $("configPanel" + item.charAt(0).toUpperCase() + item.slice(1));
+      tab.classList.toggle("active", item === name);
+      tab.setAttribute("aria-selected", item === name ? "true" : "false");
+      tab.tabIndex = item === name ? 0 : -1;
+      panel.classList.toggle("hidden", item !== name);
+    });
+    $("configMsg").textContent = "";
+  }
+
   function fillSelect(sel, options, current) {
     sel.innerHTML = "";
     options.forEach(function (opt) {
@@ -892,10 +927,9 @@
   }
 
   // ================================================================
-  // S4: PROGRAMACAO DE PREGACOES (CRUD + IMPORTACAO)
+  // S4: PROGRAMACAO DE PREGACOES (CADASTRO MANUAL)
   // ================================================================
   var _pregacoesCache = [];
-  var _importacaoCache = [];
   var _pregacaoEditada = null;
 
   function loadPregacoes() {
@@ -910,7 +944,7 @@
   function renderPregacoes() {
     var list = $("pregacoesList");
     if (!list) return;
-    ["btnAddPregacao", "btnImportPregacao", "btnDownloadModelo"].forEach(function (id) {
+    ["btnAddPregacao"].forEach(function (id) {
       $(id).classList.toggle("hidden", !isAdmin);
     });
     $("btnScheduleAdmin").classList.toggle("hidden", isAdmin);
@@ -1028,112 +1062,93 @@
     });
   }
 
-  // ----- IMPORTACAO CSV/XLSX -----
-  function openImportModal() {
-    $("importOverlay").classList.remove("hidden");
-    _importacaoCache = [];
-    $("importFile").value = "";
-    $("importPreview").style.display = "none";
-    $("importPreview").textContent = "";
-    $("importMsg").textContent = "";
-    $("importConfirm").disabled = true;
+  function loadAppearance() {
+    api("/api/appearance").then(function (s) {
+      var rev = Date.now();
+      var logoUrl = "/api/appearance/logo?v=" + rev;
+      var backgroundUrl = "/api/appearance/background?v=" + rev;
+      $("brandLogo").classList.toggle("hidden", !s.logo);
+      $("logoFallback").classList.toggle("hidden", !!s.logo);
+      $("cfgLogoPreview").classList.toggle("hidden", !s.logo);
+      $("cfgBackgroundPreview").classList.toggle("hidden", !s.background);
+      $("btnLogoRemove").disabled = !s.logo;
+      $("btnBackgroundRemove").disabled = !s.background;
+      if (s.logo) {
+        $("brandLogo").src = logoUrl;
+        $("cfgLogoPreview").src = logoUrl;
+      }
+      if (s.background) $("cfgBackgroundPreview").src = backgroundUrl;
+      $("appFavicon").href = s.logo ? logoUrl : "/static/favicon.svg";
+      document.body.classList.toggle("custom-background", !!s.background);
+      document.body.style.setProperty("--appearance-background", s.background
+        ? 'url("' + backgroundUrl + '")' : "none");
+    }).catch(function () {});
   }
 
-  function closeImportModal() {
-    $("importOverlay").classList.add("hidden");
-  }
-
-  function previewImport(ev) {
-    var file = ev.target.files[0];
-    if (!file) return;
-    var formData = new FormData();
-    formData.append("arquivo", file);
-    var msg = $("importMsg");
-    msg.textContent = "lendo...";
-    fetch("/api/importacao/previa", {
-      method: "POST", body: formData, credentials: "same-origin"
+  function saveAppearance(kind, inputId) {
+    var file = $(inputId).files[0];
+    var message = $("appearanceMsg");
+    if (!file) { message.textContent = "Selecione uma imagem antes de salvar."; return; }
+    var data = new FormData();
+    data.append("image", file);
+    message.textContent = "Salvando imagem...";
+    fetch("/api/appearance/" + kind, {
+      method: "POST", body: data, credentials: "same-origin"
     }).then(function (resp) {
-      return resp.json().catch(function () { return {}; }).then(function (data) {
-        if (!resp.ok) {
-          msg.textContent = data.message || "falha na leitura";
-          throw new Error(data.message);
-        }
-        var v = data.validos || [];
-        var e = data.erros || [];
-        var d = data.duplicatas || [];
-        var partes = [];
-        if (v.length) partes.push(v.length + " valido(s)");
-        if (e.length) partes.push(e.length + " erro(s)");
-        if (d.length) partes.push(d.length + " duplicata(s)");
-        msg.textContent = partes.join(" · ") || "vazio";
-        if (v.length) {
-          var linhas = v.slice(0, 5).map(function (p) {
-            return p.data + " " + p.horario + " · " + p.pregador + " / " + p.igreja;
-          }).join("\n");
-          if (v.length > 5) linhas += "\n... e mais " + (v.length - 5);
-          $("importPreview").textContent = "Validos:\n" + linhas;
-          $("importPreview").style.display = "block";
-        }
-        if (e.length || d.length) {
-          _importacaoCache = v; // guarda para confirmar
-          $("importConfirm").disabled = false;
-        } else {
-          _importacaoCache = v;
-          $("importConfirm").disabled = v.length === 0;
-        }
+      return resp.json().then(function (body) {
+        if (!resp.ok) throw new Error(body.message || "Falha ao salvar a imagem");
       });
-    }).catch(function () {});
+    }).then(function () {
+      $(inputId).value = "";
+      message.textContent = "Imagem salva neste PC.";
+      loadAppearance();
+    }).catch(function (e) { message.textContent = e.message; });
   }
 
-  function confirmImport() {
-    if (!_importacaoCache.length) return;
-    var msg = $("importMsg");
-    msg.textContent = "gravando...";
-    api("/api/importacao/confirmar", "POST", { validos: _importacaoCache })
-      .then(function () {
-        msg.textContent = "";
-        toast("Importacao concluida", "success");
-        closeImportModal();
-        loadPregacoes();
-      }).catch(function (e) {
-        msg.textContent = e.message;
-        toast(e.message, "error");
-      });
-  }
-
-  function downloadModelo() {
-    // o link ja aponta para /api/importacao/modelo via atributo download
-    // mas forca o fetch se o navegador nao respeitar
-    api("/api/importacao/modelo").then(function (blob) {
-      // Response blob handling for browsers that ignore download attr on <a>
-      var url = window.URL.createObjectURL(blob);
-      var a = document.createElement("a");
-      a.href = url; a.download = "modelo_pregacoes.csv"; a.click();
-      window.URL.revokeObjectURL(url);
-    }).catch(function () {});
+  function removeAppearance(kind) {
+    if (!confirm("Remover esta imagem personalizada?")) return;
+    api("/api/appearance/" + kind, "DELETE").then(function () {
+      $("appearanceMsg").textContent = "Imagem removida.";
+      loadAppearance();
+    }).catch(function (e) { $("appearanceMsg").textContent = e.message; });
   }
 
   function saveConfig(ev) {
     ev.preventDefault();
     var form = $("configForm");
-    var payload = {
-      "device_name": form.elements["device_name"].value,
-      "estudos.ativo": form.elements["estudos.ativo"].checked,
-      "estudos.mind_map_enabled": form.elements["estudos.mind_map_enabled"].checked,
-      "estudos.mind_map_prompt": form.elements["estudos.mind_map_prompt"].value.trim(),
-      "estudos.whatsapp": form.elements["estudos.whatsapp"].value.trim(),
-      "power.shutdown_after_tasks": form.elements["power.shutdown_after_tasks"].checked,
-      "power.shutdown_delay_minutes": Number(form.elements["power.shutdown_delay_minutes"].value)
-    };
+    var submitter = ev.submitter;
+    var section = submitter && submitter.closest(".config-panel") &&
+      !submitter.closest(".config-panel").classList.contains("hidden")
+      ? submitter.dataset.configSave : activeConfigTab;
+    var payload = {};
+    if (section === "equipment") {
+      payload.device_name = form.elements["device_name"].value.trim();
+    } else if (section === "google") {
+      payload["estudos.ativo"] = form.elements["estudos.ativo"].checked;
+      payload["estudos.mind_map_enabled"] = form.elements["estudos.mind_map_enabled"].checked;
+      payload["estudos.mind_map_prompt"] = form.elements["estudos.mind_map_prompt"].value.trim();
+    } else if (section === "whatsapp") {
+      payload["estudos.whatsapp"] = form.elements["estudos.whatsapp"].value.trim();
+    } else if (section === "automation") {
+      payload["power.shutdown_after_tasks"] = form.elements["power.shutdown_after_tasks"].checked;
+      payload["power.shutdown_delay_minutes"] = Number(form.elements["power.shutdown_delay_minutes"].value);
+    } else return;
     var msg = $("configMsg");
     msg.textContent = "salvando...";
-    api("/api/config", "POST", payload).then(function (res) {
-      msg.textContent = "Configuracao salva";
+    api("/api/config", "POST", payload).then(function () {
+      msg.textContent = "Configuracao salva nesta aba";
       toast("Configuracao salva", "success");
-      addNotif("Configuracao atualizada", "success");
-      loadConfig();
+      if (section === "equipment") $("deviceName").textContent = payload.device_name;
+      if (section === "whatsapp") {
+        waSaved = payload["estudos.whatsapp"].split(/[,;\s]+/).filter(Boolean);
+        $("cfgWaDestinos").textContent = waSaved.length
+          ? "DESTINOS SALVOS (" + waSaved.length + "): " + waSaved.join(" · ")
+          : "Nenhum numero salvo.";
+        $("cfgWaResendNumbers").value = waSaved.join("\n");
+      }
+      if (section === "automation") loadPowerStatus();
     }).catch(function (e) {
-      msg.textContent = "";
+      msg.textContent = e.message;
       toast(e.message, "error");
     });
   }
@@ -1159,25 +1174,30 @@
 
   function loadWaStudies() {
     api("/api/estudos/jobs").then(function (r) {
-      var select = $("cfgWaStudy");
-      var selected = select.value;
-      select.innerHTML = "";
-      (r.items || []).forEach(function (job) {
-        if (!job.pdf_available && !job.mind_map_available) return;
-        var option = document.createElement("option");
-        option.value = job.job_id;
-        option.textContent = dataHora(job.created_at) + " · " + job.audio;
-        select.appendChild(option);
+      var jobs = r.items || [];
+      function fillJobs(select, eligible) {
+        var selected = select.value;
+        select.innerHTML = "";
+        jobs.filter(eligible).forEach(function (job) {
+          var option = document.createElement("option");
+          option.value = job.job_id;
+          option.textContent = dataHora(job.created_at) + " - " + job.audio;
+          select.appendChild(option);
+        });
+        if (selected) select.value = selected;
+        return selected !== select.value;
+      }
+      fillJobs($("cfgWaStudy"), function (job) { return job.pdf_available; });
+      var mapChanged = fillJobs($("cfgMapStudy"), function (job) {
+        return job.mind_map_available || !!job.mind_map_error;
       });
-      if (selected) select.value = selected;
-      if (selected !== select.value) $("cfgMapViewer").classList.add("hidden");
-      var found = (r.items || []).find(function (item) { return item.job_id === select.value; });
-      $("btnWaResend").disabled = !found || !found.pdf_available;
-      $("cfgWaResendStatus").textContent = found && !found.pdf_available
-        ? "PDF indisponivel; o mapa mental continua acessivel."
-        : found && found.sends.length
-        ? found.sends.map(function (s) { return "+" + s.recipient + ": " + s.status.replace(/_/g, " "); }).join(" | ")
+      if (mapChanged) $("cfgMapViewer").classList.add("hidden");
+      var resend = jobs.find(function (item) { return item.job_id === $("cfgWaStudy").value; });
+      $("btnWaResend").disabled = !resend;
+      $("cfgWaResendStatus").textContent = resend && resend.sends.length
+        ? resend.sends.map(function (s) { return "+" + s.recipient + ": " + s.status.replace(/_/g, " "); }).join(" | ")
         : "O reenvio usa o PDF existente e nao refaz o estudo.";
+      var found = jobs.find(function (item) { return item.job_id === $("cfgMapStudy").value; });
       var hasMap = !!(found && found.mind_map_available);
       $("btnMapOpen").disabled = !hasMap;
       $("btnMapDownload").classList.toggle("hidden", !hasMap);
@@ -1186,7 +1206,7 @@
       }
       $("cfgMapStatus").textContent = hasMap ? "Mapa pronto para visualizar ou baixar."
         : found && found.mind_map_error ? "Falha ao gerar mapa: " + found.mind_map_error
-        : "Este estudo ainda nao tem mapa mental.";
+        : "Nenhum mapa mental disponivel.";
     }).catch(function (e) { $("cfgWaResendStatus").textContent = e.message; });
   }
 
@@ -1412,6 +1432,14 @@
 
     $("btnStart").addEventListener("click", doStart);
     $("btnStop").addEventListener("click", askStop);
+    $("btnCancelRecording").addEventListener("click", function () {
+      $("cancelRecordingOverlay").classList.remove("hidden");
+    });
+    $("cancelRecordingBack").addEventListener("click", function () {
+      $("cancelRecordingOverlay").classList.add("hidden");
+      refresh();
+    });
+    $("cancelRecordingOk").addEventListener("click", doCancelRecording);
     $("confirmCancel").addEventListener("click", function () {
       $("confirmOverlay").classList.add("hidden");
       refresh();
@@ -1429,6 +1457,20 @@
     });
 
     $("configForm").addEventListener("submit", saveConfig);
+    document.querySelectorAll("[data-config-tab]").forEach(function (tab) {
+      tab.addEventListener("click", function () { setConfigTab(tab.dataset.configTab); });
+      tab.addEventListener("keydown", function (ev) {
+        var names = ["equipment", "google", "whatsapp", "automation", "appearance", "advanced"];
+        var current = names.indexOf(tab.dataset.configTab);
+        var next = ev.key === "ArrowRight" ? (current + 1) % names.length
+          : ev.key === "ArrowLeft" ? (current + names.length - 1) % names.length
+          : ev.key === "Home" ? 0 : ev.key === "End" ? names.length - 1 : -1;
+        if (next < 0) return;
+        ev.preventDefault();
+        setConfigTab(names[next]);
+        document.querySelector('[data-config-tab="' + names[next] + '"]').focus();
+      });
+    });
     $("btnWaLogin").addEventListener("click", function () {
       api("/api/whatsapp/login", "POST").then(function () { loadWaStatus(); })
         .catch(function (e) { toast(e.message, "error"); });
@@ -1448,11 +1490,11 @@
         }).catch(function (e) { toast(e.message, "error"); });
     });
     $("btnMapOpen").addEventListener("click", function () {
-      var id = $("cfgWaStudy").value;
+      var id = $("cfgMapStudy").value;
       if (!id) return;
       api("/api/estudos/jobs/" + encodeURIComponent(id) + "/mapa")
-        .then(function (data) { if ($("cfgWaStudy").value === id) renderMindMap(data); })
-        .catch(function (e) { if ($("cfgWaStudy").value === id) $("cfgMapStatus").textContent = e.message; });
+        .then(function (data) { if ($("cfgMapStudy").value === id) renderMindMap(data); })
+        .catch(function (e) { if ($("cfgMapStudy").value === id) $("cfgMapStatus").textContent = e.message; });
     });
     $("btnPowerArm").addEventListener("click", function () {
       api("/api/power/arm", "POST").then(paintPower)
@@ -1463,6 +1505,9 @@
         .catch(function (e) { toast(e.message, "error"); });
     });
     $("cfgWaStudy").addEventListener("change", function () {
+      loadWaStudies();
+    });
+    $("cfgMapStudy").addEventListener("change", function () {
       $("cfgMapViewer").classList.add("hidden");
       loadWaStudies();
     });
@@ -1471,6 +1516,14 @@
     }, 5000);
     $("advancedForm").addEventListener("submit", saveAdvanced);
     $("btnAdvanced").addEventListener("click", openAdvanced);
+    $("btnDriveTechnical").addEventListener("click", function () {
+      advancedTarget = "advancedDriveCard";
+      openAdvanced();
+    });
+    $("btnLogoSave").addEventListener("click", function () { saveAppearance("logo", "cfgLogoFile"); });
+    $("btnBackgroundSave").addEventListener("click", function () { saveAppearance("background", "cfgBackgroundFile"); });
+    $("btnLogoRemove").addEventListener("click", function () { removeAppearance("logo"); });
+    $("btnBackgroundRemove").addEventListener("click", function () { removeAppearance("background"); });
     $("btnRemoteToken").addEventListener("click", toggleRemoteToken);
     $("btnRemoteSave").addEventListener("click", saveRemoteConfig);
     $("btnConfigAudioTest").addEventListener("click", function () {
@@ -1570,14 +1623,6 @@
     $("btnScheduleAdmin").addEventListener("click", function () { openAdmin("home"); });
     $("pregacaoForm").addEventListener("submit", savePregacao);
     $("pregacaoCancel").addEventListener("click", closePregacaoModal);
-    $("btnImportPregacao").addEventListener("click", openImportModal);
-    $("importCancel").addEventListener("click", closeImportModal);
-    $("importFile").addEventListener("change", previewImport);
-    $("importConfirm").addEventListener("click", confirmImport);
-    $("btnDownloadModelo").addEventListener("click", function (ev) {
-      ev.preventDefault();
-      downloadModelo();
-    });
 
     $("btnNlmCheck").addEventListener("click", function () {
       if (nlmDiagnostico || nlmLoginPedido || this.disabled) return;
@@ -1636,14 +1681,21 @@
     $("navConfig").classList.toggle("active", view === "config" || view === "advanced");
     history.replaceState(null, "",
       view === "home" ? "/" : (view === "history" ? "/historico" : "/config"));
+    if (view === "advanced" && advancedTarget) {
+      var target = $(advancedTarget);
+      advancedTarget = null;
+      if (target) setTimeout(function () { target.scrollIntoView({behavior: "smooth", block: "start"}); }, 80);
+    }
   }
 
   // ---------------------------------------------------------------- boot
   function boot() {
     bind();
+    setConfigTab("equipment");
     // resultado do login do Google (retornado em /config?drive=ok|erro)
     var q = new URLSearchParams(location.search);
     var driveRes = q.get("drive");
+    if (driveRes) setConfigTab("google");
     if (location.pathname.indexOf("/config") === 0) setView("config");
     else if (location.pathname.indexOf("/historico") === 0) setView("history");
     if (driveRes) {
@@ -1672,6 +1724,7 @@
   function start() {
     refresh().then(function () {
       if (authed) loadConfig();
+      if (authed) loadAppearance();
       if (authed) loadPregacoes();
       if (authed && document.body.dataset.view === "history") loadHistory();
       // historico de notificacoes

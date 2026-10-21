@@ -5,7 +5,7 @@ import pytest
 
 from app.audio import wav
 from app.recording.manager import ManagerError, RecordingManager
-from app.states import State, state_machine
+from app.states import InvalidTransition, State, state_machine
 
 
 def _segment(path: Path, seconds: float = 1.0, bad_header: bool = False) -> Path:
@@ -88,6 +88,77 @@ def test_stop_without_recorder_is_safe(manager, fresh_state):
         manager.stop()
 
 
+def test_cancel_discards_active_capture_without_study_or_upload(
+        manager, database, recordings_root, fresh_state, monkeypatch):
+    from app.recording import manager as module
+
+    sid = "acidental"
+    session_dir = recordings_root / ".sessions" / sid
+    session_dir.mkdir(parents=True)
+    (session_dir / "segment_0001.wav").write_bytes(b"audio de teste")
+    database.create_session({"id": sid, "started_at": time.time(),
+                             "state": State.RECORDING})
+
+    class FakeRecorder:
+        stopped = False
+
+        def stop(self):
+            self.stopped = True
+
+    recorder = FakeRecorder()
+    manager.recorder = recorder
+    manager.session_id = sid
+    state_machine.set(State.RECORDING, session_id=sid, force=True)
+    monkeypatch.setattr(module.estudos, "enfileirar",
+                        lambda *_: pytest.fail("cancelamento nao pode criar estudo"))
+    result = manager.cancel()
+
+    assert result["status"] == "DISCARDED"
+    assert recorder.stopped
+    assert not session_dir.exists()
+    assert database.get_session(sid) is None
+    with database.connection() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM uploads").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+    assert manager.recorder is None
+    assert manager.session_id is None
+    assert state_machine.snapshot()["session_id"] == ""
+    assert state_machine.state == State.IDLE
+
+
+def test_cancel_is_rejected_when_not_recording(manager, fresh_state):
+    with pytest.raises(InvalidTransition):
+        manager.cancel()
+
+
+def test_cancel_cleanup_failure_keeps_session_for_recovery(
+        manager, database, recordings_root, fresh_state, monkeypatch):
+    from app.recording import manager as module
+
+    sid = "falha-descarte"
+    session_dir = recordings_root / ".sessions" / sid
+    session_dir.mkdir(parents=True)
+    (session_dir / "segment_0001.wav").write_bytes(b"audio")
+    database.create_session({"id": sid, "started_at": time.time(),
+                             "state": State.RECORDING})
+
+    class FakeRecorder:
+        def stop(self):
+            pass
+
+    manager.recorder = FakeRecorder()
+    manager.session_id = sid
+    state_machine.set(State.RECORDING, session_id=sid, force=True)
+    monkeypatch.setattr(module.shutil, "rmtree",
+                        lambda *_: (_ for _ in ()).throw(OSError("ocupado")))
+
+    with pytest.raises(ManagerError, match="recuperacao"):
+        manager.cancel()
+    assert session_dir.exists()
+    assert database.get_session(sid)["state"] == State.RECOVERY_REQUIRED
+    assert state_machine.state == State.RECOVERY_REQUIRED
+
+
 def test_discard_keeps_user_in_control(manager, database, recordings_root, fresh_state):
     session_dir = _make_interrupted(database, recordings_root, "vai-descartar")
     from app.recording import recovery
@@ -159,4 +230,3 @@ def test_empty_recording_is_discarded_not_error(manager, database, recordings_ro
     assert database.get_session(sid) is None      # nada capturado, nada salvo
     assert not session_dir.exists()               # sem lixo em disco
     assert state_machine.snapshot()["state"] == State.IDLE
-
