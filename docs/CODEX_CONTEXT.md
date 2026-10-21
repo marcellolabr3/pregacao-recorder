@@ -9,13 +9,47 @@
 - `.env`, configuracao pessoal, tokens/perfis, banco, logs e gravacoes nunca entram no Git.
 - `docs/CODEX_CONTEXT.local.md` contem legado sensivel; nunca imprimir/commitar.
 
-## Ciclo atual - WhatsApp, desligamento e mapa mental (20/10/2026)
+## Entrega final no SSD (20/10/2026)
+
+- O usuario autorizou expressamente gerar todos os artefatos e concluir a
+  entrega quando conectou o SSD. Flutter 2.7.0+13, pacote publico, instalador
+  generico e atualizador pessoal foram compilados. Testes completos Python e
+  Flutter (40), analise Flutter, smoke de runtime e 11 provas do instalador
+  passaram. As duas goldens da tela principal foram atualizadas em `f526656`.
+- O SSD `Pregacoes` esta em `E:` neste PC. A pasta pessoal foi recuperada da
+  Lixeira, identificada por manifestos e banco. A pasta antiga permanece na
+  Lixeira, fora da raiz ativa. O SSD contem na raiz instalador publico, ZIP,
+  APK 2.7, sidecars SHA-256 e `INSTALAR-NO-OUTRO-PC.txt`.
+- A instalacao pessoal foi atualizada no SSD com o pacote publico e o APK 2.7.
+  7.861 arquivos publicos e o APK conferem por SHA-256; seis arquivos privados
+  criticos permaneceram identicos antes da abertura. O banco passou em
+  `quick_check`, com 16 sessoes, 16 uploads, 6 jobs e 16 gravacoes intactas.
+  A abertura real atualizou banco/config/token sem perder registros ou audio.
+- O primeiro atualizador falhou ao sobrescrever arquivos Playwright identicos.
+  `build_personal_update.py` e `personal_update.iss` agora conferem SHA-256 e
+  instalam apenas arquivos ausentes/diferentes. A nova execucao concluiu as
+  etapas e o registro do inicio automatico, mas o processo Inno ficou ativo
+  apos fechar o log; foi encerrado depois da verificacao integral do destino.
+  O atualizador ja foi aplicado; no outro PC, usar o comando
+  `Ativar Inicio Automatico.cmd` incluido na pasta pessoal.
+- O SSD abriu painel/agente neste PC; HTTP 200/IDLE, programacao visivel, MQTT
+  TLS com `online`, estado retido e ACK positivo para `STATUS` e
+  `PREGACAO_LISTAR`, sem desconexoes na prova. Ao encerrar, `avail` ficou
+  `offline`. O laboratorio voltou a 8080/IDLE com autostart ativo. O autostart
+  pessoal foi desativado somente neste PC para evitar disputa de porta.
+- Pendente fora deste PC: aceite nos dois celulares, audio no PC de destino,
+  um estudo real concluido a 100% e abertura apos novo login Windows. Nao
+  enviar WhatsApp a terceiros sem instrucao explicita.
+- Evidencia detalhada em [TESTES.md](TESTES.md) e tarefas em
+  [TASKS_SPRINTS_20261020.md](TASKS_SPRINTS_20261020.md).
+
+## Ciclo anterior - WhatsApp, desligamento e mapa mental (20/10/2026)
 
 - Escopo e aceite: [TASKS_SPRINTS_20261020_ENTREGA.md](TASKS_SPRINTS_20261020_ENTREGA.md).
   Sprints 1 a 4 enviadas em `ecf2df6`, `e81017b`, `a1bad7e`, `2dc4b85`.
   Ajuste de migracao e acesso ao mapa sem PDF em `f29c77c`.
-  **Nao gerar APK, instalador, pacote ou atualizador** ate o usuario pedir
-  expressamente, mesmo apos todos os testes passarem. Commit/push por sprint.
+  A restricao de build foi encerrada pelo pedido expresso de entrega final
+  registrado acima. Commit/push por sprint.
 - O usuario esclareceu: **APK sem PIN/senha de acesso; MQTT conserva senha e
   token como ja configurados**. Nao mudar broker nem retirar autenticacao MQTT.
 - WhatsApp: o app antigo confundia o marcador `8. Enviando` com entrega.
@@ -56,6 +90,8 @@
   ate novo build solicitado pelo usuario.
 
 ## Ciclo anterior - 20/10/2026
+
+As linhas abaixo registram o estado antes da entrega final descrita acima.
 
 - Pedido e tarefas: [TASKS_SPRINTS_20261020.md](TASKS_SPRINTS_20261020.md).
   Commits ja enviados: sprint 1 `a3977a9`, sprint 2 `0ae930a`, sprint 3
@@ -174,15 +210,16 @@
   NotebookLM ainda pede login interativo; uso real no outro PC e celular segue
   sem aceite. Detalhes em `docs/TESTES.md` e `docs/GUIA_SSD_PORTATIL.md`.
 
-## Pendencias dependentes do usuario
+## Pendencias no PC de destino
 
 1. Conferir as linhas do log do envio no outro PC para fechar a causa exata;
    autenticar WhatsApp em CONFIG no proprio PC se a sessao estiver ausente.
-2. Provar no destino com recebimento real nos numeros escolhidos, NotebookLM
-   real, mapa mental e desligamento depois de uma tarefa real. Esses testes
-   podem ter efeitos externos; no laboratorio so houve verificacao de sessao.
-3. O SSD permanece no outro PC. Ao voltar a ficar acessivel, conferir e eliminar
-   as pastas antigas autorizadas, preservando a pasta pessoal; validar os dois
-   celulares e o inicio no logon. Nao declarar essa limpeza concluida daqui.
-4. Goldens Flutter e artefatos de APK/pacote/instalador/atualizador aguardam
-   pedido expresso do usuario. Nao iniciar build por iniciativa propria.
+2. Testar driver e gravacao com audio real, instalar o APK nos dois celulares,
+   conferir conexao e programacao, concluir um estudo real a 100% e verificar
+   o inicio automatico apos nova entrada no Windows. Ative o inicio automatico
+   para o usuario Windows desse PC com o comando incluido na pasta pessoal.
+3. Confirmar, com destinatarios de teste escolhidos pelo usuario, o recebimento
+   WhatsApp, o estudo NotebookLM, o mapa mental e o desligamento configurado.
+   Essas provas tem efeitos externos; nao foram executadas nesta entrega.
+4. A pasta antiga ficou na Lixeira do SSD, fora da raiz ativa. A pasta pessoal
+   restaurada e atualizada esta na raiz. Evite restaurar a pasta antiga sobre ela.

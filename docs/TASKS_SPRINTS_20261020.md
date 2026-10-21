@@ -69,27 +69,28 @@ gravacoes ou perfil NotebookLM no Git.
 
 ## Sprint 5 - integracao e entrega
 
-- [ ] S5.1 Executar testes completos Python/Flutter e verificacoes de interface;
-  revisar documentacao, versao e estado do Git.
-- [ ] S5.2 Somente agora gerar APK, pacote publico, instalador generico e
-  atualizador da pasta pessoal; conferir checksums e instalar no PC/SSD de
-  destino quando ele estiver acessivel. Nao gerar um instalador privado a
-  partir dos dados deste laboratorio.
-- [ ] S5.3 Fazer aceite real: PC online estavel no APK, programacao sincronizada,
-  progresso 100% ao concluir e inicio apos nova entrada no Windows.
-- [ ] S5.4 Atualizar README/contexto/evidencias e commitar/push final.
+- [x] S5.1 Suite Python e Flutter completas, 40 testes Flutter, analise Flutter,
+  sintaxe JavaScript e referencias visuais da tela principal aprovadas.
+- [x] S5.2 APK 2.7.0+13, pacote publico, instalador generico e atualizador
+  pessoal gerados. Instalador, ZIP e APK copiados para o SSD e conferidos por
+  SHA-256. A pasta pessoal do SSD foi atualizada, com 7.861 arquivos publicos
+  validos e dados privados preservados. Nenhum instalador privado novo foi
+  gerado a partir do laboratorio.
+- [ ] S5.3 O agente pessoal abriu no SSD e respondeu online/status/listagem
+  pelo MQTT sem desconexao observada; ao encerrar, o broker mostrou offline.
+  Ainda faltam a prova nos dois celulares, um estudo real concluido a 100% e
+  uma nova entrada no Windows do PC de destino.
+- [x] S5.4 README, contexto, guias e evidencias atualizados; correcao do
+  atualizador e documentacao enviadas no commit final da sprint.
 
-Se o SSD permanecer fora deste PC, a instalacao e o aceite final dependem de
-acesso a ele ou de execucao orientada no PC onde esta conectado. Ao encontrar
-essa ou outra limitacao, consultar o usuario antes de escolher alternativa.
+O SSD foi conectado a este PC e esta pronto para ir ao PC de destino. A prova
+de driver de audio, celulares e nova entrada no Windows depende desse PC.
 
 Estado de trabalho: o usuario confirmou que nao quer pedir PIN no APK, operara
 com dois celulares e autorizou a identidade MQTT separada do laboratorio. O
 agente usa no PC as credenciais administrativas ja configuradas, sem pedir PIN
 ao celular; o token MQTT salvo no telefone continua necessario para conectar.
-O inicio automatico do laboratorio foi registrado para o usuario Windows atual,
-resolvendo o volume em vez de fixar a letra D:. O SSD esta em outro PC: o aceite
-real da instalacao pessoal e dos dois celulares ainda depende dele. Nenhum
-APK/pacote/instalador novo foi gerado neste ciclo. Antes do build final, falta
-o usuario esclarecer se "sem senha" inclui eliminar a configuracao inicial do
-token MQTT, pois isso exige mudar o acesso ao broker.
+O inicio automatico do laboratorio permanece registrado neste usuario Windows.
+O inicio automatico pessoal foi testado e desativado apenas neste PC para nao
+disputar a porta 8080; no PC de destino, use o comando incluido no SSD.
+"Sem senha" significa sem PIN no APK; a senha e o token MQTT permanecem.

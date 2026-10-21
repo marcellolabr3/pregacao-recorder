@@ -315,7 +315,7 @@ precisar de novo login ao mudar de conta Windows.
 - Windows limpo, PC destino, controle pelo celular e sessoes externas ainda
   precisam de aceite real; NotebookLM segue exigindo login interativo.
 
-## Reinstalacao do SSD (20/10/2026, estado atual)
+## Reinstalacao do SSD (20/10/2026, estado anterior)
 
 - `E:\PregacaoRecorder-Pessoal` nao estava presente quando o SSD foi revisto; a
   pasta antiga `E:\PregacaoRecorder` havia reaparecido incompleta. A origem da
@@ -340,3 +340,54 @@ precisar de novo login ao mudar de conta Windows.
   porta; a abertura completa aguarda autorizacao para interromper essa copia
   temporariamente. A pasta antiga ainda aparece no SSD: a exclusao
   foi bloqueada por revisao automatica, e seu destino aguarda instrucao do usuario.
+
+## Entrega final com SSD conectado (20/10/2026)
+
+- Suite Python completa passou; Flutter concluiu 40 testes, `flutter analyze`
+  nao apontou problemas e `node --check` passou. As duas referencias visuais
+  da pagina principal foram atualizadas e revisadas. O APK release 2.7.0+13
+  tem SHA-256 `CEC2A680D8738099F1FDEAA459B390B25D6F9789D2C6608922D0EEC1D889C0C1`.
+  `apksigner` confirmou a mesma assinatura do APK anterior. O PIN nao e pedido
+  no APK; credenciais/token MQTT continuam necessarios.
+- Pacote publico `PregacaoRecorder-release-20261020T214011232587Z.zip`
+  (7.861 arquivos inventariados e manifesto) passou o smoke dos runtimes;
+  SHA-256 `5EC345E72E7204EE41839EF268C2A220E0684696E6F8D4B5560A397209B57CAF`.
+  Instalador `PregacaoRecorder-Instalar-release-20261020T214011232587Z.exe`
+  passou 11 provas isoladas de instalacao/reinstalacao/backup/recusa/remocao;
+  SHA-256 `BF7F2233FAFF8DAD613D807338E8A07C318D64FF93AA783A00C6A4682CA8418D`.
+  Instalador, ZIP, APK e sidecars foram copiados para a raiz do SSD `E:` e
+  comparados por SHA-256 com a origem.
+- A pasta pessoal estava na Lixeira do SSD, identificada pelos manifestos,
+  banco e `portable-state.json`. Ela foi restaurada em
+  `E:\PregacaoRecorder-Pessoal`; a pasta antiga permanece apenas na Lixeira.
+  Antes da atualizacao havia 16 sessoes, 16 uploads concluidos, 6 jobs e 16
+  gravacoes (13.769.525 bytes); SQLite `quick_check` retornou `ok`.
+- O primeiro atualizador tentava substituir todos os arquivos, inclusive os
+  identicos, e parou em arquivos do Playwright. A versao corrigida usa
+  `Check: NeedsUpdate` com SHA-256 e atualizou o SSD. O log confirmou registro
+  do inicio automatico com saida 0 e fechamento da instalacao; o processo Inno
+  permaneceu ativo apos o log fechar e foi encerrado depois da validacao.
+  Essa limpeza final do processo ainda merece teste no PC de destino; o
+  conteudo instalado passou verificacao independente completa. Apos a correcao,
+  os 24 testes de `tests/test_installer_builder.py` passaram, incluindo o
+  inventario e os hashes gerados para o atualizador.
+- Atualizador final:
+  `PregacaoRecorder-Pessoal-Atualizar-update-20261020T222820Z.exe`, SHA-256
+  `7F6BDE8C4E0348AD0B6BB1DDAD0D14984729862D023BB8CFB2076F2F5AC64025`.
+  O manifesto instalado tem essa versao, 7.861 hashes publicos corretos, APK
+  2.7 correto, os seis arquivos privados criticos inalterados antes da abertura,
+  16 gravacoes com o mesmo total de bytes e banco integro. O diagnostico
+  `app.launcher --verificar` do runtime no SSD saiu com 0.
+- A abertura real do SSD iniciou gravador e agente, o painel respondeu HTTP
+  200 com estado `IDLE` e mostrou programacao. Um cliente MQTT/TLS temporario
+  recebeu `online` e estado retido; `STATUS` e `PREGACAO_LISTAR` tiveram ACK
+  positivo, sem desconexao observada. Ao encerrar a instancia pessoal, o
+  estado retido passou a `offline`. O laboratorio foi reiniciado em 8080,
+  `IDLE`, com inicio automatico ativo. O inicio automatico pessoal foi
+  desativado apenas neste PC; ha comandos no SSD para ativa-lo no outro PC.
+  A abertura normal atualizou banco/config/token local sem perder as 16
+  sessoes, 16 uploads, 6 jobs ou 16 gravacoes; `quick_check` continuou `ok`.
+- Pendente no outro PC: testar driver e gravacao com audio real, instalar o APK
+  nos dois celulares e confirmar a interface, concluir um estudo real e
+  verificar o inicio apos nova entrada no Windows. Nenhuma mensagem WhatsApp
+  foi enviada nesta entrega.

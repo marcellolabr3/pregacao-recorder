@@ -71,6 +71,19 @@ begin
   end;
 end;
 
+function NeedsUpdate(Relative, ExpectedSHA256: String): Boolean;
+var
+  Target: String;
+begin
+  Target := AddBackslash(ExpandConstant('{app}')) + Relative;
+  RequireRegularAncestors(Target);
+  if not FileExists(Target) then begin
+    Result := True;
+    Exit;
+  end;
+  Result := Lowercase(GetSHA256OfFile(Target)) <> Lowercase(ExpectedSHA256);
+end;
+
 function RunningInstallation: Boolean;
 var
   Locator, Services, Processes, Process: Variant;

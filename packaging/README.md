@@ -144,19 +144,18 @@ python packaging/verify_personal_portable.py E:\PregacaoRecorder-Pessoal
 A montagem usa pasta curta por causa dos caminhos do perfil do navegador no
 Windows. `verify_personal_portable.py` confere o estado imediatamente apos a
 instalacao; dados privados podem mudar legitimamente com o uso. O instalador
-privado esta na raiz do SSD e em `dist-pacote/`, fora do Git. A pasta pessoal
-foi reinstalada em 20/10/2026; a pasta antiga `E:\PregacaoRecorder` reapareceu
-incompleta naquela data. O usuario autorizou sua eliminacao, mas o SSD esta
-em outro PC e ainda precisa ser conferido la. Uma copia anterior
-da pasta antiga foi arquivada em `recovery/ssd-root-archive-20261020/`, ignorado pelo Git.
-Nao publicar esses artefatos. Consulte
+privado original permanece em `dist-pacote/`, fora do Git. A pasta pessoal
+foi restaurada da Lixeira do SSD e atualizada em 20/10/2026; a pasta antiga
+permanece apenas na Lixeira, fora da raiz ativa. Uma copia anterior da pasta
+antiga foi arquivada em `recovery/ssd-root-archive-20261020/`, ignorada pelo
+Git. Nao publicar esses artefatos. Consulte
 [GUIA_SSD_PORTATIL.md](../docs/GUIA_SSD_PORTATIL.md) para uso, celular,
 contas e testes no outro PC.
 
 ## Atualizar a pasta pessoal existente
 
-Quando o SSD estiver em outro PC, use o atualizador sem estado privado. Ele
-leva o pacote publico novo e o APK, aceita somente a pasta
+Para novas versoes, use o atualizador sem estado privado. Ele leva o pacote
+publico novo e o APK, aceita somente a pasta
 `PregacaoRecorder-Pessoal` ja instalada, confere que ela esta fechada e faz uma
 copia dos arquivos publicos antigos em `gravador/recovery/update-*` dentro
 dessa pasta. Nao leva nem substitui configuracao, banco, contas, perfis,
@@ -170,9 +169,11 @@ ao inicio automatico encontrar o SSD mesmo se a letra mudar.
   --iscc '.bundle-cache\inno-7.1.0\compiler\ISCC.exe'
 ```
 
-Copie o `.exe` e o `.exe.sha256` resultantes para dentro da pasta pessoal no SSD,
-feche as tarefas e o programa, execute o atualizador e confira a pasta escolhida
-na tela do instalador. Assim a raiz do SSD nao ganha outra pasta. Nao
+O atualizador `update-20261020T222820Z` ja foi aplicado a pasta pessoal no
+SSD; o APK 2.7 tambem esta nela. Para uma versao futura, copie o `.exe` e o
+`.exe.sha256` resultantes para dentro da pasta pessoal no SSD, feche as tarefas
+e o programa, execute o atualizador e confira a pasta escolhida na tela do
+instalador. Assim a raiz do SSD nao ganha outra pasta. Nao
 execute o `build_personal_portable.py` com dados do laboratorio para atualizar
 o SSD real: esse montador incorpora o estado privado da maquina de origem.
 

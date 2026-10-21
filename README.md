@@ -17,15 +17,15 @@ executar `iniciar-tudo.bat --verificar`. Opcoes e logs: [operacao Windows](docs/
 ## Edicao pessoal no SSD
 
 No SSD, use `PregacaoRecorder-Pessoal\Iniciar Pregacao.cmd` sob a letra atribuida
-pelo Windows. `Verificar Pacote.cmd` confere as dependencias. O SSD esta no
-outro PC; o usuario informou que abriu o programa e entrou no NotebookLM la.
-A revisao 2.7.0+13 do APK e o atualizador da pasta pessoal estao em preparacao.
-O atualizador preserva contas, banco, gravacoes e o login feito no outro PC.
+pelo Windows. `Verificar Pacote.cmd` confere as dependencias. A pasta pessoal
+foi atualizada no SSD com o pacote final e preservou contas, banco, gravacoes
+e sessoes. O APK 2.7.0+13, o instalador publico Windows e o ZIP estao na raiz
+do SSD, junto dos arquivos SHA-256 e de `INSTALAR-NO-OUTRO-PC.txt`.
 O laboratorio usa identidade MQTT propria (`pregacao-lab-aska`); a instalacao
 pessoal conserva a identidade real. Ao usar o SSD, confira audio, conexao dos
 dois celulares e contas conforme o [guia do SSD](docs/GUIA_SSD_PORTATIL.md)
-e o [roteiro de aceite](docs/ACEITE_WINDOWS.md). A pasta antiga do SSD sera
-conferida e eliminada quando essa unidade estiver acessivel.
+e o [roteiro de aceite](docs/ACEITE_WINDOWS.md). O inicio automatico pessoal
+deve ser ativado uma vez no outro PC pelo comando incluido na pasta do SSD.
 
 ## Fluxo implementado
 
@@ -49,8 +49,7 @@ e falha. Aceite pelo servidor ainda nao comprova entrega no telefone. Um estudo
 pronto pode ser reenviado a outros numeros pelo painel, usando o PDF existente.
 
 O codigo do aplicativo Android tambem distingue aceite e envio incerto na
-barra de progresso. O APK instalado so recebera esse texto quando um novo
-APK for gerado a pedido do usuario.
+barra de progresso. O APK 2.7.0+13 gerado para esta entrega inclui esse texto.
 
 O mapa mental e opcional: marque a caixa em CONFIG e escreva as instrucoes no
 campo proprio. O NotebookLM gera um mapa do mesmo estudo; o painel permite

@@ -29,12 +29,16 @@ def prepare_update(bundle: Path, apk: Path, output: Path) -> tuple[Path, Path]:
     entries = []
     for relative in files:
         source = marker if relative == "package-manifest.json" else bundle / relative
+        expected = sha256(marker) if relative == "package-manifest.json" else manifest["files"][relative]
         parent = str(PurePosixPath(relative).parent).replace("/", "\\")
         destination = "{app}" if parent == "." else "{app}\\" + inno_string(parent)
         entries.append('Source: "' + inno_string(str(source)) + '"; DestDir: "'
-                       + destination + '"; Flags: ignoreversion')
+                       + destination + '"; Flags: ignoreversion; Check: NeedsUpdate('
+                       + "'" + relative.replace("'", "''").replace("/", "\\") + "', '"
+                       + expected + "')")
     entries.append('Source: "' + inno_string(str(apk))
-                   + '"; DestDir: "{app}"; Flags: ignoreversion')
+                   + '"; DestDir: "{app}"; Flags: ignoreversion; Check: NeedsUpdate('
+                   + "'" + apk.name.replace("'", "''") + "', '" + sha256(apk) + "')")
     (work / "update-files.iss").write_text("\n".join(entries) + "\n",
                                              encoding="utf-8-sig")
     inventory = [*files, apk.name]
