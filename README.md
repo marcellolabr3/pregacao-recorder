@@ -53,6 +53,8 @@ O novo aplicativo para os dois celulares e
 `dist-pacote/PregacaoControle-2.8.apk`, versao
 `2.8.0+14`. SHA-256:
 `CC3D4E3DBC3E1F3A2AF4F592C98F975330A22E60DE574CAB9FB7FD20F3779CC2`.
+O APK e um artefato local de build, ignorado pelo Git; o repositorio contem
+o codigo-fonte e as instrucoes para recompilar.
 `apksigner` validou o APK e confirmou o mesmo certificado da versao anterior;
 atualize por cima do aplicativo instalado para preservar a configuracao.
 O APK traz descarte da gravacao, barra dourada ate verde, indicacao vermelha de
