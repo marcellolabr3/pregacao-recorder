@@ -18,7 +18,9 @@
   6.059 privados. Banco `integrity_check=ok`, com 16 sessoes, 16 uploads e
   6 jobs; 16 gravacoes do gravador, 9 audios do pipeline, 18 saidas/estudos,
   perfis WhatsApp e NotebookLM. O APK interno coincide com o release 2.8 e o
-  guia interno descreve esta versao. Nenhum instalador/backup foi copiado para E:.
+  guia interno descreve esta versao. O `.exe` e seu `.exe.sha256` foram copiados
+  para a raiz da E: e o SHA-256 da copia foi conferido; nenhuma pasta de
+  backup, runtime avulso ou ZIP foi copiada.
 
 ## Interface, cancelamento e APK 2.8 (21/10/2026)
 
@@ -40,8 +42,8 @@
 - O usuario relatou que o teste funcional anterior foi bem-sucedido. Esta
   versao do descarte e do novo visual foi validada em testes isolados; falta
   confirmar em uma gravacao real e nos dois celulares. A unidade E: vista
-  neste PC estava vazia, sem a pasta pessoal; por isso o instalador completo
-  anterior ainda contem a versao anterior ate o SSD correto ser conectado.
+  neste PC estava vazia, sem a pasta pessoal; a nova copia 2.8 foi montada a
+  partir do snapshot local de 20/10, com essa data explicita no nome.
 - `packaging/build_bundle.py --skip-zip` montou
   `PregacaoRecorder-release-20261021T115915854351Z` a partir da revisao
   `f747cd5`: 7.863 arquivos publicos no manifesto, com o novo modulo de

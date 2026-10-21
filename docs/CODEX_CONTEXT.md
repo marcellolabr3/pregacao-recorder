@@ -27,7 +27,7 @@
   e APKs antigos. Preserva configuracao, banco consistente, perfil NotebookLM,
   sessao WhatsApp, gravacoes, estudos e imagens configuradas. Testes de
   montagem/inventario: 35 passaram.
-- Prova final local (ainda NAO colocada em E:):
+- Instalador datado colocado na raiz da E: e mantido tambem localmente:
   `dist-pacote/PregacaoRecorder-Completo-Instalar-local-20261021T123058021736Z-snapshot-20261020.exe`,
   582.581.299 bytes; SHA-256
   `978084DD1C3808C2BA56CF8621AAD78D7B06FA9831B15DD99C80E757E28CF643`.
@@ -35,9 +35,12 @@
   16 audios de gravador, 9 audios no pipeline, 18 arquivos de estudo/saida,
   5.879 arquivos de sessao WhatsApp e 129 de NotebookLM; APK 2.8 conferido.
   Guia interno 2.8 presente. Sem recovery, logs, cache/teste ou APK 2.7.
-- A copia de prova so deve ir para E: como entrega final se o usuario confirmar
-  que o snapshot 20/10 e a origem desejada. Se houver pasta pessoal mais atual,
-  montar novamente dela e colocar so `.exe` e `.exe.sha256` na raiz da E:.
+  O SHA-256 da copia em E: foi conferido. A raiz da E: contem somente esse `.exe`,
+  seu `.exe.sha256` e `System Volume Information` do Windows.
+- O nome `snapshot-20261020` explicita que contas e gravacoes sao dessa data.
+  Se houver pasta pessoal mais atual, montar novamente dela e substituir apenas
+  os dois arquivos da entrega, sem copiar backup, pasta de montagem ou runtime
+  avulso. Nao declarar que inclui dados posteriores a 20/10.
 
 ## Interface e descarte (21/10/2026)
 
