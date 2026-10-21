@@ -36,9 +36,15 @@
   smoke Playwright isolado, 40 testes Flutter e analise Flutter passaram.
   A build release e a copia para o SSD sao registradas em `docs/TESTES.md`.
 - Durante esta tarefa, o SSD pessoal nao estava montado (somente C: e D:).
-  Nao afirmar que a versao nova esta no SSD ou no instalador completo anterior
-  ate atualizar e conferir esses artefatos. Manter gravador/agente fechados,
-  conforme pedido do usuario.
+  Depois apareceu uma unidade E: vazia, sem `PregacaoRecorder-Pessoal`.
+  O pacote publico `release-20261021T115915854351Z` passou no smoke (7.863
+  arquivos, revisao `f747cd5`); o atualizador
+  `PregacaoRecorder-Pessoal-Atualizar-update-20261021T120614Z.exe` foi
+  compilado com APK 2.8 e SHA-256
+  `3C1667775AA01C59D63F23DA660C3715944038CE2CE86D0D3D9DE9501691272E`.
+  Nao foi aplicado. Nao afirmar que a versao nova esta no SSD ou no instalador
+  completo anterior ate atualizar e conferir esses artefatos. Manter
+  gravador/agente fechados, conforme pedido do usuario.
 
 ## Instalacao completa local a partir do SSD (21/10/2026)
 

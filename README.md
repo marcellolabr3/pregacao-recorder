@@ -38,6 +38,13 @@ sem o SSD e registra o inicio automatico para o usuario Windows local. Leia
 O instalador publico sem dados foi preservado em `Pacote-Publico-Sem-Dados`.
 Esse instalador foi montado antes da reorganizacao de CONFIG e ainda precisa
 ser atualizado a partir do SSD pessoal atual para incluir esta interface.
+O pacote Windows atualizado esta em
+`dist-pacote/PregacaoRecorder-release-20261021T115915854351Z` e o atualizador
+pessoal pronto em
+`dist-pacote/PregacaoRecorder-Pessoal-Atualizar-update-20261021T120614Z.exe`.
+O atualizador foi compilado, mas nao aplicado: a unidade `E:` acessivel agora
+nao contem `PregacaoRecorder-Pessoal`. Depois de acessar a pasta pessoal atual,
+o instalador completo pode ser reconstruido com os dados mais recentes.
 
 A pasta `PregacaoRecorder-Pessoal` no SSD continua disponivel para uso portatil
 e backup. Nao inicie as duas copias ao mesmo tempo: elas conservam a mesma

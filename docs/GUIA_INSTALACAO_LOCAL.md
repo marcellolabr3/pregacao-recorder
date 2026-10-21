@@ -5,6 +5,11 @@ o historico, os estudos e as gravacoes da pasta pessoal atual do SSD. Ele
 instala uma copia em %LOCALAPPDATA%\PregacaoRecorder-Pessoal para o usuario
 Windows atual. Depois da instalacao, a copia local funciona sem o SSD.
 
+O instalador completo gerado antes da interface 2.8 ainda inclui o painel e
+APK anteriores. O pacote e o atualizador 2.8 ja foram compilados, mas um novo
+instalador completo depende da pasta pessoal atual do SSD. Nao use um backup
+antigo como origem se deseja levar todas as contas e gravacoes recentes.
+
 1. Feche o programa no SSD antes de instalar e antes de abrir a copia local.
    As duas copias usam a mesma identidade MQTT e nao devem rodar juntas.
 2. Execute PregacaoRecorder-Completo-Instalar-*.exe na raiz do SSD. O instalador

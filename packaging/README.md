@@ -165,7 +165,7 @@ ao inicio automatico encontrar o SSD mesmo se a letra mudar.
 ```powershell
 .venv\Scripts\python.exe -B packaging/build_personal_update.py `
   'dist-pacote\PregacaoRecorder-release-VERSAO' `
-  --apk 'flutter\pregacao_controle\PregacaoControle-2.7.apk' `
+  --apk 'dist-pacote\PregacaoControle-2.8.apk' `
   --iscc '.bundle-cache\inno-7.1.0\compiler\ISCC.exe'
 ```
 
@@ -176,6 +176,15 @@ e o programa, execute o atualizador e confira a pasta escolhida na tela do
 instalador. Assim a raiz do SSD nao ganha outra pasta. Nao
 execute o `build_personal_portable.py` com dados do laboratorio para atualizar
 o SSD real: esse montador incorpora o estado privado da maquina de origem.
+
+Para a interface 2.8, o pacote publico validado e
+`dist-pacote/PregacaoRecorder-release-20261021T115915854351Z`; o atualizador
+ja compilado e `dist-pacote/PregacaoRecorder-Pessoal-Atualizar-update-20261021T120614Z.exe`.
+O SSD pessoal atual ainda nao estava disponivel nesta etapa: a unidade E:
+montada estava vazia. Portanto esse atualizador e o APK 2.8 permanecem locais,
+sem aplicacao na pasta pessoal ou no instalador completo anterior. Quando a
+pasta estiver acessivel, feche os processos, atualize-a, confira os dados e so
+entao gere outro instalador completo com `build_personal_local.py`.
 
 O instalador pessoal e o atualizador registram o inicio ao entrar no Windows
 para o usuario atual. Na maquina instalada, estes comandos conferem, ativam ou

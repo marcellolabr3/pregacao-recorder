@@ -22,6 +22,18 @@
   confirmar em uma gravacao real e nos dois celulares. A unidade E: vista
   neste PC estava vazia, sem a pasta pessoal; por isso o instalador completo
   anterior ainda contem a versao anterior ate o SSD correto ser conectado.
+- `packaging/build_bundle.py --skip-zip` montou
+  `PregacaoRecorder-release-20261021T115915854351Z` a partir da revisao
+  `f747cd5`: 7.863 arquivos publicos no manifesto, com o novo modulo de
+  aparencia e favicon, sem `gravador/data`. O smoke confirmou imports isolados,
+  PDF/XLSX, Chromium e headless shell, CLI NotebookLM, modulos WhatsApp,
+  FFmpeg/MP3 sintetico e diagnostico sem iniciar servicos.
+- `build_personal_update.py` compilou
+  `PregacaoRecorder-Pessoal-Atualizar-update-20261021T120614Z.exe` (561.754.551
+  bytes), com os 7.863 arquivos publicos, manifesto e APK 2.8. SHA-256:
+  `3C1667775AA01C59D63F23DA660C3715944038CE2CE86D0D3D9DE9501691272E`.
+  O atualizador ainda nao foi aplicado: falta a pasta pessoal atual para
+  conferir dados e reconstruir o instalador completo do novo PC.
 
 ## Ciclo de envio, desligamento e mapa mental (20/10/2026)
 
