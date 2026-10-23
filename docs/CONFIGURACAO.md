@@ -17,6 +17,17 @@ pendentes: as limitacoes constam na auditoria (D09/D10).
 
 ## Renovar a sessao do NotebookLM
 
+Para a copia pessoal em outro PC, cadastre uma vez o token duravel com
+`.venv\Scripts\python.exe -B packaging/ativar_login_notebooklm.py`. O script
+usa o email da sessao NotebookLM existente ou solicita outro email, abre o
+Google uma vez e guarda o token em `data/notebooklm` dentro do projeto. O
+instalador pessoal inclui esse token quando presente e a sessão existente; no novo PC
+o aplicativo cria e renova os cookies sozinho. O celular mostra o estado e
+permite **DIAGNOSTICAR SESSAO** e **RENOVAR LOGIN NO PC** sem transmitir o token pelo MQTT.
+Se o token duravel nao estiver disponivel, a entrega pessoal inclui a sessao
+atual do NotebookLM e o botao de login continua disponivel quando ela expirar.
+Se o Google revogar o token, sera necessario um novo cadastro.
+
 Em CONFIG > ESTUDO AUTOMATICO, clicar em RENOVAR LOGIN uma vez. No PC do gravador,
 entrar novamente na conta Google com acesso ao NotebookLM e concluir as etapas
 pedidas pelo Google. A janela pode levar ate 10 minutos aguardando a entrada.
@@ -34,7 +45,3 @@ Cancelamento/falha mantem os estudos em espera e mostram uma orientacao no card.
 Um diagnostico posterior bem sucedido tambem remove o aviso de falha anterior.
 Detalhes tecnicos permanecem no `logs/login_nlm.log` do pipeline; nao compartilhar
 logs ou arquivos de autenticacao sem verificar dados sensiveis.
-
-Arquivos desta correcao: `app/estudos.py`, `web/static/app.js`,
-`web/templates/index.html`, `tests/test_estudos.py`, `tests/test_nlm_login.py`,
-`docs/CONFIGURACAO.md`, `docs/TESTES.md`, `docs/CODEX_CONTEXT.md`.

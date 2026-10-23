@@ -28,7 +28,7 @@ def public_path(relative: str) -> bool:
     if path.is_absolute() or ".." in path.parts or path.as_posix() != relative:
         return False
     if path.name.casefold() in {".env", ".npmrc", "google_token.json", "google_credentials.json",
-                                "storage_state.json", "creds.json", "cookies", "cookies.sqlite", "login data", "qr.png"}:
+                                "storage_state.json", "master_token.json", "creds.json", "cookies", "cookies.sqlite", "login data", "qr.png"}:
         return False
     if re.fullmatch(r"qr_\d+\.png", path.name, re.IGNORECASE):
         return False

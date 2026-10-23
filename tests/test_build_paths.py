@@ -47,8 +47,9 @@ def test_release_build_stages_and_tool_caches_inside_checkout(tmp_path, monkeypa
         calls.append((command, env))
         assert env is not None
         for name in ("TEMP", "TMP", "TMPDIR", "PUB_CACHE", "GRADLE_USER_HOME",
-                     "ANDROID_USER_HOME", "ANDROID_PREFS_ROOT", "NPM_CONFIG_CACHE"):
+                     "ANDROID_USER_HOME", "NPM_CONFIG_CACHE"):
             assert Path(env[name]).resolve().is_relative_to(project), name
+        assert "ANDROID_PREFS_ROOT" not in env
         if command[1:3] == ["build", "apk"]:
             apk = flutter_project / "build/app/outputs/flutter-apk/app-release.apk"
             apk.parent.mkdir(parents=True)

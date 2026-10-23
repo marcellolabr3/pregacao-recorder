@@ -1,9 +1,5 @@
-// Configuracao do operador, gravada uma unica vez no celular.
-//
-// Host, porta e ID do aparelho NAO sao segredos (estao no painel do
-// equipamento) e vem de fabrica: na pratica o operador digita so o TOKEN.
-// O token e credencial - por isso o armazenamento e protegido (Keystore no
-// Android, Keychain no iOS) e ele NUNCA esta no codigo do APK.
+// Configuracao do operador. A edicao pessoal do APK recebe os dados do
+// broker no build; as alteracoes feitas no celular ficam no Keystore.
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -32,6 +28,25 @@ class Configuracao {
   // valores de fabrica: identificadores PUBLICOS do servico remoto
   static const padraoServidor = 'd1901dc1.ala.us-east-1.emqxsl.com';
   static const padraoAparelho = 'pregacao-igreja-01';
+
+  /// Valores incorporados somente ao APK pessoal por --dart-define-from-file.
+  /// O build publico continua sem credenciais.
+  static Configuracao inicial() {
+    const servidor = String.fromEnvironment('PREGACAO_MOBILE_HOST');
+    const porta = String.fromEnvironment('PREGACAO_MOBILE_PORT');
+    const tls = String.fromEnvironment('PREGACAO_MOBILE_TLS');
+    const aparelho = String.fromEnvironment('PREGACAO_MOBILE_DEVICE_ID');
+    const usuario = String.fromEnvironment('PREGACAO_MOBILE_USERNAME');
+    const token = String.fromEnvironment('PREGACAO_MOBILE_PASSWORD');
+    return Configuracao(
+      servidor: servidor.isEmpty ? padraoServidor : servidor,
+      porta: int.tryParse(porta) ?? 8883,
+      tls: tls.isEmpty ? true : tls == 'true',
+      aparelho: aparelho.isEmpty ? padraoAparelho : aparelho,
+      usuario: usuario.isEmpty ? 'operador' : usuario,
+      token: token,
+    );
+  }
 
   /// Existe configuracao suficiente para tentar conectar? Sem token a tela
   /// principal mostra a orientacao, em vez de cair num erro de autenticacao
@@ -72,14 +87,14 @@ class ArmazenamentoSeguro {
   Future<Configuracao> carregar() async {
     try {
       final bruto = await _storage.read(key: _chave);
-      if (bruto == null || bruto.isEmpty) return Configuracao();
+      if (bruto == null || bruto.isEmpty) return Configuracao.inicial();
       final dados = jsonDecode(bruto);
       if (dados is Map<String, dynamic>) return Configuracao.fromJson(dados);
-      return Configuracao();
+      return Configuracao.inicial();
     } catch (_) {
       // armazenamento inacessivel (ex.: keystore corrompido): volta ao
       // padrao de fabrica em vez de travar o app
-      return Configuracao();
+      return Configuracao.inicial();
     }
   }
 

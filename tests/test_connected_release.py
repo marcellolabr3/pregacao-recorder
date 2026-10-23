@@ -96,6 +96,33 @@ def test_mismatched_google_token_rejected(builder, personal_source, tmp_path):
         builder.prepare_connection_overlay(personal_source, tmp_path / "bundle")
 
 
+def test_overlay_carries_notebooklm_token_and_current_session(builder, personal_source, tmp_path):
+    profile = personal_source / "data/notebooklm/profiles/default"
+    profile.mkdir(parents=True)
+    token = {"version": 1, "email": "me@example.com", "android_id": "abcdef12",
+             "master_token": "private-token"}
+    (profile / "master_token.json").write_text(json.dumps(token), encoding="utf-8")
+    (profile / "storage_state.json").write_text('{"cookies": ["old"]}', encoding="utf-8")
+    (profile / "browser_profile").mkdir()
+    bundle = tmp_path / "bundle"
+
+    files = builder.prepare_connection_overlay(personal_source, bundle)
+
+    assert files == (*builder.CONNECTION_FILES, builder.NOTEBOOKLM_TOKEN,
+                     builder.NOTEBOOKLM_STORAGE)
+    assert json.loads((bundle / builder.NOTEBOOKLM_TOKEN).read_text(encoding="utf-8")) == token
+    assert (bundle / builder.NOTEBOOKLM_STORAGE).is_file()
+    assert not (bundle / "gravador/data/notebooklm/profiles/default/browser_profile").exists()
+
+
+def test_invalid_notebooklm_token_rejected(builder, personal_source, tmp_path):
+    profile = personal_source / "data/notebooklm/profiles/default"
+    profile.mkdir(parents=True)
+    (profile / "master_token.json").write_text('{"email":"me@example.com"}', encoding="utf-8")
+    with pytest.raises(ValueError, match="Master token"):
+        builder.prepare_connection_overlay(personal_source, tmp_path / "bundle")
+
+
 def test_inno_entries_list_only_the_four_private_files(builder, personal_source, tmp_path):
     bundle = tmp_path / "bundle"
     files = builder.prepare_connection_overlay(personal_source, bundle)
@@ -108,3 +135,47 @@ def test_inno_entries_list_only_the_four_private_files(builder, personal_source,
     assert "D:/old" not in entries
     assert "#define ConnectedPersonalBuild" in script.read_text(encoding="utf-8-sig")
     assert '#include "connection-files.iss"' in (ROOT / "packaging/installer.iss").read_text(encoding="utf-8")
+
+
+def test_mobile_defines_use_operator_credential_and_saved_device(builder, personal_source, tmp_path):
+    bundle = tmp_path / "bundle"
+    builder.prepare_connection_overlay(personal_source, bundle)
+    mobile = builder.mobile_defines(bundle)
+    assert mobile == {
+        "PREGACAO_MOBILE_HOST": "broker.example",
+        "PREGACAO_MOBILE_PORT": "8883",
+        "PREGACAO_MOBILE_TLS": "true",
+        "PREGACAO_MOBILE_DEVICE_ID": "igreja-atual",
+        "PREGACAO_MOBILE_USERNAME": "operador",
+        "PREGACAO_MOBILE_PASSWORD": "operator-secret",
+    }
+    assert mobile["PREGACAO_MOBILE_PASSWORD"] != "broker-secret"
+
+
+def test_overlay_carries_whatsapp_auth_and_recipients(builder, personal_source, tmp_path):
+    pipeline = tmp_path / "pipeline"
+    auth = pipeline / "whatsapp/auth"
+    auth.mkdir(parents=True)
+    (auth / "creds.json").write_text('{"auth":"linked"}', encoding="utf-8")
+    (auth / "keys").mkdir()
+    (auth / "keys/key.json").write_text('{"key":"saved"}', encoding="utf-8")
+    env = personal_source / ".env"
+    env.write_text(env.read_text(encoding="utf-8").replace(
+        "PREGACAO_PIPELINE_HOME=D:/old/pipeline",
+        f"PREGACAO_PIPELINE_HOME={pipeline}"), encoding="utf-8")
+    settings = personal_source / "config/config.json"
+    config = json.loads(settings.read_text(encoding="utf-8"))
+    config["estudos"]["whatsapp"] = "5511999999999"
+    settings.write_text(json.dumps(config), encoding="utf-8")
+    bundle = tmp_path / "bundle"
+    files = builder.prepare_connection_overlay(personal_source, bundle)
+    assert builder.WHATSAPP_AUTH in files
+    assert (bundle / builder.WHATSAPP_AUTH / "keys/key.json").is_file()
+    assert json.loads((bundle / builder.CONNECTION_FILES[0]).read_text(
+        encoding="utf-8"))["estudos"]["whatsapp"] == "5511999999999"
+    script = tmp_path / "script/setup.iss"
+    script.parent.mkdir()
+    script.write_text("[Setup]\n", encoding="utf-8")
+    builder.write_private_entries(script, bundle, files)
+    entries = (script.parent / "connection-files.iss").read_text(encoding="utf-8-sig")
+    assert "recursesubdirs createallsubdirs" in entries

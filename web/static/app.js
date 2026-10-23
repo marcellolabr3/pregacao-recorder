@@ -614,7 +614,8 @@
     p = p || {};
     nlmUltimo = p;
     var login = p.login || {};
-    var ocupado = nlmLoginPedido || nlmDiagnostico || !!login.em_andamento;
+    var ocupado = nlmLoginPedido || nlmDiagnostico ||
+      !!p.diagnostico_em_andamento || !!login.em_andamento;
     var mapa = {
       ok: ["● SESSAO ATIVA", "var(--green2)"],
       auth: ["○ SESSAO EXPIRADA", "var(--amber)"],
@@ -634,7 +635,7 @@
       orientacao = login.estado === "verificando"
         ? "Login recebido. Aguarde a confirmacao da sessao; o painel atualiza sozinho."
         : "Entre na sua conta na janela do navegador do PC e conclua o login. O painel confirma quando estiver pronto.";
-    } else if (nlmDiagnostico) {
+    } else if (nlmDiagnostico || p.diagnostico_em_andamento) {
       el.textContent = "VERIFICANDO SESSAO";
       el.style.color = "var(--amber)";
       orientacao = "Verificando a sessao do NotebookLM. Aguarde o resultado.";
@@ -656,6 +657,10 @@
     }
     var mensagem = $("cfgNlmLogin");
     if (mensagem) mensagem.textContent = orientacao;
+    var token = $("cfgNlmToken");
+    if (token) token.textContent = p.master_token
+      ? "Renovacao automatica configurada."
+      : "Renovacao automatica depende da sessao atual; use RENOVAR LOGIN se expirar.";
     var pend = $("cfgNlmPend");
     if (pend) {
       pend.textContent = p.aguardando

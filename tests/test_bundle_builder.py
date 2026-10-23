@@ -84,6 +84,9 @@ def test_runtime_lock_contains_exact_hashes_and_correct_notebooklm():
     assert lines
     assert all(re.fullmatch(r'[A-Za-z0-9_.-]+==[^ ]+ --hash=sha256:[a-f0-9]{64}', line) for line in lines)
     assert 'notebooklm-py==0.8.5 ' in text
+    assert 'notebooklm-py[headless]==0.8.5' in (ROOT / 'packaging/requirements-runtime.in').read_text()
+    assert 'gpsoauth==2.0.0 ' in text
+    assert 'pycryptodomex==3.24.1 ' in text
     assert '\nnotebooklm==' not in text
     assert 'openpyxl==3.1.5 ' in text
     # Installed NotebookLM uses its dedicated browser profile. Do not ship

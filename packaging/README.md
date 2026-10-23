@@ -1,9 +1,9 @@
 # Entrega Windows e Android
 
-A entrega pessoal atual está em `E:\Gerador de Estudo\`: o instalador Windows
-preserva a configuração MQTT e a autorização OAuth do Google Drive, enquanto o
-APK permanece separado. Esse instalador contém credenciais e deve ficar fora do
-GitHub. Para recriá-lo com as conexões atuais, use
+A entrega pessoal é gerada como dois arquivos independentes: o instalador Windows
+com MQTT, Google Drive, NotebookLM e WhatsApp, e o APK com a conexão MQTT do
+operador já preenchida. Ambos contêm credenciais e ficam fora do GitHub. Para
+recriá-los com as conexões atuais, use
 `build_connected_release.py` conforme a seção **Instalador pessoal** abaixo.
 
 ## Edição pública sem credenciais
@@ -65,20 +65,33 @@ atalhos ou registro no Windows:
 .venv\Scripts\python.exe -B packaging/smoke_installer.py
 ```
 
-Os montadores antigos que copiavam histórico, gravações e sessões foram movidos
-para `.OLD/packaging/`; eles não fazem parte do build atual.
-
 ## Instalador pessoal
 
-Para a entrega pessoal que mantém apenas as conexões do PC atual, use:
+Para gerar o instalador e o APK pessoal no mesmo diretório, use:
 
 ```powershell
-.venv\Scripts\python.exe -B packaging/build_connected_release.py --output "E:\Gerador de Estudo\Gerador de Estudo.exe"
+.venv\Scripts\python.exe -B packaging/build_connected_release.py --output "dist-pacote-pessoal\Gerador de Estudo.exe"
 ```
 
-Esse instalador inclui as preferências e credenciais MQTT, o cliente OAuth e o
-token renovável do Google Drive. O marcador portátil ajusta os caminhos de
-estudos e gravações no primeiro início. Ele não inclui banco, gravações,
-backups, perfis de navegador ou sessões de WhatsApp/NotebookLM. O APK continua
-separado; ao atualizar no mesmo celular, a configuração protegida é mantida.
-A cópia pessoal deve permanecer privada porque contém credenciais.
+O APK `Controle Android.apk` aparece ao lado do instalador e já recebe host,
+porta, TLS, ID do equipamento, usuário `operador` e o token do operador. O
+instalador inclui a credencial MQTT do PC, o cliente OAuth e o token renovável
+do Google Drive. Ele também copia a sessão atual do NotebookLM e, quando
+existir, a sessão vinculada do WhatsApp e os destinatários configurados.
+Depois do build, copie os dois arquivos e seus `.sha256` para a mídia de entrega;
+esta entrega foi copiada para a raiz de `E:\` e verificada por SHA-256.
+
+Para o NotebookLM conseguir recriar a sessão mesmo depois de todos os cookies
+expirarem, faça uma autorização durável no navegador antes de gerar a entrega:
+
+```powershell
+.venv\Scripts\python.exe -B packaging/ativar_login_notebooklm.py --account voce@gmail.com
+```
+
+O script grava o token durável em `data/notebooklm/profiles/default/master_token.json`
+e verifica a sessão. Sem esse token, o build ainda leva a sessão atual existente;
+se ela expirar, **RENOVAR LOGIN** no painel ou **RENOVAR LOGIN NO PC** no APK
+abre o navegador do PC. O `LEIA-ME.txt` identifica qual modo foi incluído.
+O marcador portátil ajusta os caminhos de estudos e gravações no primeiro
+início. Banco, gravações e backups não entram na entrega. Atualizar o APK no
+mesmo celular preserva as alterações de conexão feitas no aparelho.

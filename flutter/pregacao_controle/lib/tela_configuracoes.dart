@@ -1,6 +1,5 @@
-// Configuracoes do operador: os dados PUBLICOS do servico remoto ja vem de
-// fabrica (host, porta, ID) - na pratica quem digita algo novo e so o TOKEN,
-// que e credencial e fica gravado no armazenamento protegido do aparelho.
+// Configuracoes do operador: a edicao pessoal ja traz a conexao completa;
+// alteracoes feitas no celular ficam no armazenamento protegido do aparelho.
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -111,7 +110,7 @@ class _TelaConfiguracoesState extends State<TelaConfiguracoes> {
               labelText: 'Token',
               helperText:
                   'Credencial dos operadores (cartao CONTROLE REMOTO do '
-                  'equipamento). Nunca fica no codigo do aplicativo.',
+                  'equipamento). Na edicao pessoal ja vem preenchida.',
             ),
           ),
           const SizedBox(height: 18),

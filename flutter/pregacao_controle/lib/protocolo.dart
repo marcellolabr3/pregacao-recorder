@@ -93,6 +93,15 @@ class EstadoEquipamento {
   final String storageAviso;
   final int freeMb;
   final int recoveryPending;
+  final bool estudosAtivo;
+  final String notebooklmEstado;
+  final String notebooklmDetalhe;
+  final bool notebooklmMasterToken;
+  final bool notebooklmDiagnostico;
+  final bool notebooklmLoginEmAndamento;
+  final String notebooklmLoginEstado;
+  final String notebooklmLoginDetalhe;
+  final int estudosAguardando;
   final List<EventoHistorico> recentEvents;
 
   const EstadoEquipamento({
@@ -116,6 +125,15 @@ class EstadoEquipamento {
     this.storageAviso = '',
     this.freeMb = 0,
     this.recoveryPending = 0,
+    this.estudosAtivo = false,
+    this.notebooklmEstado = 'desconhecido',
+    this.notebooklmDetalhe = '',
+    this.notebooklmMasterToken = false,
+    this.notebooklmDiagnostico = false,
+    this.notebooklmLoginEmAndamento = false,
+    this.notebooklmLoginEstado = '',
+    this.notebooklmLoginDetalhe = '',
+    this.estudosAguardando = 0,
     this.recentEvents = const [],
   });
 
@@ -123,6 +141,8 @@ class EstadoEquipamento {
   factory EstadoEquipamento.fromJson(Map<String, dynamic> json) {
     final recording = (json['recording'] as Map<String, dynamic>?) ?? const {};
     final uploads = (json['uploads'] as Map<String, dynamic>?) ?? const {};
+    final estudos = (json['estudos'] as Map<String, dynamic>?) ?? const {};
+    final login = (estudos['login'] as Map<String, dynamic>?) ?? const {};
     double numero(dynamic v) => (v is num) ? v.toDouble() : 0;
     int inteiro(dynamic v) => (v is num) ? v.toInt() : 0;
     return EstadoEquipamento(
@@ -146,6 +166,15 @@ class EstadoEquipamento {
       storageAviso: json['storage_aviso'] as String? ?? '',
       freeMb: inteiro(json['free_mb']),
       recoveryPending: inteiro(json['recovery_pending']),
+      estudosAtivo: estudos['ativo'] == true,
+      notebooklmEstado: estudos['estado'] as String? ?? 'desconhecido',
+      notebooklmDetalhe: estudos['detalhe'] as String? ?? '',
+      notebooklmMasterToken: estudos['master_token'] == true,
+      notebooklmDiagnostico: estudos['diagnostico_em_andamento'] == true,
+      notebooklmLoginEmAndamento: login['em_andamento'] == true,
+      notebooklmLoginEstado: login['estado'] as String? ?? '',
+      notebooklmLoginDetalhe: login['detalhe'] as String? ?? '',
+      estudosAguardando: inteiro(estudos['aguardando']),
       recentEvents: json['recent_events'] is List
           ? (json['recent_events'] as List)
               .whereType<Map<String, dynamic>>()

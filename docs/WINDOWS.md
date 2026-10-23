@@ -93,8 +93,7 @@ scripts\pregacao.cmd logs -f
 
 Os logs de inicializacao ficam em `logs/inicializacao.log`, `logs/inicio-gravador.log`
 e `logs/inicio-agente.log`. Os servicos continuam usando `logs/pregacao.log` e
-`logs/pregacao-agente.log`. A ferramenta antiga de migracao de caminhos foi
-arquivada em `.OLD/source/_instalador/` e nao e executada pelo iniciador.
+`logs/pregacao-agente.log`.
 
 ## Atualizar
 

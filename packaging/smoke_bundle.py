@@ -31,7 +31,7 @@ def main(argv=None):
 import importlib, importlib.util, json, pathlib, sys, tempfile
 from io import BytesIO
 expected = pathlib.Path(sys.executable).parent.resolve()
-for name in ('flask','werkzeug','waitress','googleapiclient.discovery','google_auth_oauthlib','google_auth_httplib2','paho.mqtt.client','openpyxl','notebooklm','markdown','xhtml2pdf','playwright'):
+for name in ('flask','werkzeug','waitress','googleapiclient.discovery','google_auth_oauthlib','google_auth_httplib2','paho.mqtt.client','openpyxl','notebooklm','gpsoauth','Cryptodome','markdown','xhtml2pdf','playwright'):
     module = importlib.import_module(name)
     if getattr(module, '__file__', None):
         assert pathlib.Path(module.__file__).resolve().is_relative_to(expected), name

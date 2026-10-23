@@ -21,8 +21,8 @@
 # concluidos ficam intactos. Assim que a sessao volta (login pelo painel
 # ou checagem periodica), os jobs em espera voltam para PENDENTE e
 # continuam DIRETO do NotebookLM, sem refazer gravacao nem upload. A
-# checagem periodica e moderada e passiva: falha de rede nao invalida
-# nada e nenhum refresh roda em loop.
+# checagem periodica e moderada: falha de rede nao invalida nada. Com um
+# master token local, a sessao expirada e recriada sem navegador.
 #
 # PERSISTENCIA (S2): a fila NAO e mais memoria - cada disparo e uma linha
 # na tabela `jobs` do SQLite (estado/etapa/prova gravada). Job nao se perde
@@ -81,6 +81,9 @@ _saude = {
 }
 _ultima_renovacao = 0.0  # evita refresh em rajada quando vrios jobs em espera
 _vigia: Optional[threading.Thread] = None
+_trava_diagnostico = threading.Lock()
+_diagnostico_thread: Optional[threading.Thread] = None
+_diagnostico_em_andamento = False
 # sequencia de marcos do progresso (S3): sempre crescente, ver _seq()
 _trava_seq = threading.Lock()
 _ultima_seq = 0
@@ -129,6 +132,26 @@ _DETALHE = {
 
 def _cfg(chave: str) -> str:
     return str(config.get("estudos." + chave, "") or "").strip()
+
+
+def master_token_presente() -> bool:
+    """Indica se o perfil do CLI tem a credencial duravel, sem le-la na API."""
+    _usar_token_do_projeto()
+    home = Path(os.environ.get("NOTEBOOKLM_HOME") or Path.home() / ".notebooklm")
+    perfil = os.environ.get("NOTEBOOKLM_PROFILE", "default")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", perfil) or perfil in (".", ".."):
+        return False
+    token = home / "profiles" / perfil / "master_token.json"
+    return token.is_file() and not token.is_symlink()
+
+
+def _usar_token_do_projeto() -> None:
+    """No modo fonte, usar o token cadastrado dentro de D:/Dev do projeto."""
+    if os.environ.get("NOTEBOOKLM_HOME") or bundled_runtime.is_bundled():
+        return
+    home = Path(__file__).resolve().parent.parent / "data" / "notebooklm"
+    if (home / "profiles" / "default" / "master_token.json").is_file():
+        os.environ["NOTEBOOKLM_HOME"] = str(home)
 
 
 def ligado() -> bool:
@@ -284,25 +307,26 @@ def _renovar_sessao() -> bool:
     prog = _nlm_programa(pasta)
     if not pasta or not _programa_existe(prog):
         return False
-    agora = time.time()
-    if agora - _ultima_renovacao < _RENOVAR_INTERVALO:
-        log.info("renovacao pulada: ja tentada ha pouco")
-        return False
-    _ultima_renovacao = agora
+    with _trava_nlm:
+        agora = time.time()
+        if agora - _ultima_renovacao < _RENOVAR_INTERVALO:
+            log.info("renovacao pulada: ja tentada ha pouco")
+            return False
+        _ultima_renovacao = agora
 
-    prefixo = _nlm_prefixo(pasta, prog)
-    tentativas = [["auth", "refresh", "--allow-headless", "--verify"]]
-    if not bundled_runtime.is_bundled():
-        navegador = _nlm_navegador().lower()
-        navegador = "edge" if navegador in ("msedge", "edge") else navegador
-        tentativas.insert(0, ["auth", "refresh", "--browser-cookies", navegador, "--verify"])
-    for args in tentativas:
-        codigo, texto = _executar_nlm(prefixo + args, Path(pasta), 300)
-        log.info("auth refresh %s: codigo %s", args[2], codigo)
-        if texto.strip():
-            log.info("auth refresh saida: %s", texto.strip()[:400])
-        if codigo == 0:
-            return True
+        prefixo = _nlm_prefixo(pasta, prog)
+        tentativas = [["auth", "refresh", "--allow-headless", "--verify"]]
+        if not bundled_runtime.is_bundled() and not master_token_presente():
+            navegador = _nlm_navegador().lower()
+            navegador = "edge" if navegador in ("msedge", "edge") else navegador
+            tentativas.insert(0, ["auth", "refresh", "--browser-cookies", navegador, "--verify"])
+        for args in tentativas:
+            codigo, texto = _executar_nlm(prefixo + args, Path(pasta), 300)
+            log.info("auth refresh %s: codigo %s", args[2], codigo)
+            if texto.strip():
+                log.info("auth refresh saida: %s", texto.strip()[:400])
+            if codigo == 0:
+                return True
     return False
 
 
@@ -360,6 +384,8 @@ def status() -> Dict[str, Any]:
     pendentes = contagens.get("AGUARDANDO_INTERVENCAO", 0)
     fila = contagens.get("PENDENTE", 0)
     motivo = db.job_motivo() if pendentes else ""
+    with _trava_diagnostico:
+        diagnostico_em_andamento = _diagnostico_em_andamento
     if not ligado():
         return {
             "ativo": False,
@@ -370,6 +396,8 @@ def status() -> Dict[str, Any]:
             "motivo": "",
             "fila": fila,
             "login": _status_login(),
+            "master_token": master_token_presente(),
+            "diagnostico_em_andamento": diagnostico_em_andamento,
             # a barra da cadeia nao depende do recurso estar ligado: o
             # estado da ULTIMA gravacao/estudo continua sendo a verdade
             "job": _job_publico(),
@@ -384,6 +412,8 @@ def status() -> Dict[str, Any]:
         "motivo": motivo,
         "fila": fila,
         "login": _status_login(),
+        "master_token": master_token_presente(),
+        "diagnostico_em_andamento": diagnostico_em_andamento,
         "job": _job_publico(),
         "barra": barra(),
     }
@@ -397,7 +427,7 @@ def diagnosticar() -> Dict[str, Any]:
         return status()
     estado = verificar_saude(force=True)
     renovada = False
-    if estado == "auth":
+    if estado == "auth" or (estado == "desconhecido" and master_token_presente()):
         log.info("diagnostico: tentando renovar a sessao")
         if _renovar_sessao():
             _definir("ok", "sessao renovada automaticamente")
@@ -414,6 +444,37 @@ def diagnosticar() -> Dict[str, Any]:
     resultado["renovada"] = renovada
     resultado["retomados"] = retomados
     return resultado
+
+
+def _diagnostico_remoto() -> None:
+    global _diagnostico_em_andamento
+    try:
+        diagnosticar()
+    except Exception:
+        log.exception("diagnostico remoto do NotebookLM falhou")
+    finally:
+        with _trava_diagnostico:
+            _diagnostico_em_andamento = False
+
+
+def solicitar_diagnostico() -> Dict[str, Any]:
+    """Agenda verificacao/renovacao sem segurar o ACK do celular por minutos."""
+    global _diagnostico_thread, _diagnostico_em_andamento
+    if not ligado():
+        raise ValueError("estudo automatico nao configurado neste equipamento")
+    with _trava_diagnostico:
+        if _diagnostico_em_andamento:
+            return {"solicitado": False, "em_andamento": True}
+        _diagnostico_em_andamento = True
+        _diagnostico_thread = threading.Thread(
+            target=_diagnostico_remoto, name="notebooklm-diagnostico", daemon=True
+        )
+        try:
+            _diagnostico_thread.start()
+        except Exception:
+            _diagnostico_em_andamento = False
+            raise
+    return {"solicitado": True, "em_andamento": True}
 
 
 def _status_login() -> Dict[str, Any]:
@@ -545,13 +606,14 @@ def _keepalive() -> None:
     prog = _nlm_programa(pasta)
     if not pasta or not _programa_existe(prog):
         return
-    agora = time.time()
-    if agora - _ultima_renovacao < _RENOVAR_INTERVALO:
-        return
-    _ultima_renovacao = agora
-    codigo, texto = _executar_nlm(
-        _nlm_prefixo(pasta, prog) + ["auth", "refresh", "--verify"], Path(pasta), 120
-    )
+    with _trava_nlm:
+        agora = time.time()
+        if agora - _ultima_renovacao < _RENOVAR_INTERVALO:
+            return
+        _ultima_renovacao = agora
+        codigo, texto = _executar_nlm(
+            _nlm_prefixo(pasta, prog) + ["auth", "refresh", "--verify"], Path(pasta), 120
+        )
     log.info("keepalive (auth refresh --verify): codigo %s", codigo)
     if codigo != 0 and texto.strip():
         log.warning("keepalive saida: %s", texto.strip()[:300])
@@ -643,14 +705,15 @@ def iniciar() -> None:
     recomendada pelo proprio CLI para uso desassistido). A verificacao e
     somente leitura; falha de rede nao invalida nada (o ultimo estado
     conhecido permanece); com a sessao confirmada valida roda o
-    keepalive oficial e retoma o que estiver em espera. Com a sessao
-    morta, o vigia NAO tenta renovar em loop - renovacao acontece no
-    disparo (uma vez) ou no botao.
+    keepalive oficial e retoma o que estiver em espera. Com master token,
+    uma sessao morta e recuperada na ronda seguinte; sem ele, a renovacao
+    permanece no disparo ou no botao.
 
     Antes de tudo, a recuperacao pos-reinicio dos jobs interrompidos
     (idempotente: so toca em EXECUTANDO).
     """
     global _vigia
+    _usar_token_do_projeto()
     retomar_apos_reinicio()
     if _vigia is not None and _vigia.is_alive():
         return
@@ -659,12 +722,17 @@ def iniciar() -> None:
 
 
 def _vigia_loop() -> None:
+    primeiro = True
     while True:
         try:
             intervalo = float(config.get("estudos.saude_intervalo", 1200) or 1200)
         except (TypeError, ValueError):
             intervalo = 1200.0
-        time.sleep(max(60.0, intervalo))
+        # O instalador pessoal pode trazer apenas master_token.json. No
+        # primeiro inicio, criar os cookies imediatamente, sem esperar 20 min.
+        if not (primeiro and master_token_presente()):
+            time.sleep(max(60.0, intervalo))
+        primeiro = False
         try:
             if not ligado() or _login_ativo():
                 continue
@@ -672,6 +740,10 @@ def _vigia_loop() -> None:
             if estado == "ok":
                 _keepalive()
                 _retomar_pendentes()
+            elif estado in ("auth", "desconhecido") and master_token_presente():
+                if _renovar_sessao():
+                    _definir("ok", "sessao renovada automaticamente")
+                    _retomar_pendentes()
             # a casa nao se limpa sozinha: logs do estudo tambem rodam
             # aqui dentro do mesmo passeio periodico
             _limpar_logs_antigos()
@@ -681,8 +753,8 @@ def _vigia_loop() -> None:
             if db.job_contagens().get("PENDENTE"):
                 _iniciar()
                 _evento.set()
-            # auth: so atualiza o indicador; a renovacao acontece no
-            # disparo ou no botao, nunca em loop
+            # Com master token, a proxima ronda tambem recupera uma sessao
+            # expirada; _renovar_sessao limita a frequencia das tentativas.
         except Exception:  # noqa: BLE001 - o vigia nunca morre
             log.exception("falha no periodo de saude do NotebookLM")
 

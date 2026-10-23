@@ -43,6 +43,24 @@ Future<void> _capturar(
 }
 
 void main() {
+  testWidgets('NotebookLM oferece diagnostico e renovacao do login no APK',
+      (tester) async {
+    final controlador = MqttControlador(Configuracao(token: 'x'));
+    controlador.conectadoBroker = true;
+    controlador.equipamentoOnline = true;
+    controlador.estado = const EstadoEquipamento(
+      state: 'IDLE',
+      estudosAtivo: true,
+      notebooklmEstado: 'auth',
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: AppScope(controlador: controlador, child: const TelaPrincipal()),
+    ));
+    expect(find.text('DIAGNOSTICAR SESSAO'), findsOneWidget);
+    expect(find.text('RENOVAR LOGIN NO PC'), findsOneWidget);
+    controlador.dispose();
+  });
+
   testWidgets('previa: sem token (primeira abertura)', (tester) async {
     final controlador = MqttControlador(Configuracao());
     await _capturar(tester, controlador, 'principal_sem_token.png');

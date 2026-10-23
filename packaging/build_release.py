@@ -60,12 +60,12 @@ def main(argv=None) -> int:
     for folder in (cache / "pub", cache / "gradle", cache / "android", cache / "npm", stage_root):
         folder.mkdir(parents=True, exist_ok=True)
     build_env = dict(os.environ)
+    build_env.pop("ANDROID_PREFS_ROOT", None)
     build_env.update({
         "TEMP": str(stage_root), "TMP": str(stage_root), "TMPDIR": str(stage_root),
         "PUB_CACHE": str(cache / "pub"),
         "GRADLE_USER_HOME": str(cache / "gradle"),
         "ANDROID_USER_HOME": str(cache / "android"),
-        "ANDROID_PREFS_ROOT": str(cache / "android"),
         "NPM_CONFIG_CACHE": str(cache / "npm"),
     })
     print("1/3 Preparando APK Android", flush=True)

@@ -48,6 +48,7 @@ def test_tampered_payload_rejected_before_compilation(bundle):
     "pipeline/config.json", "pipeline/whatsapp/auth/creds.json", "pipeline/whatsapp/qr.png",
     "gravador/app/../../.env", "runtime/../private", "runtime/file\nother", "runtime/file\\other",
     "gravador/web/profile.sqlite", "runtime/profile/.env", "runtime/python/profile/google_token.json",
+    "runtime/python/profile/master_token.json",
     "pipeline/node_modules/example/.env", "runtime/browsers/qr_12345.png"])
 def test_invalid_or_mutable_inventory_rejected(relative, bundle):
     marker = bundle / "package-manifest.json"

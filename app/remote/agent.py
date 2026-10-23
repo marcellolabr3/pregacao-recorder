@@ -63,6 +63,7 @@ COMMANDS = (
     # espelho do painel: conta Google e destino de gravacao
     "DRIVE_STATUS", "DRIVE_CONNECT", "DRIVE_FINISH",
     "DRIVE_DISCONNECT", "DRIVE_TEST",
+    "NLM_STATUS", "NLM_REFRESH", "NLM_RECONNECT",
     "STORAGE_LIST", "STORAGE_SET",
     "PREGACAO_LISTAR", "PREGACAO_OBTER", "PREGACAO_CRIAR",
     "PREGACAO_ATUALIZAR", "PREGACAO_DELETAR",
@@ -138,6 +139,7 @@ def project_status(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     drive = snapshot.get("drive") or {}
     network = snapshot.get("network") or {}
     recovery = snapshot.get("recovery") or []
+    estudos = snapshot.get("estudos") or {}
     return {
         "device_id": snapshot.get("device_id"),
         "device_name": snapshot.get("device_name"),
@@ -157,6 +159,19 @@ def project_status(snapshot: Dict[str, Any]) -> Dict[str, Any]:
             "running": int(uploads.get("running") or 0),
             "done": int(uploads.get("done") or 0),
             "failed": int(uploads.get("failed") or 0),
+        },
+        "estudos": {
+            "ativo": bool(estudos.get("ativo")),
+            "estado": str(estudos.get("estado") or "desconhecido"),
+            "detalhe": str(estudos.get("detalhe") or ""),
+            "master_token": bool(estudos.get("master_token")),
+            "diagnostico_em_andamento": bool(estudos.get("diagnostico_em_andamento")),
+            "aguardando": int(estudos.get("aguardando") or 0),
+            "login": {
+                "em_andamento": bool((estudos.get("login") or {}).get("em_andamento")),
+                "estado": str((estudos.get("login") or {}).get("estado") or ""),
+                "detalhe": str((estudos.get("login") or {}).get("detalhe") or ""),
+            },
         },
         "drive_connected": bool(drive.get("connected")),
         "network_online": bool(network.get("online")),
@@ -185,6 +200,7 @@ def signature(payload: Dict[str, Any]) -> str:
     """
     recording = payload.get("recording") or {}
     uploads = payload.get("uploads") or {}
+    estudos = payload.get("estudos") or {}
     return "|".join(
         str(part)
         for part in (
@@ -203,6 +219,14 @@ def signature(payload: Dict[str, Any]) -> str:
             payload.get("api_ok"),
             payload.get("recording_dir"),
             payload.get("storage_aviso"),
+            estudos.get("estado"),
+            estudos.get("detalhe"),
+            estudos.get("master_token"),
+            estudos.get("diagnostico_em_andamento"),
+            estudos.get("aguardando"),
+            (estudos.get("login") or {}).get("em_andamento"),
+            (estudos.get("login") or {}).get("estado"),
+            (estudos.get("login") or {}).get("detalhe"),
             tuple(event["id"] for event in payload.get("recent_events", [])),
         )
     )
@@ -436,7 +460,9 @@ class LocalApi:
         todas as operacoes).
         """
         status, payload = self._authed(method, path, body)
-        if status != 403 or str(payload.get("error") or "") != "admin_obrigatorio":
+        if status != 403 or str(payload.get("error") or "") not in (
+            "admin_obrigatorio", "admin_necessario"
+        ):
             return status, payload
         if not self._logged() and not self.login():
             return status, payload
@@ -491,6 +517,15 @@ class LocalApi:
 
     def drive_test(self) -> Tuple[int, Dict[str, Any]]:
         return self._authed("POST", "/api/drive/test", {})
+
+    def nlm_status(self) -> Tuple[int, Dict[str, Any]]:
+        return self._authed("GET", "/api/estudos/status")
+
+    def nlm_refresh(self) -> Tuple[int, Dict[str, Any]]:
+        return self._admined("POST", "/api/estudos/solicitar-diagnostico", {})
+
+    def nlm_reconnect(self) -> Tuple[int, Dict[str, Any]]:
+        return self._admined("POST", "/api/estudos/reconectar", {})
 
     # -- armazenamento ---------------------------------------------------
     def storage_list(self) -> Tuple[int, Dict[str, Any]]:
@@ -876,6 +911,12 @@ class RemoteAgent:
                 code, payload = self.api.drive_disconnect()
             elif cmd == "DRIVE_TEST":
                 code, payload = self.api.drive_test()
+            elif cmd == "NLM_STATUS":
+                code, payload = self.api.nlm_status()
+            elif cmd == "NLM_REFRESH":
+                code, payload = self.api.nlm_refresh()
+            elif cmd == "NLM_RECONNECT":
+                code, payload = self.api.nlm_reconnect()
             # -- espelho do painel: onde gravar ---------------------------
             elif cmd == "STORAGE_LIST":
                 code, payload = self.api.storage_list()
@@ -951,6 +992,20 @@ class RemoteAgent:
                     }
                 elif cmd in ("DRIVE_DISCONNECT", "DRIVE_TEST"):
                     ack["folder_id"] = str(payload.get("folder_id") or "")
+                elif cmd == "NLM_STATUS":
+                    ack["estudos"] = {
+                        campo: payload.get(campo)
+                        for campo in ("ativo", "estado", "detalhe", "master_token",
+                                      "diagnostico_em_andamento", "aguardando", "login")
+                    }
+                elif cmd == "NLM_REFRESH":
+                    ack["detail"] = ("Verificacao da conta iniciada no PC."
+                                     if payload.get("solicitado") else
+                                     "Verificacao da conta ja em andamento no PC.")
+                elif cmd == "NLM_RECONNECT":
+                    ack["detail"] = ("Abrindo login do NotebookLM no PC. Conclua-o no navegador."
+                                     if payload.get("lancado") else
+                                     "Login do NotebookLM ja em andamento no PC.")
                 elif cmd == "STORAGE_LIST":
                     ack["storage"] = payload
                 elif cmd == "STORAGE_SET":

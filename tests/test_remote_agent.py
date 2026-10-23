@@ -141,6 +141,21 @@ class FakeApi:
         self.calls.append("drive_test")
         return 200, {"ok": True, "folder_id": "pasta123"}
 
+    def nlm_status(self):
+        self.calls.append("nlm_status")
+        return 200, {"ativo": True, "estado": "ok", "master_token": True,
+                     "aguardando": 0, "detalhe": "sessao valida",
+                     "diagnostico_em_andamento": False,
+                     "master_token_secret": "never-expose"}
+
+    def nlm_refresh(self):
+        self.calls.append("nlm_refresh")
+        return 202, {"solicitado": True, "em_andamento": True}
+
+    def nlm_reconnect(self):
+        self.calls.append("nlm_reconnect")
+        return 200, {"lancado": True, "em_andamento": True}
+
     def storage_list(self):
         self.calls.append("storage_list")
         return 200, STORAGE_FAKE
@@ -689,6 +704,32 @@ def test_comandos_de_drive_e_storage_fazem_parte_do_protocolo():
                 "DRIVE_DISCONNECT", "DRIVE_TEST",
                 "STORAGE_LIST", "STORAGE_SET"):
         assert cmd in COMMANDS
+    assert "NLM_STATUS" in COMMANDS
+    assert "NLM_REFRESH" in COMMANDS
+    assert "NLM_RECONNECT" in COMMANDS
+
+
+def test_notebooklm_no_celular_expoe_estado_sem_credenciais():
+    agent, _, api = make_agent()
+    status = agent.handle_command({"cmd": "NLM_STATUS", "req_id": "nlm1"})
+    assert status["ok"] is True
+    assert status["estudos"]["master_token"] is True
+    assert "master_token_secret" not in status["estudos"]
+    refresh = agent.handle_command({"cmd": "NLM_REFRESH", "req_id": "nlm2"})
+    assert refresh["ok"] is True
+    assert "iniciada" in refresh["detail"]
+    assert api.calls[-2:] == ["status", "nlm_refresh"]
+    login = agent.handle_command({"cmd": "NLM_RECONNECT", "req_id": "nlm3"})
+    assert login["ok"] is True
+    assert "navegador" in login["detail"]
+    assert api.calls[-2:] == ["status", "nlm_reconnect"]
+
+
+def test_estado_retido_muda_apos_renovacao_notebooklm():
+    old = project_status(base_snapshot(estudos={"ativo": True, "estado": "auth"}))
+    new = project_status(base_snapshot(estudos={"ativo": True, "estado": "ok",
+                                                 "master_token": True}))
+    assert signature(old) != signature(new)
 
 
 def test_parse_command_preserva_code_e_state_sensitivos_a_maiuscula():

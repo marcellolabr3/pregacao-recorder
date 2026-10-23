@@ -118,6 +118,31 @@ void main() {
       expect(st.apiOk, isTrue);
       expect(st.storageAviso, '');
     });
+
+    test('estado do NotebookLM mostra renovacao automatica no celular', () {
+      final st = EstadoEquipamento.fromJson(const {
+        'state': 'IDLE',
+        'estudos': {
+          'ativo': true,
+          'estado': 'ok',
+          'master_token': true,
+          'diagnostico_em_andamento': false,
+          'aguardando': 2,
+          'login': {
+            'em_andamento': true,
+            'estado': 'aguardando',
+            'detalhe': 'Conclua o login no PC',
+          },
+        },
+      });
+      expect(st.estudosAtivo, isTrue);
+      expect(st.notebooklmEstado, 'ok');
+      expect(st.notebooklmMasterToken, isTrue);
+      expect(st.estudosAguardando, 2);
+      expect(st.notebooklmLoginEmAndamento, isTrue);
+      expect(st.notebooklmLoginEstado, 'aguardando');
+      expect(st.notebooklmLoginDetalhe, 'Conclua o login no PC');
+    });
   });
 
   group('rotulos da tela', () {

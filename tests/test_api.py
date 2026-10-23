@@ -28,6 +28,25 @@ def _admin(client, pin="1234"):
     return client.post("/api/admin/login", json={"pin": pin})
 
 
+def test_diagnostico_notebooklm_remoto_exige_admin_e_agenda(client, monkeypatch):
+    from app import estudos
+
+    chamadas = []
+    monkeypatch.setattr(estudos, "solicitar_diagnostico",
+                        lambda: chamadas.append(True) or
+                        {"solicitado": True, "em_andamento": True})
+    rota = "/api/estudos/solicitar-diagnostico"
+    assert client.post(rota).status_code == 401
+    _login(client)
+    assert client.post(rota).status_code == 403
+    assert chamadas == []
+    _admin(client)
+    resposta = client.post(rota)
+    assert resposta.status_code == 202
+    assert resposta.get_json()["solicitado"] is True
+    assert chamadas == [True]
+
+
 # --------------------------------------------------------------------------
 def test_index_is_served(client):
     resp = client.get("/")

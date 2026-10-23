@@ -1334,6 +1334,17 @@ def register_routes(app, manager: RecordingManager, uploader: UploadWorker) -> N
             log.warning("diagnostico do NotebookLM falhou: %s", exc)
             return _err(f"Falha ao verificar a sessao: {exc}", 502)
 
+    @app.post("/api/estudos/solicitar-diagnostico")
+    @auth.require_auth
+    def estudos_solicitar_diagnostico():
+        if not auth.is_admin():
+            return _err("apenas administrador pode renovar a sessao", 403,
+                        "admin_necessario")
+        try:
+            return jsonify(estudos.solicitar_diagnostico()), 202
+        except ValueError as exc:
+            return _err(str(exc), 412, "estudo_nao_configurado")
+
     @app.post("/api/estudos/reconectar")
     @auth.require_auth
     def estudos_reconectar():

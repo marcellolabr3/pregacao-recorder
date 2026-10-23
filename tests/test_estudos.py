@@ -1,5 +1,6 @@
 # Estudo automatico: a fila que liga o gravador ao sermon-pipeline.
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from app.db import Database
 def _db_isolado(monkeypatch, tmp_path):
     """Cada teste com seu proprio banco: a fila e persistente (S2)."""
     monkeypatch.setattr(estudos, "db", Database(tmp_path / "jobs.db"))
+    monkeypatch.setenv("NOTEBOOKLM_HOME", str(tmp_path / "notebooklm"))
 
 
 class _Proc:
@@ -384,6 +386,49 @@ def test_keepalive_nao_roda_com_sessao_morta(monkeypatch, tmp_path):
     assert estudos.verificar_saude(force=True) == "auth"
     assert nlm and "refresh" not in " ".join(nlm[0])
     assert not any("refresh" in c for c in nlm)
+
+
+def test_token_duravel_recupera_sessao_sem_cookie_inicial(monkeypatch, tmp_path):
+    _cenario(monkeypatch, tmp_path)
+    home = tmp_path / "nlm-home"
+    profile = home / "profiles/default"
+    profile.mkdir(parents=True)
+    (profile / "master_token.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("NOTEBOOKLM_HOME", str(home))
+    nlm = _respostas_nlm(monkeypatch, check=(1, "Missing storage"),
+                         refresh=(0, "verified"))
+
+    result = estudos.diagnosticar()
+
+    assert result["estado"] == "ok"
+    assert result["master_token"] is True
+    assert result["renovada"] is True
+    assert ["auth", "refresh", "--allow-headless", "--verify"] == nlm[-1][1:]
+
+
+def test_diagnostico_remoto_e_assincrono_e_nao_duplica(monkeypatch, tmp_path):
+    _cenario(monkeypatch, tmp_path)
+    iniciou = threading.Event()
+    liberar = threading.Event()
+    chamadas = []
+
+    def diagnosticar():
+        chamadas.append(True)
+        iniciou.set()
+        liberar.wait(3)
+
+    monkeypatch.setattr(estudos, "diagnosticar", diagnosticar)
+    try:
+        assert estudos.solicitar_diagnostico()["solicitado"] is True
+        assert iniciou.wait(2)
+        assert estudos.solicitar_diagnostico() == {"solicitado": False,
+                                                   "em_andamento": True}
+        assert estudos.status()["diagnostico_em_andamento"] is True
+    finally:
+        liberar.set()
+        estudos._diagnostico_thread.join(timeout=3)
+    assert chamadas == [True]
+    assert estudos.status()["diagnostico_em_andamento"] is False
 
 
 def test_reconectar_agenda_login_monitorado_com_log(monkeypatch, tmp_path):
