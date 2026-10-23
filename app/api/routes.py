@@ -288,6 +288,13 @@ def system_status(manager: RecordingManager, uploader: UploadWorker) -> Dict[str
             "storage_atual": armazenamento,
             "storage_aviso": aviso_armazenamento,
             "estudos": est,
+            "recent_events": [
+                {"id": event["id"], "ts": event["ts"],
+                 "kind": event["kind"], "message": event["message"],
+                 "file": str((event.get("payload") or {}).get("path") or "")
+                         .replace("\\", "/").rsplit("/", 1)[-1]}
+                for event in db.list_events(limit=6)
+            ],
         }
     )
     if est.get("aguardando"):

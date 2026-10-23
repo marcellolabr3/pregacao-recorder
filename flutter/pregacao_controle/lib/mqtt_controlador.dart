@@ -238,6 +238,7 @@ class MqttControlador extends ChangeNotifier {
       topicos.state,
       topicos.events,
       topicos.jobs, // S3: progresso do estudo por job (retido)
+      topicos.history, // ultimos eventos persistidos, retidos para reconexao
     ]) {
       try {
         final r = client.subscribe(t, MqttQos.atLeastOnce);
@@ -361,6 +362,19 @@ class MqttControlador extends ChangeNotifier {
           final dados = jsonDecode(texto);
           if (dados is Map<String, dynamic>) {
             estado = EstadoEquipamento.fromJson(dados);
+            // O estado ja e retido pelo broker. Ele tambem restaura os eventos
+            // quando o topic opcional de historico nao foi autorizado.
+            if (dados['recent_events'] is List) {
+              eventos
+                ..clear()
+                ..addAll(estado!.recentEvents.map((evento) => evento.linha));
+              for (final evento in estado!.recentEvents) {
+                if (evento.kind == 'gravacao_pronta' && evento.file.isNotEmpty) {
+                  nomeArquivo = evento.file;
+                  break;
+                }
+              }
+            }
             notifyListeners();
           }
         } else if (topico == topicos.ack) {
@@ -377,6 +391,21 @@ class MqttControlador extends ChangeNotifier {
           final dados = jsonDecode(texto);
           if (dados is Map<String, dynamic>) {
             _aoEvento(EventoSistema.fromJson(dados));
+          }
+        } else if (topico == topicos.history) {
+          final dados = jsonDecode(texto);
+          if (dados is Map<String, dynamic>) {
+            final historico = lerHistorico(dados);
+            eventos
+              ..clear()
+              ..addAll(historico.take(6).map((evento) => evento.linha));
+            for (final evento in historico) {
+              if (evento.kind == 'gravacao_pronta' && evento.file.isNotEmpty) {
+                nomeArquivo = evento.file;
+                break;
+              }
+            }
+            notifyListeners();
           }
         } else if (topico == topicos.jobs) {
           if (texto.isEmpty) {
@@ -411,15 +440,23 @@ class MqttControlador extends ChangeNotifier {
           .last;
       if (nome.isNotEmpty) nomeArquivo = nome;
     }
-    final agora = DateTime.now();
-    final rotulo = '${agora.hour.toString().padLeft(2, '0')}:'
-        '${agora.minute.toString().padLeft(2, '0')}  '
-        '${evento.kind.isEmpty ? "evento" : evento.kind}  ${evento.message}';
-    eventos.insert(0, rotulo.trimRight());
+    eventos.insert(0, _rotuloEvento(evento));
     while (eventos.length > 6) {
       eventos.removeLast();
     }
     notifyListeners();
+  }
+
+  String _rotuloEvento(EventoSistema evento) {
+    final quando = evento.ts > 0
+        ? DateTime.fromMillisecondsSinceEpoch((evento.ts * 1000).round())
+        : DateTime.now();
+    return '${quando.day.toString().padLeft(2, '0')}/'
+        '${quando.month.toString().padLeft(2, '0')} '
+        '${quando.hour.toString().padLeft(2, '0')}:'
+        '${quando.minute.toString().padLeft(2, '0')}  '
+        '${evento.kind.isEmpty ? "evento" : evento.kind}  ${evento.message}'
+        .trimRight();
   }
 
   // ------------------------------------------------------------------

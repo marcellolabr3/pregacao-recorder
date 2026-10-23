@@ -7,7 +7,7 @@ desinstalador. Mantem instalacoes, backups e logs na pasta de evidencia impressa
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 import hashlib
 import importlib.util
 import json
@@ -99,7 +99,7 @@ def expect_files(root: Path, expected: dict[str, bytes]) -> None:
 
 
 def backups(target: Path) -> list[Path]:
-    parent = Path(str(target) + "-backups")
+    parent = Path(str(target) + "-dados-anteriores")
     return sorted(parent.iterdir()) if parent.exists() else []
 
 
@@ -119,9 +119,10 @@ def seed_private(target: Path) -> dict[str, bytes]:
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_bytes(data)
     database = target / "gravador/data/smoke.sqlite"
-    with sqlite3.connect(database) as connection:
-        connection.execute("CREATE TABLE jobs (id INTEGER PRIMARY KEY, estado TEXT)")
-        connection.execute("INSERT INTO jobs VALUES (1, 'AGUARDANDO_INTERVENCAO')")
+    with closing(sqlite3.connect(database)) as connection:
+        with connection:
+            connection.execute("CREATE TABLE jobs (id INTEGER PRIMARY KEY, estado TEXT)")
+            connection.execute("INSERT INTO jobs VALUES (1, 'AGUARDANDO_INTERVENCAO')")
     files["gravador/data/smoke.sqlite"] = database.read_bytes()
     return files
 
@@ -188,16 +189,16 @@ def check_unrecognized_directory(executable: Path, work: Path) -> None:
     require(code != 0 and "sem pacote reconhecido" in text.lower(), "Instalador aceitou pasta arbitraria existente")
     require(list(target.iterdir()) == [marker] and marker.read_bytes() == b"conteudo anterior sintetico",
             "Recusa escreveu na pasta arbitraria")
-    require(not Path(str(target) + "-backups").exists(), "Recusa criou backup de pasta arbitraria")
+    require(not Path(str(target) + "-dados-anteriores").exists(), "Recusa criou backup de pasta arbitraria")
 
 
 def check_blocked_backup(executable: Path, target: Path, work: Path, managed, private) -> None:
-    blocker = Path(str(target) + "-backups")
+    blocker = Path(str(target) + "-dados-anteriores")
     require(blocker.resolve().is_relative_to(work.resolve()) and not blocker.exists(), "Destino do bloqueio sintetico invalido")
     blocker.write_bytes(b"arquivo sintetico impedindo a pasta de backup")
     try:
         code, text = install(executable, target, work / "recusa-backup-bloqueado.log")
-        require(code != 0 and "copia de seguranca" in text.lower(), "Instalador ignorou falha ao criar backup")
+        require(code != 0 and "arquivar" in text.lower(), "Instalador ignorou falha ao arquivar dados")
         expect_files(target, managed)
         expect_files(target, private)
         require(blocker.read_bytes() == b"arquivo sintetico impedindo a pasta de backup", "Instalador substituiu bloqueio de backup")
@@ -250,7 +251,7 @@ def check_junction(executable: Path, target: Path, work: Path, managed, private)
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--iscc", type=Path, help="ISCC.exe do Inno Setup 7; somente compilacao local")
-    parser.add_argument("--work", type=Path, help="Nova pasta vazia para todas as evidencias; padrao TEMP")
+    parser.add_argument("--work", type=Path, help="Nova pasta vazia para todas as evidencias; padrao .w/ no projeto")
     options = parser.parse_args(argv)
     if os.name != "nt":
         parser.error("Este smoke executa o instalador Windows")
@@ -264,7 +265,9 @@ def main(argv=None) -> int:
             parser.error("--work deve ser uma pasta nova, para impedir uso de dados existentes")
         work.mkdir(parents=True)
     else:
-        work = Path(tempfile.mkdtemp(prefix="pregacao-installer-smoke-"))
+        work_root = ROOT / ".w"
+        work_root.mkdir(exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="s-", dir=work_root))
     print("EVIDENCIAS:", work, flush=True)
     report = {"work": str(work), "checks": {}, "uses_real_accounts": False,
               "writes_desktop_or_registry": False}
@@ -301,33 +304,40 @@ def main(argv=None) -> int:
         code, _ = install(exe2, target, work / "reinstalacao.log")
         require(code == 0, "Reinstalacao falhou")
         expect_files(target, managed2)
-        expect_files(target, private)
+        require(all(not (target / relative).exists() for relative in private),
+                "Reinstalacao deve comecar sem dados locais anteriores")
         saved = backups(target)
         require(len(saved) == 1, "Reinstalacao deveria criar exatamente um backup")
-        expect_files(saved[0], managed1)
-        expect_files(saved[0], {name: data for name, data in private.items() if "/recordings/" not in name})
-        require(not (saved[0] / "gravador/recordings").exists(), "Audios nao devem ser duplicados no backup")
-        with sqlite3.connect(target / "gravador/data/smoke.sqlite") as connection:
+        require((saved[0] / "gravador/config/default.json").read_bytes() ==
+                managed1["gravador/config/default.json"], "Config antiga nao foi arquivada")
+        expect_files(saved[0], private)
+        with closing(sqlite3.connect(saved[0] / "gravador/data/smoke.sqlite")) as connection:
             require(connection.execute("SELECT estado FROM jobs WHERE id=1").fetchone() == ("AGUARDANDO_INTERVENCAO",),
-                    "Registro SQLite nao foi preservado")
-        checks["reinstall_preserves_private_data_audio_profiles_sqlite"] = "PASS"
-        checks["backup_before_managed_replacement"] = "PASS"
+                    "Registro SQLite nao foi arquivado")
+        checks["reinstall_starts_clean_and_archives_previous_data"] = "PASS"
+        checks["previous_recordings_moved_without_copy"] = "PASS"
 
         with synthetic_process(target) as child:
-            expect_uninstall_refusal(target, work / "recusa-desinstalacao-processo.log", "Feche o programa", managed2, private)
+            expect_uninstall_refusal(target, work / "recusa-desinstalacao-processo.log", "Conclua gravacoes", managed2, {})
             require(child.poll() is None, "Desinstalador encerrou processo sintetico")
         checks["refuse_uninstall_live_process_without_killing"] = "PASS"
         with launcher_lock(target):
-            expect_uninstall_refusal(target, work / "recusa-desinstalacao-lock.log", "Desinstalacao cancelada", managed2, private)
+            expect_uninstall_refusal(target, work / "recusa-desinstalacao-lock.log", "Desinstalacao cancelada", managed2, {})
         checks["refuse_uninstall_launcher_lock"] = "PASS"
         code, _ = uninstall(target, work / "desinstalacao.log")
         require(code == 0, "Desinstalacao ociosa falhou")
         require(all(not (target / relative).exists() for relative in managed2), "Desinstalacao deixou componentes gerenciados")
-        expect_files(target, private)
+        require(all(not (target / relative).exists() for relative in private),
+                "Desinstalacao ressuscitou dados locais arquivados")
         require(backups(target) == saved, "Desinstalacao alterou pastas de backup")
-        expect_files(saved[0], managed1)
-        expect_files(saved[0], {name: data for name, data in private.items() if "/recordings/" not in name})
-        checks["uninstall_removes_managed_preserves_private_audio_profiles_backups"] = "PASS"
+        expect_files(saved[0], private)
+        checks["uninstall_removes_managed_preserves_archived_data"] = "PASS"
+        code, _ = install(exe2, target, work / "instalacao-apos-desinstalar.log")
+        require(code == 0, "Instalacao apos desinstalar falhou em pasta residual")
+        expect_files(target, managed2)
+        require(all(not (target / relative).exists() for relative in private),
+                "Pasta residual trouxe dados antigos para a instalacao nova")
+        checks["install_after_uninstall_with_residual_folder"] = "PASS"
         print(json.dumps(checks, ensure_ascii=False, indent=2))
         return 0
     except Exception as exc:

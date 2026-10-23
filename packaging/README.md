@@ -1,303 +1,84 @@
-# Pacote e instalador pessoal Windows
+# Entrega Windows e Android
 
-Monta o pacote completo e o instalador `.exe`, com gravador, pipeline e runtimes
-privados. Nao inclui contas ou dados pessoais. Configuracao e pareamento no
-destino: [guia curto](../docs/GUIA_INSTALACAO_WINDOWS.md).
+A entrega pessoal atual está em `E:\Gerador de Estudo\`: o instalador Windows
+preserva a configuração MQTT e a autorização OAuth do Google Drive, enquanto o
+APK permanece separado. Esse instalador contém credenciais e deve ficar fora do
+GitHub. Para recriá-lo com as conexões atuais, use
+`build_connected_release.py` conforme a seção **Instalador pessoal** abaixo.
 
-## Gerar
+## Edição pública sem credenciais
 
-Na maquina de build: Windows x64, Python 3.11 com pip, Node/npm e FFmpeg/ffprobe
-conhecidos. Essas ferramentas nao precisam estar instaladas no PC que usa o pacote.
-
-```powershell
-.venv\Scripts\python.exe -B packaging/build_bundle.py
-```
-
-O build baixa CPython embeddable 3.11.9 da origem oficial e verifica SHA256;
-instala as 62 distribuicoes Python fixadas em `requirements-runtime.lock`, com
-hashes, sem copiar `.venv`; usa `npm ci --omit=dev --ignore-scripts` com o lock
-Node do componente. Chromium e seu headless shell sao incluidos sem perfil autenticado. Pode aproveitar
-somente binarios gerenciados do cache Playwright, conferidos pela revisao esperada:
+Use `build_release.py` para gerar os dois artefatos independentes:
 
 ```powershell
-.venv\Scripts\python.exe -B packaging/build_bundle.py --browser-cache "$env:LOCALAPPDATA\ms-playwright"
+.venv\Scripts\python.exe -B packaging/build_release.py
 ```
 
-NotebookLM usa o perfil dedicado desse Chromium para login e renovacao
-`--allow-headless --verify`. O pacote nao inclui o extra opcional `rookie-cookies`,
-que le cookies de navegadores externos. O ambiente de desenvolvimento preserva
-as tentativas atuais de renovacao; nao foi alterado nem exige reinstalar dependencias.
+Saída em `dist-pacote/`:
 
-`--node`, `--ffmpeg` e `--ffprobe` permitem indicar os executaveis de build;
-`--output`, `--cache` e `--skip-zip` ajudam a repetir a montagem. Os binarios
-copiados precisam ser autonomos; o smoke verifica Node, FFmpeg/DirectShow e
-ffprobe com PATH isolado. Build requer internet/cache para dependencias, nao contas.
+- `Gerador de Estudo.exe` e `Gerador de Estudo.exe.sha256`;
+- `Controle Android.apk` e `Controle Android.apk.sha256`.
 
-## Gerar o instalador
+Requisitos na máquina de build: Windows x64, Python 3.11, Flutter com Android
+SDK, Node/npm, FFmpeg/ffprobe, Inno Setup 7 e acesso à internet ou cache das
+dependências. A máquina de destino recebe Python, Node, FFmpeg e Chromium dentro
+do instalador; não precisa dessas ferramentas de desenvolvimento. Use `--flutter`,
+`--iscc`, `--browser-cache`, `--cache` e `--output` para apontar outros caminhos.
+O cache padrão fica em `.bundle-cache/` e a montagem temporária em `.w/`,
+ambos dentro do projeto. Flutter, Gradle, Pub, npm e os testes de pacote usam
+essas pastas durante o build. Nenhuma pasta de montagem é criada na raiz de D:.
+O APK usa `.signing/debug.keystore` dentro do projeto para manter a assinatura
+das versões já instaladas; a chave é ignorada pelo Git e não entra no pacote.
 
-Depois de montar o pacote, use o compilador Inno Setup 7 apenas na maquina de
-build. O destino nao precisa dele. Download e verificacao na
-[origem oficial](https://jrsoftware.org/isdl.php); o build validado usa 7.1.0 x64,
-assinado por Pyrsys B.V. O compilador pode ficar em `.bundle-cache/`, em
-[modo portable](https://jrsoftware.org/ishelp/topic_technotes.htm).
+Depois de conferir os dois arquivos finais, `limpar_gerados.ps1` mostra os
+instaladores antigos, caches e o build intermediário do Flutter que podem ser
+removidos. A prévia não apaga nada; para executar a limpeza:
 
 ```powershell
-.venv\Scripts\python.exe -B packaging/build_installer.py `
-  'dist-pacote\PregacaoRecorder-release-VERSAO' `
-  --iscc '.bundle-cache\inno-7.1.0\compiler\ISCC.exe'
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging\limpar_gerados.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging\limpar_gerados.ps1 -Execute
 ```
 
-O montador verifica hashes e caminhos antes de compilar e inclui somente o
-inventario publico. Arquivos privados extras no diretorio de build nao entram
-no instalador. Saidas: `PregacaoRecorder-Instalar-release-VERSAO.exe`, checksum
-`.exe.sha256`, script gerado e log local em `dist-pacote/`.
+O script confere os hashes da entrega, limita a remoção aos artefatos gerados,
+recusa links/junções e preserva `recovery/`, `data/`, `recordings/`, `.venv/` e
+o compilador Inno usado pelo próximo build.
 
-Instala por usuario em `%LOCALAPPDATA%\PregacaoRecorder`, sem elevar privilegios,
-e cria um unico atalho na area de trabalho. Nao inicia servicos nem contas ao
-final da instalacao. Reinstalar preserva configuracao, banco, sessoes e audios;
-antes da substituicao copia os componentes anteriores e configuracao/dados para
-`PregacaoRecorder-backups\DATA-HORA`, ao lado do destino. Audios nao sao duplicados.
-Backups podem conter segredos e devem permanecer privados.
+O build inclui fontes por lista fechada, instala dependências Python fixadas
+por hash, obtém o Chromium da revisão do Playwright, executa um smoke offline do
+pacote e compila o Inno Setup. A pasta intermediária é temporária; o APK nunca
+entra no instalador. O manifesto validado impede incluir `.env`, banco, áudios,
+perfis de navegador, credenciais, tokens e arquivos que não pertençam ao código
+ou runtime. O instalador contém um desinstalador e aceita escolher a pasta.
 
-O instalador recusa processos ativos, trava do iniciador, juncoes e pastas
-preexistentes sem manifesto. Nao encerra processos. A desinstalacao exige
-ociosidade e remove componentes instalados, preservando dados criados pelo uso.
-O instalador generico nao migra contas entre PCs nem restaura automaticamente.
+Na instalação, o início automático é registrado apenas para o usuário Windows
+atual. A bandeja inicia os serviços sem abrir o navegador; o atalho da área de
+trabalho usa `app.launcher --abrir-painel`, que abre somente o endereço local.
+Ao desinstalar, o programa fecha os processos verificados dessa instalação se
+estiver ocioso. Instalar novamente no mesmo local move os dados locais para
+`<pasta>-dados-anteriores/<data>` antes de instalar uma cópia limpa. Não há
+cópia dos runtimes antigos nem duplicação das gravações.
 
-## Conteudo e uso
-
-- `gravador/`: fontes, painel, defaults publicos e exemplos.
-- `pipeline/`: fontes minimas e prompt preservado, template sem configuracao pessoal.
-- `runtime/`: Python/bibliotecas, Node, FFmpeg/ffprobe e Chromium.
-- `package-manifest.json`: origem da revisao, versoes e hashes dos arquivos.
-- `Iniciar Pregacao.cmd` e `Verificar Pacote.cmd`: usam somente o Python do pacote.
-- `Conectar WhatsApp.cmd`: Node privado, pareamento sem enviar arquivo.
-- `GUIA-INSTALACAO.md`: audio, contas, PINs e celular/broker.
-- `ACEITE_WINDOWS.md`: roteiro e registro das provas reais da sprint 3.
-
-Extraia a pasta completa para um destino gravavel. `Verificar Pacote.cmd` e
-somente leitura; `Iniciar Pregacao.cmd` inicia o programa e cria os caminhos locais
-iniciais, segredo local e identidade MQTT exclusiva quando ausentes. Selecionar
-audio/pasta e conectar contas continua necessario. Instale no destino definitivo:
-mover depois do primeiro uso pode invalidar os caminhos absolutos salvos.
-
-Saidas em `dist-pacote/`, cache em `.bundle-cache/`; ambos ignorados pelo Git.
-O ZIP, logs de build e dependencias nao sao commitados. A copia de fontes usa
-allowlist: nao leva `.env`, configuracao pessoal, banco, audios, logs, cookies,
-QRs, perfis ou o `node_modules` do PC original. Node e instalado a partir do lock.
-
-## Validar
-
-O build executa `smoke_bundle.py` com o Python privado e ambiente isolado:
-imports com origem conferida; PDF e XLSX locais; Chromium offline e perfil
-persistente headless sem canal explicito; versao e ajuda de login/refresh do
-NotebookLM; imports Node dentro do pacote; DirectShow e MP3 sintetico/ffprobe;
-diagnostico do launcher sem gravar configuracao. Sem login, conexao de conta,
-captura real, upload ou envio. Credenciais ausentes geram avisos esperados.
-
-Para repetir o smoke, a partir da raiz deste repositorio:
-
-```powershell
-& 'CAMINHO-DO-PACOTE\runtime\python\python.exe' -B packaging/smoke_bundle.py 'CAMINHO-DO-PACOTE'
-```
-
-A prova neste PC com PATH isolado nao substitui Windows limpo, driver/interface
-de audio e contas reais no destino. Essas provas permanecem na sprint 3.
-
-Fluxos da sprint 2 revisados: testar audio selecionado sem salvar; CONFIG valida
-e persiste por lote; MQTT e editavel no cartao administrativo, com senha/token
-vazios preservados. A CONFIG MQTT salva prevalece sobre o `.env` legado e exige
-reiniciar os servicos (guia: reiniciar Windows e abrir atalho). Os 488 testes
-isolados e as 11 provas do instalador passaram; resultados atuais em
-[TESTES.md](../docs/TESTES.md). Configuracao pessoal e aceite no destino pendentes.
-
-O instalador tambem tem smoke real com fixtures pequenas, sem contas, atalho ou
-registro no Windows. Compila a mesma logica, instala/reinstala em pasta temporaria,
-valida backup e preservacao e recusa processo ativo/lock/junction:
+Para validar o instalador com arquivos sintéticos, sem abrir contas nem criar
+atalhos ou registro no Windows:
 
 ```powershell
 .venv\Scripts\python.exe -B packaging/smoke_installer.py
 ```
 
-`--iscc` permite outro caminho do compilador. `--work` exige uma pasta nova.
-Builds `-smoke.exe` sao fixtures de validacao e nao devem ser entregues ao usuario.
+Os montadores antigos que copiavam histórico, gravações e sessões foram movidos
+para `.OLD/packaging/`; eles não fazem parte do build atual.
 
-Referencias: [task](../docs/TASK_DISTRIBUICAO_WINDOWS.md),
-[Python embeddable](https://docs.python.org/3.11/using/windows.html#the-embeddable-package),
-[Playwright browsers](https://playwright.dev/python/docs/browsers).
+## Instalador pessoal
 
-## Edicao pessoal no SSD
-
-O usuario autorizou explicitamente incorporar todas as contas e dados atuais
-no instalador privado. `build_personal_portable.py` valida um pacote publico,
-copia o estado local com backup consistente do SQLite, inclui o APK e cria
-instalador Inno sem registro/desinstalador. A pasta padrao e relativa ao
-proprio `.exe` (`{src}\PregacaoRecorder-Pessoal`); o primeiro inicio ajusta os
-caminhos absolutos quando a letra ou a pasta do SSD muda. Reinstalar preserva
-os dados privados existentes. O pacote generico acima continua sem dados.
+Para a entrega pessoal que mantém apenas as conexões do PC atual, use:
 
 ```powershell
-python packaging/build_personal_portable.py dist-pacote/PregacaoRecorder-sprint2-20261020T000353363243Z --iscc .bundle-cache/inno-7.1.0/compiler/ISCC.exe --stage-root D:\PRP
-python packaging/verify_personal_portable.py E:\PregacaoRecorder-Pessoal
+.venv\Scripts\python.exe -B packaging/build_connected_release.py --output "E:\Gerador de Estudo\Gerador de Estudo.exe"
 ```
 
-A montagem usa pasta curta por causa dos caminhos do perfil do navegador no
-Windows. `verify_personal_portable.py` confere o estado imediatamente apos a
-instalacao; dados privados podem mudar legitimamente com o uso. O instalador
-privado original permanece em `dist-pacote/`, fora do Git. A pasta pessoal
-foi restaurada da Lixeira do SSD e atualizada em 20/10/2026; a pasta antiga
-permanece apenas na Lixeira, fora da raiz ativa. Uma copia anterior da pasta
-antiga foi arquivada em `recovery/ssd-root-archive-20261020/`, ignorada pelo
-Git. Nao publicar esses artefatos. Consulte
-[GUIA_SSD_PORTATIL.md](../docs/GUIA_SSD_PORTATIL.md) para uso, celular,
-contas e testes no outro PC.
-
-## Atualizar a pasta pessoal existente
-
-Para novas versoes, use o atualizador sem estado privado. Ele leva o pacote
-publico novo e o APK, aceita somente a pasta
-`PregacaoRecorder-Pessoal` ja instalada, confere que ela esta fechada e faz uma
-copia dos arquivos publicos antigos em `gravador/recovery/update-*` dentro
-dessa pasta. Nao leva nem substitui configuracao, banco, contas, perfis,
-gravacoes ou credenciais do laboratorio. O numero de serie do volume permite
-ao inicio automatico encontrar o SSD mesmo se a letra mudar.
-
-```powershell
-.venv\Scripts\python.exe -B packaging/build_personal_update.py `
-  'dist-pacote\PregacaoRecorder-release-VERSAO' `
-  --apk 'dist-pacote\PregacaoControle-2.8.apk' `
-  --iscc '.bundle-cache\inno-7.1.0\compiler\ISCC.exe'
-```
-
-O atualizador `update-20261020T222820Z` ja foi aplicado a pasta pessoal no
-SSD; o APK 2.7 tambem esta nela. Para uma versao futura, copie o `.exe` e o
-`.exe.sha256` resultantes para dentro da pasta pessoal no SSD, feche as tarefas
-e o programa, execute o atualizador e confira a pasta escolhida na tela do
-instalador. Assim a raiz do SSD nao ganha outra pasta. Nao
-execute o `build_personal_portable.py` com dados do laboratorio para atualizar
-o SSD real: esse montador incorpora o estado privado da maquina de origem.
-
-Para a interface 2.8, o pacote publico validado e
-`dist-pacote/PregacaoRecorder-release-20261021T115915854351Z`; o atualizador
-ja compilado e `dist-pacote/PregacaoRecorder-Pessoal-Atualizar-update-20261021T120614Z.exe`.
-O SSD pessoal atual ainda nao estava disponivel nesta etapa: a unidade E:
-montada estava vazia. Portanto esse atualizador e o APK 2.8 permanecem locais,
-sem aplicacao na pasta pessoal ou no instalador completo anterior. Quando a
-pasta estiver acessivel, feche os processos, atualize-a, confira os dados e so
-entao gere outro instalador completo com `build_personal_local.py`.
-
-O instalador pessoal e o atualizador registram o inicio ao entrar no Windows
-para o usuario atual. Na maquina instalada, estes comandos conferem, ativam ou
-desativam essa opcao, sem depender da letra atual do SSD:
-
-```powershell
-$inicio = "$env:LOCALAPPDATA\PregacaoRecorder-Personal-Autostart\autostart.ps1"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inicio -Mode Status -Layout Personal
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inicio -Mode Enable -Layout Personal
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $inicio -Mode Disable -Layout Personal
-```
-
-Se o SSD nao estiver conectado ao entrar no Windows, o iniciador espera ate
-60 segundos; depois registra o erro em `ultimo-erro.txt` na mesma pasta local.
-Conecte o SSD e abra `Iniciar Pregacao.cmd` para essa sessao. A proxima entrada
-no Windows com o SSD conectado volta a iniciar automaticamente.
-
-## Instalar a copia pessoal completa no PC
-
-`build_personal_local.py` usa uma pasta pessoal instalada como origem das contas
-e dos dados. `--base` fornece o pacote publico validado da versao final, mesmo
-quando a copia pessoal ainda tem codigo anterior; `--apk` fornece o APK atual.
-O montador inclui configuracao, banco por backup SQLite, perfis de autenticacao,
-gravacoes e estudos. Ele limita a copia privada a essas pastas e descarta
-backups, logs, caches do navegador, arquivos temporarios, audio de teste,
-atalhos antigos, atualizadores e APKs anteriores. Os arquivos incluidos sao
-inventariados e conferidos por SHA-256. Nao usa o estado privado do laboratorio.
-
-```powershell
-.venv\Scripts\python.exe -B packaging/build_personal_local.py `
-  CAMINHO\PregacaoRecorder-Pessoal `
-  --base dist-pacote\PregacaoRecorder-release-20261021T115915854351Z `
-  --apk dist-pacote\PregacaoControle-2.8.apk `
-  --iscc .bundle-cache\inno-7.1.0\compiler\ISCC.exe `
-  --stage-root D:\PRL
-```
-
-O instalador resultante cria `%LOCALAPPDATA%\PregacaoRecorder-Pessoal` para o
-usuario Windows atual. A primeira abertura ajusta caminhos do banco, das
-gravacoes e do pipeline para essa pasta. O inicio automatico aponta para a
-copia local e continua funcionando sem o SSD. A pasta local preexistente e
-recusada para evitar sobrescrever dados; para atualizacoes posteriores, use
-um atualizador adequado depois de fechar as tarefas.
-
-Para entrega em outra unidade, copie apenas o `.exe` completo e o
-`.exe.sha256`. O APK 2.8 ja vai dentro do instalador e fica disponivel na pasta
-local instalada. Nao copie a pasta de montagem, runtimes avulsos, ZIP publico
-nem backups para a unidade de entrega. Confira que a copia pessoal usada como
-origem contem todas as gravacoes atuais; uma origem antiga produz um instalador
-com dados antigos. Consulte
-[GUIA_INSTALACAO_LOCAL.md](../docs/GUIA_INSTALACAO_LOCAL.md) e os resultados em
-[TESTES.md](../docs/TESTES.md). Nao publicar o instalador completo: ele contem
-credenciais e dados pessoais. As copias local e SSD usam o mesmo ID MQTT e nao
-devem executar juntas; nao ha sincronizacao automatica entre elas.
-
-## Inventario da sprint 1
-
-- `.gitignore`
-- `app/bundled_runtime.py`
-- `app/estudos.py`
-- `app/launcher.py`
-- `docs/CODEX_CONTEXT.md`
-- `docs/SPRINTS.md`
-- `docs/TASK_DISTRIBUICAO_WINDOWS.md`
-- `docs/TESTES.md`
-- `docs/WINDOWS.md`
-- `iniciar-tudo.bat`
-- `packaging/README.md`
-- `packaging/build_bundle.py`
-- `packaging/requirements-runtime.in`
-- `packaging/requirements-runtime.lock`
-- `packaging/smoke_bundle.py`
-- `requirements.txt`
-- `scripts/pregacao.cmd`
-- `tests/test_bundle_builder.py`
-- `tests/test_bundled_runtime.py`
-- `tests/test_nlm_login.py`
-- `tests/test_vendor_pipeline.py`
-- `vendor/sermon-pipeline/.gitignore`
-- `vendor/sermon-pipeline/README.md`
-- `vendor/sermon-pipeline/SOURCE.json`
-- `vendor/sermon-pipeline/config.example.json`
-- `vendor/sermon-pipeline/package-lock.json`
-- `vendor/sermon-pipeline/package.json`
-- `vendor/sermon-pipeline/pipeline.py`
-- `vendor/sermon-pipeline/prompt.txt`
-- `vendor/sermon-pipeline/whatsapp/send.js`
-
-## Arquivos alterados na sprint 2
-
-- `CONTEXTO_AUDITORIA_PRODUTO.md`
-- `app/bundled_runtime.py`
-- `app/estudos.py`
-- `app/launcher.py`
-- `docs/CODEX_CONTEXT.md`
-- `docs/GUIA_INSTALACAO_WINDOWS.md` (novo)
-- `docs/SPRINTS.md`
-- `docs/TASK_DISTRIBUICAO_WINDOWS.md`
-- `docs/TESTES.md`
-- `docs/WINDOWS.md`
-- `packaging/README.md`
-- `packaging/build_bundle.py`
-- `packaging/build_installer.py` (novo)
-- `packaging/installer.iss` (novo)
-- `packaging/requirements-runtime.in`
-- `packaging/requirements-runtime.lock`
-- `packaging/smoke_bundle.py`
-- `packaging/smoke_installer.py` (novo)
-- `tests/test_bundle_builder.py`
-- `tests/test_bundled_runtime.py`
-- `tests/test_installer_builder.py` (novo)
-- `tests/test_launcher.py`
-- `tests/test_nlm_login.py`
-- `tests/test_remote_pairing_ui.py` (novo)
-- `web/static/app.js`
-- `web/templates/index.html`
+Esse instalador inclui as preferências e credenciais MQTT, o cliente OAuth e o
+token renovável do Google Drive. O marcador portátil ajusta os caminhos de
+estudos e gravações no primeiro início. Ele não inclui banco, gravações,
+backups, perfis de navegador ou sessões de WhatsApp/NotebookLM. O APK continua
+separado; ao atualizar no mesmo celular, a configuração protegida é mantida.
+A cópia pessoal deve permanecer privada porque contém credenciais.

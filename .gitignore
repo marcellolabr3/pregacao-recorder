@@ -27,18 +27,15 @@ venv/
 flutter/pregacao_controle/build/
 flutter/pregacao_controle/.dart_tool/
 flutter/pregacao_controle/ios/Pods/
-android/.gradle/
-android/build/
-android/app/build/
-android/local.properties
-android/.idea/
 node_modules/
 
 # Editores
 .vscode/
 .idea/
-site/
 
 /.bundle-cache/
+/.w/
+/.signing/
 
 /dist-pacote/
+/.OLD/

@@ -13,10 +13,35 @@ void main() {
       expect(t.avail, 'pregacao/pregacao-igreja-01/avail');
       expect(t.state, 'pregacao/pregacao-igreja-01/state');
       expect(t.events, 'pregacao/pregacao-igreja-01/events');
+      expect(t.history, 'pregacao/pregacao-igreja-01/history');
       expect(t.ack, 'pregacao/pregacao-igreja-01/ack');
       expect(t.cmd, 'pregacao/pregacao-igreja-01/cmd');
       expect(t.jobs, 'pregacao/pregacao-igreja-01/jobs');
     });
+  });
+
+  test('historico retido restaura eventos e nome do arquivo', () {
+    final eventos = lerHistorico(const {
+      'items': [
+        {'id': 9, 'ts': 1790000000.0, 'kind': 'gravacao_pronta',
+          'message': 'Gravacao finalizada', 'file': 'estudo.mp3'},
+      ],
+    });
+    expect(eventos, hasLength(1));
+    expect(eventos.first.kind, 'gravacao_pronta');
+    expect(eventos.first.file, 'estudo.mp3');
+    expect(eventos.first.linha, contains('Gravacao finalizada'));
+  });
+
+  test('estado retido inclui historico para conexoes existentes', () {
+    final estado = EstadoEquipamento.fromJson(const {
+      'state': 'COMPLETED',
+      'recent_events': [
+        {'id': 9, 'ts': 1790000000.0, 'kind': 'gravacao_pronta',
+          'message': 'Gravacao finalizada', 'file': 'estudo.mp3'},
+      ],
+    });
+    expect(estado.recentEvents.single.file, 'estudo.mp3');
   });
 
   group('montarComando', () {

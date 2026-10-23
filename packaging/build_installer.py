@@ -46,7 +46,7 @@ def public_path(relative: str) -> bool:
     runtime = relative.startswith(("runtime/python/", "runtime/browsers/")) or relative in {
         "runtime/node/node.exe", "runtime/ffmpeg/bin/ffmpeg.exe", "runtime/ffmpeg/bin/ffprobe.exe"}
     return runtime or relative.startswith("licenses/") or relative in {
-        "Iniciar Pregacao.cmd", "Verificar Pacote.cmd", "Conectar WhatsApp.cmd", "LEIA-ME.txt", "GUIA-INSTALACAO.md", "ACEITE_WINDOWS.md"}
+        "Iniciar Pregacao.cmd", "Verificar Pacote.cmd", "Conectar WhatsApp.cmd", "Bandeja.ps1", "LEIA-ME.txt", "GUIA-INSTALACAO.md", "ACEITE_WINDOWS.md"}
 
 
 def validated_files(bundle: Path) -> tuple[dict, list[str]]:
@@ -96,12 +96,14 @@ def prepare_script(bundle: Path, work: Path, output: Path, *, smoke: bool = Fals
     (work / "bundle-files.iss").write_text("\n".join(entries) + "\n", encoding="utf-8-sig")
     source = (ROOT / "packaging/installer.iss").read_text(encoding="utf-8-sig")
     defines = ('#define PackageVersion "' + version + '"\n'
-               '#define InstallerOutput "' + inno_string(str(output)) + '"\n')
+               '#define InstallerOutput "' + inno_string(str(output)) + '"\n'
+               '#define AutostartScript "' + inno_string(str(ROOT / "packaging/windows_autostart.ps1")) + '"\n'
+               '#define AppIcon "' + inno_string(str(ROOT / "packaging/gerador-de-estudo.ico")) + '"\n')
     if smoke:
         defines += '#define SmokeTestBuild\n'
     script = work / "setup.iss"
     script.write_text(defines + source, encoding="utf-8-sig")
-    return script, "PregacaoRecorder-Instalar-" + version + ("-smoke" if smoke else "")
+    return script, "Gerador de Estudo" + ("-smoke" if smoke else "")
 
 
 def main(argv=None) -> int:

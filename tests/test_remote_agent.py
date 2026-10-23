@@ -77,10 +77,15 @@ class FakeApi:
         self.finish_calls = []
         self.set_calls = []
         self.pregacoes = []
+        self.history = []
 
     def status(self):
         self.calls.append("status")
         return self.status_code, self.snapshot
+
+    def events_history(self):
+        self.calls.append("events_history")
+        return 200, {"items": self.history}
 
     def start(self):
         self.calls.append("start")
@@ -589,6 +594,38 @@ def test_on_connect_assina_os_comandos_e_marca_online():
     assert primeiro["retain"] is True
     # apos conectar, ja publica o estado completo (retido)
     assert any(p["topic"].endswith("/state") for p in client.published)
+    assert any(p["topic"].endswith("/history") and p["retain"]
+               for p in client.published)
+
+
+def test_history_retido_reconstroi_eventos_do_pc_sem_expor_caminhos():
+    agent, client, api = make_agent()
+    api.history = [{
+        "id": 17, "ts": 1234.5, "kind": "gravacao_pronta",
+        "message": "Gravacao finalizada no PC",
+        "payload": {"path": "C:\\Gravacoes\\culto.mp3", "token": "secreto"},
+    }]
+
+    assert agent.publish_history() is True
+    sent = client.published[-1]
+    assert sent["topic"].endswith("/history")
+    assert sent["retain"] is True
+    assert json.loads(sent["payload"])["items"] == [{
+        "id": 17, "ts": 1234.5, "kind": "gravacao_pronta",
+        "message": "Gravacao finalizada no PC", "file": "culto.mp3",
+    }]
+    assert "secreto" not in sent["payload"]
+    assert agent.publish_history() is False
+
+
+def test_estado_retido_tambem_leva_eventos_para_broker_sem_topic_history():
+    snapshot = base_snapshot(recent_events=[{
+        "id": 22, "ts": 1234.5, "kind": "gravacao_pronta",
+        "message": "Gravacao finalizada no PC", "file": "culto.mp3",
+    }])
+    payload = project_status(snapshot)
+    assert payload["recent_events"][0]["file"] == "culto.mp3"
+    assert signature(payload) != signature(project_status(base_snapshot()))
 
 
 def test_on_connect_com_recusa_nao_publica_nada():

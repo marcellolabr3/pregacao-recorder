@@ -27,4 +27,5 @@ retentativa pode repetir notebook/relatorio/PDF. Metadados existem no banco,
 mas nao sao transmitidos ao estudo. A auditoria lista as demais pendencias.
 
 Operacao e comandos: `docs/WINDOWS.md`. Testes: `docs/TESTES.md`.
-Escopo de retirada e resultados: `docs/REMOCAO_RASPBERRY.md`.
+O registro historico da retirada esta em `.OLD/docs/REMOCAO_RASPBERRY.md` nesta
+copia local; `.OLD/` nao e publicada no GitHub.

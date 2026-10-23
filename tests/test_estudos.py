@@ -168,7 +168,7 @@ def test_pipeline_inexistente_avisa(monkeypatch, tmp_path):
         estudos, "notify", lambda *a, **k: avisos.append(a[0] if a else "")
     )
     estudos.enfileirar("pregacao.mp3")
-    time.sleep(0.3)
+    assert _espera(lambda: "estudo_erro" in avisos and "job_progress" in avisos)
     assert chamadas == []
     # alem do aviso, o marco vermelho do job tambem e publicado (S3)
     assert avisos and "estudo_erro" in avisos

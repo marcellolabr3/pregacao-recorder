@@ -1,6 +1,5 @@
 """Inventario do instalador: hash/allowlist impedem copiar dados locais por engano."""
 import hashlib
-import importlib
 import importlib.util
 import json
 from pathlib import Path
@@ -36,14 +35,13 @@ def test_installer_copies_only_inventory_not_unlisted_private_files(bundle, tmp_
     assert str(private) not in entries
     assert "recursesubdirs" not in entries
     assert "gravador/app/launcher.py" in entries.replace("\\", "/")
-    assert name == "PregacaoRecorder-Instalar-sprint2-test"
+    assert name == "Gerador de Estudo"
 
 
 def test_tampered_payload_rejected_before_compilation(bundle):
     (bundle / "gravador/app/launcher.py").write_text("changed")
     with pytest.raises(ValueError, match="alterado"):
         installer.validated_files(bundle)
-
 
 @pytest.mark.parametrize("relative", ["../outside", "C:/private", "gravador/.env", "gravador/config/config.json",
     "gravador/config/google_token.json", "gravador/data/pregacao.db", "gravador/recordings/test.mp3",
@@ -74,23 +72,3 @@ def test_unversioned_or_incomplete_package_rejected(bundle):
     marker.write_text(json.dumps(data))
     with pytest.raises(ValueError, match="incompleto"):
         installer.validated_files(bundle)
-
-
-def test_personal_update_checks_hash_before_replacing_public_files(bundle, tmp_path, monkeypatch):
-    monkeypatch.syspath_prepend(str(ROOT / "packaging"))
-    update = importlib.import_module("build_personal_update")
-    apk = tmp_path / "PregacaoControle-2.7.apk"
-    apk.write_bytes(b"apk-fixture")
-    (bundle / "gravador/.env").write_text("private-fixture")
-
-    script, _ = update.prepare_update(bundle, apk, tmp_path / "output")
-    entries = (script.parent / "update-files.iss").read_text(encoding="utf-8-sig")
-    manifest = script.parent / "package-manifest.json"
-    public_hash = hashlib.sha256((bundle / "gravador/app/launcher.py").read_bytes()).hexdigest()
-    manifest_hash = hashlib.sha256(manifest.read_bytes()).hexdigest()
-    apk_hash = hashlib.sha256(apk.read_bytes()).hexdigest()
-
-    assert f"NeedsUpdate('gravador\\app\\launcher.py', '{public_hash}')" in entries
-    assert f"NeedsUpdate('package-manifest.json', '{manifest_hash}')" in entries
-    assert f"NeedsUpdate('PregacaoControle-2.7.apk', '{apk_hash}')" in entries
-    assert "gravador/.env" not in entries

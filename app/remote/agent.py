@@ -118,6 +118,7 @@ def topics(device_id: str) -> Dict[str, str]:
         "avail": f"{base}/avail",
         "state": f"{base}/state",
         "events": f"{base}/events",
+        "history": f"{base}/history",
         # progresso do estudo por job (S3): payload pequeno, RETIDO - o
         # celular que reconectar recebe o estado atual sem reiniciar nada
         "jobs": f"{base}/jobs",
@@ -164,6 +165,14 @@ def project_status(snapshot: Dict[str, Any]) -> Dict[str, Any]:
         "storage_aviso": str(snapshot.get("storage_aviso") or ""),
         "free_mb": int(storage.get("free_mb") or 0),
         "recovery_pending": len(recovery),
+        "recent_events": [
+            {"id": int(event.get("id") or 0), "ts": float(event.get("ts") or 0),
+             "kind": str(event.get("kind") or "")[:80],
+             "message": str(event.get("message") or "")[:240],
+             "file": str(event.get("file") or "")[:120]}
+            for event in (snapshot.get("recent_events") or [])[:6]
+            if isinstance(event, dict)
+        ],
         "ts": time.time(),
     }
 
@@ -194,6 +203,7 @@ def signature(payload: Dict[str, Any]) -> str:
             payload.get("api_ok"),
             payload.get("recording_dir"),
             payload.get("storage_aviso"),
+            tuple(event["id"] for event in payload.get("recent_events", [])),
         )
     )
 
@@ -457,6 +467,9 @@ class LocalApi:
     def cancel(self) -> Tuple[int, Dict[str, Any]]:
         return self._authed("POST", "/api/cancel", {})
 
+    def events_history(self) -> Tuple[int, Dict[str, Any]]:
+        return self._authed("GET", "/api/events/history")
+
     # -- google drive (o conector do APK) --------------------------------
     def drive_status(self) -> Tuple[int, Dict[str, Any]]:
         return self._authed("GET", "/api/drive/status")
@@ -568,6 +581,7 @@ class RemoteAgent:
         # e de qual job - mensagem antiga da fila nunca faz a barra voltar
         self._job_seq = 0
         self._job_visto: Optional[str] = None
+        self._history_signature = ""
 
     # ------------------------------------------------------------------
     # mqtt
@@ -604,6 +618,7 @@ class RemoteAgent:
         self._publish(self.topics["avail"], ONLINE, retain=True)
         self.publish_state(force=True)
         self.publish_job_snapshot()
+        self.publish_history(force=True)
 
     def _on_disconnect(self, client: Any, userdata: Any, *args: Any) -> None:
         # paho v1: (client, userdata, rc)
@@ -711,6 +726,41 @@ class RemoteAgent:
             seq = max(seq, self._job_seq + 1)
         payload.update(seq=seq, ts=agora)
         return self._publica_job(payload)
+
+    def publish_history(self, force: bool = False) -> bool:
+        """Publica os ultimos eventos do banco para celulares que estavam fechados.
+
+        O topic e retido. Arquivos de audio, segredos e payloads internos nao
+        atravessam o broker; apenas o texto, tipo, horario e nome do arquivo.
+        """
+        code, response = self.api.events_history()
+        if code != 200 or not isinstance(response, dict):
+            return False
+        raw = response.get("items")
+        if not isinstance(raw, list):
+            return False
+        items = []
+        for event in raw[:12]:
+            if not isinstance(event, dict):
+                continue
+            data = event.get("payload") or {}
+            if not isinstance(data, dict):
+                data = {}
+            items.append({
+                "id": int(event.get("id") or 0),
+                "ts": float(event.get("ts") or 0),
+                "kind": str(event.get("kind") or "")[:80],
+                "message": str(event.get("message") or "")[:240],
+                "file": Path(str(data.get("path") or "").replace("\\", "/")).name[:120],
+            })
+        payload = {"items": items}
+        encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+        if not force and encoded == self._history_signature:
+            return False
+        if self._publish(self.topics["history"], encoded, retain=True):
+            self._history_signature = encoded
+            return True
+        return False
 
     # ------------------------------------------------------------------
     # estado
@@ -981,6 +1031,8 @@ class RemoteAgent:
                         payload = parse_event(event)
                         if payload:
                             self._publish(self.topics["events"], payload)
+                            self.publish_history()
+                            self.publish_state()
             except Exception as exc:
                 if not self._stop.is_set():
                     falhas += 1
@@ -1009,6 +1061,7 @@ class RemoteAgent:
         while not self._stop.wait(self.settings.interval):
             try:
                 self.publish_state()
+                self.publish_history()
             except Exception:  # pragma: no cover
                 log.exception("[REMOTE] falha ao atualizar estado")
 

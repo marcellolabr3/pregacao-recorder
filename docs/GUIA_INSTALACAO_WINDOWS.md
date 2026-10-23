@@ -1,28 +1,37 @@
-# Pregacao Recorder no outro PC
+# Gerador de Estudo no outro PC — edição pública
+
+Este guia descreve o instalador sem credenciais. Para a entrega pessoal que
+preserva broker MQTT e autorização Google Drive, use
+[GUIA_INSTALACAO_CONECTADA.md](GUIA_INSTALACAO_CONECTADA.md).
 
 Windows 10/11 de 64 bits. O pacote inclui Python, Node, FFmpeg e navegador;
 instale o driver da interface de audio caso o Windows ainda nao a reconheca.
 
 ## Instalar e abrir
 
-1. Execute o instalador `.exe`. A pasta padrao e
-   `%LOCALAPPDATA%\PregacaoRecorder`, gravavel pelo seu usuario.
-2. Abra o atalho **Pregacao Recorder**. O painel usa a porta 8080 por padrao.
+1. Copie `Gerador de Estudo.exe` para o PC e execute-o. Escolha a pasta de
+   instalacao; o padrao e `%LOCALAPPDATA%\Gerador de Estudo`.
+2. O servico inicia com o Windows e aparece na bandeja. O atalho
+   **Gerador de Estudo** abre somente o painel no navegador, na porta 8080 por
+   padrao. Na bandeja, dourado indica painel ativo e vermelho, indisponivel.
 3. Na primeira abertura o pacote prepara os caminhos do pipeline, um segredo
    local de sessao e um ID exclusivo do equipamento. Nao e preciso editar caminhos.
 4. Para conferir o pacote sem iniciar captura, filas ou conexoes, execute
    **Verificar Pacote.cmd** na pasta instalada. Avisos de contas ausentes sao
    esperados antes de configurar as integracoes.
 
-Para reinstalar, aguarde terminar gravacoes, uploads, estudos e logins, e feche
-os processos do programa. A reinstalacao preserva configuracao/dados locais e
-faz uma copia de seguranca dos arquivos que substitui. Nao copie a pasta `logs`
-do PC antigo: arquivos PID nao sao historico nem configuracao.
-Fechar o navegador nao encerra os processos. Uma forma simples e concluir as
-tarefas, reiniciar o Windows e executar o instalador antes de abrir o atalho
-(desative temporariamente um atalho de inicio automatico, se voce o criou).
-O backup fica ao lado do destino, em `PregacaoRecorder-backups\DATA-HORA`;
-pode conter contas e dados privados. A desinstalacao preserva seus dados locais.
+`Controle Android.apk` e um arquivo separado, ao lado do instalador Windows.
+Instale ou atualize o aplicativo em cada celular diretamente com esse APK; nao
+e necessario instalar o programa Windows para obter o arquivo Android.
+
+Para desinstalar, use **Desinstalar Gerador de Estudo** no menu Iniciar ou
+**Configuracoes > Aplicativos**. Aguarde terminar gravacoes, uploads, estudos e
+envios; o desinstalador encerra os servicos desta instalacao quando estiverem
+ociosos. Fechar o navegador nao encerra os servicos. A desinstalacao preserva
+os dados criados pelo uso. Uma reinstalacao na mesma pasta move configuracao,
+banco, sessoes e gravacoes para `<pasta>-dados-anteriores\DATA-HORA` e inicia
+vazia. Os audios sao movidos, sem duplicacao. Confira essa pasta antes de
+apagar dados antigos.
 
 ## Audio e pasta
 
@@ -35,8 +44,9 @@ Confirme espaco livre no destino.
 A gravacao local funciona sem internet; as integracoes aguardam conectividade.
 
 Uma instalacao nova inicia com historico novo. O instalador nao transfere o
-banco nem as gravacoes do PC de origem. Reescolha interface e disco no destino,
-pois os nomes e letras das unidades podem mudar.
+banco, gravacoes, credenciais nem copias locais do PC de origem. Os arquivos
+ja enviados ao Google Drive continuam na nuvem. Reescolha interface e disco
+no destino, pois os nomes e letras das unidades podem mudar.
 
 ## Contas e estudo
 
@@ -107,18 +117,21 @@ username. Uma credencial antiga restrita a outro ID nao ganha acesso ao novo ID.
 
 | Credencial | Publicar | Assinar |
 |---|---|---|
-| PC | `avail`, `state`, `events`, `ack`, `jobs` | `cmd` |
-| Operador | `cmd` | `avail`, `state`, `events`, `ack`, `jobs` |
+| PC | `avail`, `state`, `events`, `history`, `ack`, `jobs` | `cmd` |
+| Operador | `cmd` | `avail`, `state`, `events`, `history`, `ack`, `jobs` |
 
 Cada nome acima e um topic completo sob `pregacao/<novo-id>/`; crie as regras
 individuais conforme seu provedor e negue topics de outros equipamentos.
 O operador pode receber acesso aos dois IDs quando precisar controlar ambos.
+O estado retido ja leva os ultimos seis eventos ao celular, sem mudar as regras
+do broker. Autorize `history` para uma lista maior de eventos retidos.
 Nao use comandos retidos. Nunca use a mesma identidade nos dois PCs ativos.
 
 **Substituir definitivamente o PC antigo:** desligue o controle no antigo e,
 somente nesse caso, informe o ID antigo no cartao **CONTROLE REMOTO** do novo.
 A escolha salva prevalece sobre o ID gerado; mantenha as permissoes e
-credenciais correspondentes. Reinstalacoes preservam o ID ja escolhido.
+credenciais correspondentes. Como a reinstalacao limpa gera um novo ID, repita
+essa configuracao se quiser continuar usando a identidade antiga.
 
 Depois de reiniciar, envie **STATUS** pelo celular e confirme ACK/estado atual.
 O heartbeat local nao comprova a conexao MQTT. Nao use o script de teste EMQX

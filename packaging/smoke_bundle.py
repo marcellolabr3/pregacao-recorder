@@ -7,6 +7,8 @@ import subprocess
 import sys
 import tempfile
 
+ROOT = Path(__file__).resolve().parent.parent
+
 
 def main(argv=None):
     arguments = argv if argv is not None else sys.argv[1:]
@@ -15,7 +17,10 @@ def main(argv=None):
     node = root / "runtime/node/node.exe"
     env = {k: v for k, v in os.environ.items() if not k.startswith(("PREGACAO_", "NOTEBOOKLM_", "PLAYWRIGHT_", "GOOGLE_")) and k not in {"NODE_PATH", "NODE_OPTIONS", "PYTHONPATH", "PYTHONHOME"}}
     env["PYTHONDONTWRITEBYTECODE"] = "1"
-    with tempfile.TemporaryDirectory(prefix="pregacao-bundle-smoke-") as temporary:
+    work_root = ROOT / ".w"
+    work_root.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="s-", dir=work_root) as temporary:
+        env.update({"TEMP": temporary, "TMP": temporary, "TMPDIR": temporary})
         env["NOTEBOOKLM_HOME"] = str(Path(temporary) / "notebooklm")
         env["PREGACAO_PIPELINE_HOME"] = temporary
         env["PLAYWRIGHT_BROWSERS_PATH"] = str(root / "runtime/browsers")

@@ -336,6 +336,7 @@ def main(argv=None) -> int:
     modes.add_argument("--verificar", action="store_true", help="confere requisitos sem iniciar servicos")
     modes.add_argument("--somente-gravador", action="store_true", help="inicia somente o servidor")
     modes.add_argument("--somente-agente", action="store_true", help="inicia somente o controle remoto")
+    modes.add_argument("--abrir-painel", action="store_true", help="abre somente o navegador")
     parser.add_argument("--sem-navegador", action="store_true", help="inicia sem abrir o painel")
     parser.add_argument("--service", choices=MODULES, help=argparse.SUPPRESS)
     parser.add_argument("--service-root", help=argparse.SUPPRESS)
@@ -358,7 +359,8 @@ def main(argv=None) -> int:
     from . import bundled_runtime
 
     try:
-        package = bundled_runtime.prepare_environment(create_config=not args.verificar, recorder_root=root)
+        package = bundled_runtime.prepare_environment(
+            create_config=not (args.verificar or args.abrir_painel), recorder_root=root)
     except (OSError, ValueError):
         print("[ERRO] Nao foi possivel preparar a configuracao do pacote local.")
         return 1
@@ -389,6 +391,11 @@ def main(argv=None) -> int:
     except (OSError, ValueError):
         print("[ERRO] Nao foi possivel ler a configuracao local. Confira permissoes e formato JSON.")
         return 1
+    if args.abrir_painel:
+        host = str(getattr(cfg, "host", "0.0.0.0") or "0.0.0.0")
+        host = {"0.0.0.0": "127.0.0.1", "::": "::1"}.get(host, host)
+        url = f"http://{'[' + host + ']' if ':' in host else host}:{cfg.port}"
+        return 0 if webbrowser.open(url) else 1
     from .remote.settings import effective_environment
 
     env = effective_environment(cfg, os.environ)

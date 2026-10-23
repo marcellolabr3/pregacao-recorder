@@ -410,6 +410,25 @@ def test_verificar_nao_inicia_servicos_navegador_ou_logs(tmp_path, monkeypatch):
     assert Path(checked[0][1]["PREGACAO_HOME"]) == tmp_path
 
 
+def test_atalho_abre_apenas_navegador_na_porta_configurada(tmp_path, monkeypatch):
+    from app import config as config_mod
+
+    monkeypatch.setenv("PREGACAO_HOME", str(tmp_path))
+    monkeypatch.setattr(config_mod, "Config", lambda home: SimpleNamespace(host="0.0.0.0", port=18765))
+    monkeypatch.setattr(config_mod, "load_env", lambda _: {})
+    opened = []
+    monkeypatch.setattr(launcher.webbrowser, "open", lambda url: opened.append(url) or True)
+
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("atalho de painel nao pode iniciar servicos")
+
+    monkeypatch.setattr(launcher, "launch", unexpected)
+    monkeypatch.setattr(launcher, "_launch_lock", unexpected)
+    monkeypatch.setattr(launcher, "_file_logger", unexpected)
+    assert launcher.main(["--abrir-painel"]) == 0
+    assert opened == ["http://127.0.0.1:18765"]
+
+
 def test_main_falha_mqtt_mantem_gravador_e_informa_resultado(tmp_path, monkeypatch, capsys):
     from app import config as config_mod
 

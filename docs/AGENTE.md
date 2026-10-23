@@ -16,6 +16,7 @@ Sob `pregacao/<device_id>/`:
 | state | PC -> celular | sim |
 | avail | PC -> celular, com LWT | sim |
 | events | PC -> celular | nao |
+| history | PC -> celular | sim (ultimos eventos persistidos) |
 | jobs | PC -> celular, progresso | sim |
 
 Comandos: START, STOP, STATUS, DRIVE_STATUS, DRIVE_CONNECT, DRIVE_FINISH,
@@ -40,8 +41,8 @@ a sessao MQTT da instalacao pessoal.
 O indicador de atividade local do agente usa heartbeat HTTP; nao e prova de
 sessao MQTT conectada. Confirmacao funcional exige STATUS com ACK real.
 
-O aplicativo atual e Flutter em `flutter/pregacao_controle/`. A fonte Kotlin em
-`android/` e legada; seu menu de configuracao de rede foi retirado da fonte.
+O aplicativo atual e Flutter em `flutter/pregacao_controle/`. A fonte Kotlin
+legada foi arquivada em `.OLD/source/android-kotlin/`.
 APKs ja instalados nao sao atualizados por alterar arquivos no repositorio.
 A primeira pagina Flutter permite consultar e manter a programacao. O APK
 instalado so recebe essas mudancas depois de instalar a nova versao compilada.

@@ -13,8 +13,15 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# Keep all test homes and pytest temporary directories inside this checkout.
+_TEST_TEMP = ROOT / ".w" / "tests"
+_TEST_TEMP.mkdir(parents=True, exist_ok=True)
+for _name in ("TEMP", "TMP", "TMPDIR"):
+    os.environ[_name] = str(_TEST_TEMP)
+tempfile.tempdir = str(_TEST_TEMP)
+
 # Precisa acontecer ANTES de qualquer import de app.*
-_HOME = Path(tempfile.mkdtemp(prefix="pregacao-test-"))
+_HOME = Path(tempfile.mkdtemp(prefix="pregacao-test-", dir=_TEST_TEMP))
 os.environ["PREGACAO_HOME"] = str(_HOME)
 os.environ.setdefault("PREGACAO_PIN", "1234")
 os.environ.setdefault("PREGACAO_SECRET", "segredo-de-teste")

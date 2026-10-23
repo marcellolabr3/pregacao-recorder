@@ -1,18 +1,18 @@
 # Windows - instalacao e operacao
 
-Este guia descreve a instalacao manual de desenvolvimento. Para instalar o
-pacote pessoal `.exe`, seguir [GUIA_INSTALACAO_WINDOWS.md](GUIA_INSTALACAO_WINDOWS.md).
-Plano e criterios em [PR-DIST-001](TASK_DISTRIBUICAO_WINDOWS.md):
-tres sprints para empacotar, instalar/configurar e testar as funcionalidades atuais.
-Indice e criterios de aceite em [SPRINTS.md](SPRINTS.md).
+Este guia descreve a instalacao manual de desenvolvimento. Para instalar a
+entrega pessoal `.exe`, seguir
+[GUIA_INSTALACAO_CONECTADA.md](GUIA_INSTALACAO_CONECTADA.md). Para a edicao publica
+sem credenciais, usar [GUIA_INSTALACAO_WINDOWS.md](GUIA_INSTALACAO_WINDOWS.md).
 
-## Pacote pessoal
+## Pacotes instalaveis
 
-As sprints 1/2 geram ZIP e instalador com runtimes proprios, sem contas ou dados
-do PC original. Para gerar/verificar, seguir [packaging/README.md](../packaging/README.md).
-O `.exe` instala por usuario, cria atalho e preserva dados na reinstalacao.
-A validacao em Windows limpo e no PC destino continua na sprint 3.
-As instrucoes abaixo continuam sendo a instalacao manual de desenvolvimento.
+O instalador pessoal inclui as conexoes MQTT e OAuth Google ja autorizadas, mas
+nao inclui banco, gravacoes ou backups. O instalador publico comeca sem contas.
+Ambos usam runtimes proprios e criam atalho e desinstalador. Uma reinstalacao na
+mesma pasta arquiva dados locais anteriores antes de iniciar uma copia vazia.
+Para gerar/verificar, seguir [packaging/README.md](../packaging/README.md).
+As instrucoes abaixo sao para executar a fonte neste projeto.
 
 ## Requisitos
 
@@ -93,8 +93,8 @@ scripts\pregacao.cmd logs -f
 
 Os logs de inicializacao ficam em `logs/inicializacao.log`, `logs/inicio-gravador.log`
 e `logs/inicio-agente.log`. Os servicos continuam usando `logs/pregacao.log` e
-`logs/pregacao-agente.log`. O script `_instalador/ajustar_caminhos.py` e uma ferramenta
-manual de migracao antiga: altera caminhos e nao e executado pelo iniciador.
+`logs/pregacao-agente.log`. A ferramenta antiga de migracao de caminhos foi
+arquivada em `.OLD/source/_instalador/` e nao e executada pelo iniciador.
 
 ## Atualizar
 
@@ -102,24 +102,3 @@ Fechar gravador/agente somente quando ociosos; guardar backup; atualizar fontes 
 reinstalar dependencias se necessario. Preservar `.env`, `config/config.json`, tokens,
 `data/`, `recordings/` e `recovery/`. Reabrir `iniciar-tudo.bat` e atualizar o navegador.
 O pipeline externo possui instalacao/dependencias separadas.
-
-## Arquivos da melhoria de inicializacao (19/10/2026)
-
-Criados: `app/launcher.py`, `tests/test_launcher.py`.
-
-Alterados: `iniciar-tudo.bat`, `app/api/routes.py` (orientacao exibida),
-`app/remote/agent.py` (documentacao), `README.md`, `GUIA-USUARIO.md`,
-`docs/WINDOWS.md`, `docs/AGENTE.md`, `docs/TESTES.md`, `docs/CODEX_CONTEXT.md`.
-
-Removidos:
-
-- `iniciar-gravador.bat`
-- `iniciar-agente.bat`
-- `_instalador/subir-painel-teste.bat`
-- `_instalador/testar-agente-ssd.bat`
-- `_instalador/verificar-deps-pregacao.bat`
-- `_instalador/verificar-deps-sermon.bat`
-- `_instalador/verificar-identidade.bat`
-- `_instalador/verificar-playwright.bat`
-- `_instalador/verificar-runtimes.bat`
-- `_instalador/verificar-tudo.bat`

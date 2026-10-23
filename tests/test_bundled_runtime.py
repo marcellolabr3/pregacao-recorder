@@ -260,6 +260,19 @@ def test_launcher_verificar_usa_caminhos_iniciais_sem_criar_arquivos(package, mo
     assert captured[0][2]["PREGACAO_HOME"] == str(package / "gravador")
 
 
+def test_atalho_abre_somente_navegador_sem_iniciar_servicos(package, monkeypatch):
+    from app import config as config_mod
+
+    monkeypatch.setattr(config_mod, "load_env", lambda path: {})
+    opened = []
+    monkeypatch.setattr(launcher.webbrowser, "open", lambda url: opened.append(url) or True)
+    monkeypatch.setattr(launcher, "launch", lambda *a, **k: pytest.fail("atalho iniciou servico"))
+    before = sorted(package.rglob("*"))
+    assert launcher.main(["--abrir-painel"]) == 0
+    assert opened == ["http://127.0.0.1:8080"]
+    assert sorted(package.rglob("*")) == before
+
+
 def test_launcher_prepara_home_e_config_antes_de_importar_servico(package, monkeypatch):
     calls = []
     monkeypatch.setattr(launcher.sys, "argv", list(launcher.sys.argv))

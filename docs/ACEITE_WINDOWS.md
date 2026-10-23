@@ -1,57 +1,27 @@
-# Aceite da instalacao pessoal - sprint 3
+# Aceite da entrega pessoal no novo PC
 
-Use o instalador e o guia atualizados. Registre somente versao, resultado e
-erro observado; nunca senhas, tokens, cookies, QRs ou dados pessoais.
+Use `Gerador de Estudo.exe` e `Controle Android.apk` da entrega privada. Registre
+somente resultado e erro observado; nunca senhas, tokens, cookies ou dados da conta.
 
-## Estado
+- [ ] Instalar no Windows x64 sem ferramentas de desenvolvimento. Conferir que o
+  atalho abre o painel e que o serviço aparece na bandeja após novo login.
+- [ ] Conferir que a instalação começa sem banco antigo, gravações, backups,
+  sessões do WhatsApp ou perfil do NotebookLM.
+- [ ] Escolher a interface de áudio e a pasta do novo PC, testar sinal e salvar.
+- [ ] Conferir que o broker MQTT e o mesmo ID do PC de origem estão presentes.
+  Desligar o agente do PC antigo antes de testar o novo. Enviar STATUS pelo
+  celular e verificar ACK real.
+- [ ] Conferir o status da conta Google Drive já autorizada. Se o Google tiver
+  revogado o token, reconectar a mesma conta pelo painel.
+- [ ] Fazer uma gravação curta, finalizar, ouvir o MP3 e confirmar a pasta.
+  Repetir sem login Google ou internet: a captura local deve funcionar; o envio
+  automático deve aguardar conexão/autorização.
+- [ ] Enviar um áudio de teste ao Drive e verificar o arquivo na conta correta.
+- [ ] Se usados, entrar novamente no NotebookLM e no WhatsApp no novo PC.
+- [ ] Atualizar o APK no celular, conferir estado, histórico e comandos MQTT.
+- [ ] Reinstalar somente quando o serviço estiver ocioso. Conferir que os dados
+  anteriores foram movidos para `<pasta>-dados-anteriores` e que a instalação
+  nova começa vazia. Testar a desinstalação pelo menu Iniciar.
 
-Sprint 3 iniciada com validacao isolada neste PC. Os testes abaixo continuam
-pendentes no Windows limpo e no computador destino. Teste automatizado com
-dispositivos/contas simulados nao comprova captura nem acesso a contas reais.
-
-## Instalar e configurar
-
-- [ ] Registrar PC/Windows e nome do instalador; conferir o `.exe.sha256`.
-- [ ] Para reproduzir a instalacao pessoal atual sem o SSD, usar
-  `PregacaoRecorder-Completo-Instalar-local-20261021T024329576035Z.exe`.
-  O instalador publico em `Pacote-Publico-Sem-Dados` cria uma copia vazia.
-- [ ] Apos instalar a copia completa, retirar o SSD e abrir pelo atalho local;
-  conferir banco, gravacoes, estudos, contas e inicio apos novo logon.
-- [ ] Instalar em Windows x64 sem Python/Node/FFmpeg/Git de desenvolvimento.
-- [ ] Abrir pelo atalho, conferir porta e executar `Verificar Pacote.cmd`.
-- [ ] Selecionar dispositivo, testar sinal, salvar e conferir apos reabrir.
-- [ ] Selecionar pasta/disco com espaco livre; salvar e conferir apos reabrir.
-- [ ] Configurar MQTT no cartao administrativo; manter ID distinto se dois PCs
-  puderem ligar. A copia completa local herda o ID do SSD: usar somente uma
-  delas por vez. Conferir credencial/ACL dos topics no broker.
-- [ ] Reiniciar Windows com tarefas concluidas, abrir atalho e conferir CONFIG.
-
-## Funcionalidades atuais
-
-- [ ] Gravar audio curto real, parar, ouvir MP3 e conferir duracao/historico/pasta.
-- [ ] Repetir gravacao sem internet; reconectar depois e conferir filas atuais.
-- [ ] Trocar destino por uma pasta de teste; conferir nova gravacao e preservacao
-  dos arquivos anteriores. Destino ausente deve recusar gravar sem fallback.
-- [ ] Conferir recuperacao atual de gravacao interrompida usando somente audio de teste.
-- [ ] Cadastrar pregacao e importar CSV/XLSX de teste, sem sobrescrever dados reais.
-- [ ] Conectar Drive e testar envio de um audio de teste; conferir arquivo remoto.
-- [ ] Renovar/diagnosticar NotebookLM; gerar estudo e abrir o PDF.
-- [ ] Parear WhatsApp; conferir destinatario e receber o PDF de teste.
-- [ ] Parear APK atual e enviar STATUS; conferir ACK e estado atual.
-- [ ] Pelo celular, iniciar/parar uma gravacao de teste e conferir progresso/MP3.
-- [ ] Reabrir o programa; conferir preferencias, PINs, identidade e ausencia de duplicatas.
-- [ ] Reinstalar ocioso; conferir backup, banco, configuracoes e audios preservados.
-
-## Registro
-
-| Ambiente / versao | Item | Resultado / evidencia |
-|---|---|---|
-| Windows limpo | Instalacao e runtimes | Pendente |
-| PC destino | Audio real e offline | Pendente |
-| PC destino | Pasta, historico, recuperacao e cadastro/importacao | Pendente |
-| PC destino | Drive e NotebookLM/PDF | Pendente |
-| PC destino | WhatsApp e destinatario conferido | Pendente |
-| PC destino + celular | MQTT/STATUS/ACK e comandos | Pendente |
-
-O aceite exige os resultados reais acima. Registre impedimentos com passos de
-reproducao antes de considerar a entrega pronta.
+Os testes automatizados não comprovam captura na interface real nem acesso à
+conta e ao broker no computador de destino. Esses itens dependem do teste acima.

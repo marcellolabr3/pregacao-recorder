@@ -69,11 +69,16 @@ def extract_runtime(archive: Path, target: Path) -> None:
     (target / "python311._pth").write_text("python311.zip\n.\nLib/site-packages\n../../gravador\n../../pipeline\nimport site\n", encoding="utf-8")
 
 
-def public_build_env() -> dict[str, str]:
+def public_build_env(cache: Path) -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if not k.startswith(("PIP_", "PREGACAO_", "NOTEBOOKLM_", "PLAYWRIGHT_", "NPM_CONFIG_")) and k not in {"NODE_PATH", "NODE_OPTIONS", "PYTHONPATH", "PYTHONHOME"}}
     env["PIP_CONFIG_FILE"] = os.devnull
     env["PIP_INDEX_URL"] = "https://pypi.org/simple"
+    env["PIP_NO_CACHE_DIR"] = "1"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    temporary = cache / "tmp"
+    temporary.mkdir(parents=True, exist_ok=True)
+    env.update({"TEMP": str(temporary), "TMP": str(temporary), "TMPDIR": str(temporary),
+                "NPM_CONFIG_CACHE": str(cache / "npm")})
     return env
 
 
@@ -99,6 +104,7 @@ def revision(source: Path) -> str:
 
 
 def write_entrypoints(target: Path) -> None:
+    copy_file(ROOT / "packaging/windows_tray.ps1", target / "Bandeja.ps1")
     for name, suffix in (("Iniciar Pregacao.cmd", ""), ("Verificar Pacote.cmd", " --verificar")):
         content = '@echo off\r\nsetlocal\r\nset "PREGACAO_PACKAGE=%~dp0"\r\npushd "%PREGACAO_PACKAGE%gravador"\r\n"%PREGACAO_PACKAGE%runtime\\python\\python.exe" -B -m app.launcher' + suffix + ' %*\r\nset "PREGACAO_EXIT=%errorlevel%"\r\npopd\r\nif not "%PREGACAO_EXIT%"=="0" pause\r\nexit /b %PREGACAO_EXIT%\r\n'
         (target / name).write_bytes(content.encode("utf-8"))
@@ -111,11 +117,12 @@ def write_entrypoints(target: Path) -> None:
         'set "PREGACAO_EXIT=%errorlevel%"\r\npopd\r\n'
         'if not "%PREGACAO_EXIT%"=="0" pause\r\nexit /b %PREGACAO_EXIT%\r\n').encode("utf-8"))
     (target / "LEIA-ME.txt").write_text(
-        "Pregacao Recorder - pacote pessoal Windows\n\n"
-        "Use o instalador .exe para instalar em LOCALAPPDATA/PregacaoRecorder.\n"
+        "Gerador de Estudo - pacote Windows limpo\n\n"
+        "Use o instalador .exe para instalar em LOCALAPPDATA/Gerador de Estudo.\n"
         "O ZIP tambem pode ser extraido em uma pasta definitiva gravavel.\n"
         "Execute Verificar Pacote.cmd para diagnostico local sem iniciar servicos.\n"
-        "Iniciar Pregacao.cmd abre o programa. Configure audio, pasta e contas em CONFIG.\n"
+        "O atalho Gerador de Estudo abre apenas o painel. A bandeja inicia os servicos com o Windows.\n"
+        "Iniciar Pregacao.cmd inicia manualmente. Configure audio, pasta e contas em CONFIG.\n"
         "Conectar WhatsApp.cmd permite parear a conta sem enviar mensagens.\n"
         "Leia GUIA-INSTALACAO.md para configuracao, celular e reinstalacao.\n"
         "Este pacote nao contem suas contas, sessoes ou historico.\n"
@@ -176,7 +183,7 @@ def main(argv=None) -> int:
     target = output / ("PregacaoRecorder-release-" + stamp)
     target.mkdir()
     log = output / ("build-" + stamp + ".log")
-    env = public_build_env()
+    env = public_build_env(cache)
     print("1/7 Fontes por allowlist", flush=True)
     copy_sources(ROOT, target)
     archive = cache / PYTHON_ZIP

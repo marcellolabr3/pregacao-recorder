@@ -35,6 +35,7 @@ class Topicos {
   String get avail => '$raiz/avail';
   String get state => '$raiz/state';
   String get events => '$raiz/events';
+  String get history => '$raiz/history';
   String get ack => '$raiz/ack';
   String get cmd => '$raiz/cmd';
   String get jobs => '$raiz/jobs';
@@ -92,6 +93,7 @@ class EstadoEquipamento {
   final String storageAviso;
   final int freeMb;
   final int recoveryPending;
+  final List<EventoHistorico> recentEvents;
 
   const EstadoEquipamento({
     this.deviceId = '',
@@ -114,6 +116,7 @@ class EstadoEquipamento {
     this.storageAviso = '',
     this.freeMb = 0,
     this.recoveryPending = 0,
+    this.recentEvents = const [],
   });
 
   /// Tolerante a campos ausentes: o payload pode vir de um agente antigo.
@@ -143,6 +146,12 @@ class EstadoEquipamento {
       storageAviso: json['storage_aviso'] as String? ?? '',
       freeMb: inteiro(json['free_mb']),
       recoveryPending: inteiro(json['recovery_pending']),
+      recentEvents: json['recent_events'] is List
+          ? (json['recent_events'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map(EventoHistorico.fromJson)
+              .toList()
+          : const [],
     );
   }
 }
@@ -289,17 +298,61 @@ class EventoSistema {
   final String kind;
   final String message;
   final String path;
+  final double ts;
 
-  const EventoSistema({this.kind = '', this.message = '', this.path = ''});
+  const EventoSistema({this.kind = '', this.message = '', this.path = '', this.ts = 0});
 
   factory EventoSistema.fromJson(Map<String, dynamic> json) {
     final data = (json['data'] as Map<String, dynamic>?) ?? const {};
     return EventoSistema(
       kind: json['kind'] as String? ?? '',
-      message: data['message'] as String? ?? '',
-      path: data['path'] as String? ?? '',
+      message: (json['message'] ?? data['message']) as String? ?? '',
+      path: (json['path'] ?? data['path']) as String? ?? '',
+      ts: (json['ts'] is num) ? (json['ts'] as num).toDouble() : 0,
     );
   }
+}
+
+/// Ultimos eventos persistidos no PC. O broker entrega esta lista retida
+/// quando o celular volta a abrir, mesmo que ele tenha perdido o evento ao vivo.
+class EventoHistorico {
+  final int id;
+  final double ts;
+  final String kind;
+  final String message;
+  final String file;
+
+  const EventoHistorico({
+    required this.id,
+    required this.ts,
+    required this.kind,
+    required this.message,
+    required this.file,
+  });
+
+  factory EventoHistorico.fromJson(Map<String, dynamic> json) {
+    return EventoHistorico(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      ts: (json['ts'] as num?)?.toDouble() ?? 0,
+      kind: json['kind'] as String? ?? '',
+      message: json['message'] as String? ?? '',
+      file: json['file'] as String? ?? '',
+    );
+  }
+
+  String get linha {
+    final time = DateTime.fromMillisecondsSinceEpoch((ts * 1000).round());
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute  $kind  $message'.trimRight();
+  }
+}
+
+List<EventoHistorico> lerHistorico(Map<String, dynamic> json) {
+  final raw = json['items'];
+  if (raw is! List) return const [];
+  return raw.whereType<Map<String, dynamic>>()
+      .map(EventoHistorico.fromJson).take(12).toList();
 }
 
 /// Progresso do estudo por job (topic "jobs", retido).

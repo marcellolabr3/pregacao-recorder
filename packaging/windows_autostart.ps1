@@ -1,7 +1,7 @@
 param(
     [ValidateSet('Register', 'Enable', 'Disable', 'Resolve', 'Start', 'Status')]
     [string]$Mode = 'Status',
-    [ValidateSet('Personal', 'Lab')]
+    [ValidateSet('Personal', 'Lab', 'Clean')]
     [string]$Layout = 'Personal',
     [string]$PackagePath = '',
     [string]$ConfigDir = '',
@@ -10,13 +10,19 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$shortcutName = if ($Layout -eq 'Personal') {
+$shortcutName = if ($Layout -eq 'Clean') {
+    'Gerador de Estudo.lnk'
+} elseif ($Layout -eq 'Personal') {
     'Pregacao Recorder Pessoal.lnk'
 } else {
     'Pregacao Recorder Laboratorio.lnk'
 }
 if (-not $ConfigDir) {
-    $ConfigDir = Join-Path $env:LOCALAPPDATA ("PregacaoRecorder-$Layout-Autostart")
+    $ConfigDir = if ($Layout -eq 'Clean') {
+        Join-Path $env:LOCALAPPDATA 'GeradorEstudo-Autostart'
+    } else {
+        Join-Path $env:LOCALAPPDATA ("PregacaoRecorder-$Layout-Autostart")
+    }
 }
 if (-not $StartupDir) {
     $StartupDir = [Environment]::GetFolderPath('Startup')
@@ -28,7 +34,7 @@ $localScript = Join-Path $ConfigDir 'autostart.ps1'
 $shortcut = Join-Path $StartupDir $shortcutName
 
 function Test-Package([string]$root, [string]$layoutName) {
-    if ($layoutName -eq 'Personal') {
+    if ($layoutName -in @('Personal', 'Clean')) {
         return (Test-Path -LiteralPath (Join-Path $root 'package-manifest.json') -PathType Leaf) -and
             (Test-Path -LiteralPath (Join-Path $root 'runtime\python\pythonw.exe') -PathType Leaf) -and
             (Test-Path -LiteralPath (Join-Path $root 'gravador\app\launcher.py') -PathType Leaf)
@@ -105,7 +111,7 @@ try {
             $localScript + '" -Mode Start -Layout ' + $Layout
         $link.WorkingDirectory = $ConfigDir
         $link.WindowStyle = 7
-        $link.Description = 'Iniciar Pregacao Recorder com o Windows'
+        $link.Description = if ($Layout -eq 'Clean') { 'Iniciar Gerador de Estudo com o Windows' } else { 'Iniciar Pregacao Recorder com o Windows' }
         $link.Save()
         Write-Output 'Inicio automatico ativado.'
     } elseif ($Mode -eq 'Disable') {
@@ -131,6 +137,13 @@ try {
             if ([DateTime]::UtcNow -ge $deadline) { throw 'Unidade da instalacao indisponivel.' }
             Start-Sleep -Seconds 5
         } while ($true)
+        if ($Layout -eq 'Clean') {
+            Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+                -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                    '-WindowStyle', 'Hidden', '-File', ('"' + (Join-Path $resolved 'Bandeja.ps1') + '"')) `
+                -WindowStyle Hidden
+            return
+        }
         if ($Layout -eq 'Personal') {
             $python = Join-Path $resolved 'runtime\python\pythonw.exe'
             $working = Join-Path $resolved 'gravador'
