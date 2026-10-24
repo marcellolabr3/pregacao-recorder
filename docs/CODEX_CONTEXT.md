@@ -3,8 +3,10 @@
 - Projeto: `D:\Dev\pregacao-recorder`. Não criar pastas de trabalho fora de
   `D:\Dev`; os caches de build ficam em `.bundle-cache/` e `.w/` neste projeto.
 - Código atual: `app/`, `web/`, `flutter/pregacao_controle/` e `packaging/`.
-- A entrega pessoal está em `E:\` e em `dist-pacote-pessoal/`: um instalador Windows
-  privado e um APK separado. O instalador inclui broker MQTT, ID do dispositivo,
+- A entrega pessoal atual está em `dist-pacote-pessoal/` e na raiz de `E:\`:
+  um instalador Windows privado e um APK separado. A cópia de `E:\` foi
+  atualizada com o APK `2.9.2` em 24/10; o `2.9.1` ficou como backup. O
+  instalador inclui broker MQTT, ID do dispositivo,
   autorização renovável do Google Drive, sessão NotebookLM e sessão WhatsApp
   quando presentes. O APK inclui a conexão MQTT do operador.
 - `packaging/build_connected_release.py` monta os dois arquivos pessoais a partir

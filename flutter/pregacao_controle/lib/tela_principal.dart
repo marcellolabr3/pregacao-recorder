@@ -13,6 +13,7 @@ import 'main.dart';
 import 'mqtt_controlador.dart';
 import 'protocolo.dart';
 import 'tela_configuracoes.dart';
+import 'tela_notebooklm.dart';
 
 class TelaPrincipal extends StatefulWidget {
   const TelaPrincipal({super.key});
@@ -156,10 +157,16 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         switch (valor) {
           case 'config':
             _abrirConfiguracoes();
+          case 'notebooklm':
+            Navigator.push<void>(
+              context,
+              MaterialPageRoute(builder: (_) => TelaNotebookLm(mqtt: mqtt)),
+            );
         }
       },
       itemBuilder: (context) => const [
         PopupMenuItem(value: 'config', child: Text('Configuracoes')),
+        PopupMenuItem(value: 'notebooklm', child: Text('Conta NotebookLM')),
       ],
     );
   }
@@ -347,7 +354,7 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         // (o agente republica so o que o app emite via SSE job_progress).
         _progressoWidget(mqtt),
 
-        _notebookLmWidget(st, ligado),
+        if (st?.estudosAtivo == true) NotebookLmPanel(mqtt: mqtt),
 
         _programacaoWidget(mqtt),
 
@@ -455,21 +462,12 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         mqtt.ultimaMensagem = ack.error.isEmpty
             ? 'resposta sem detalhe'
             : ack.error;
-      } else if (cmd == 'NLM_REFRESH' || cmd == 'NLM_RECONNECT') {
-        mqtt.ultimaMensagem = '';
       } else if (ack.detail.isNotEmpty) {
         mqtt.ultimaMensagem = ack.detail;
       } else {
         mqtt.ultimaMensagem = '';
       }
     });
-    if (ack.ok && (cmd == 'NLM_REFRESH' || cmd == 'NLM_RECONNECT')) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ack.detail.isEmpty
-            ? 'Acao do NotebookLM solicitada.'
-            : ack.detail),
-      ));
-    }
     // o estado novo chega pelo proprio MQTT em seguida e atualiza a tela
   }
 
@@ -567,67 +565,6 @@ class _TelaPrincipalState extends State<TelaPrincipal>
   // ------------------------------------------------------------------
   // progresso do estudo (S3)
   // ------------------------------------------------------------------
-  Widget _notebookLmWidget(EstadoEquipamento? st, bool ligado) {
-    if (st == null || !st.estudosAtivo) return const SizedBox.shrink();
-    final estado = st.notebooklmEstado;
-    final loginEmAndamento = st.notebooklmLoginEmAndamento;
-    final ocupado = st.notebooklmDiagnostico || loginEmAndamento;
-    final rotulo = switch (estado) {
-      'ok' => 'Conta conectada',
-      'auth' => 'Sessao expirada',
-      'rede' => 'Sem resposta da rede',
-      _ => 'Aguardando verificacao',
-    };
-    final cor = switch (estado) {
-      'ok' => Colors.green,
-      'auth' => Colors.orange,
-      'rede' => Colors.orange,
-      _ => Colors.grey,
-    };
-    return Card(
-      margin: const EdgeInsets.only(top: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('NOTEBOOKLM',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            Text(loginEmAndamento ? 'Login em andamento no PC' : rotulo,
-                style: TextStyle(color: cor)),
-            if (loginEmAndamento && st.notebooklmLoginDetalhe.isNotEmpty)
-              Text(st.notebooklmLoginDetalhe),
-            if (estado != 'ok' && st.notebooklmDetalhe.isNotEmpty)
-              Text(st.notebooklmDetalhe),
-            Text(st.notebooklmMasterToken
-                ? 'Renovacao automatica configurada'
-                : 'Renovacao automatica ainda nao configurada'),
-            if (st.estudosAguardando > 0)
-              Text('${st.estudosAguardando} estudo(s) aguardando a conta'),
-            if (ocupado)
-              const LinearProgressIndicator(),
-            const SizedBox(height: 6),
-            OutlinedButton.icon(
-              onPressed: ligado && !_aguardandoAck && !ocupado
-                  ? () => _enviar('NLM_REFRESH')
-                  : null,
-              icon: const Icon(Icons.refresh),
-              label: const Text('DIAGNOSTICAR SESSAO'),
-            ),
-            OutlinedButton.icon(
-              onPressed: ligado && !_aguardandoAck && !ocupado
-                  ? () => _enviar('NLM_RECONNECT')
-                  : null,
-              icon: const Icon(Icons.login),
-              label: const Text('RENOVAR LOGIN NO PC'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _progressoWidget(MqttControlador mqtt) {
     final pj = mqtt.ultimoProgresso;
     if (pj == null) return const SizedBox.shrink();

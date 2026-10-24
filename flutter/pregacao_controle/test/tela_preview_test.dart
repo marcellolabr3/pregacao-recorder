@@ -3,8 +3,7 @@
 //
 //   flutter test --update-goldens test/tela_preview_test.dart
 //
-// Nao e' teste de comportamento (os de protocolo estao em
-// protocolo_test.dart): e' a captura visual para revisao.
+// Inclui verificacoes dos controles e capturas visuais para revisao.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -43,8 +42,9 @@ Future<void> _capturar(
 }
 
 void main() {
-  testWidgets('NotebookLM oferece diagnostico e renovacao do login no APK',
-      (tester) async {
+  testWidgets('NotebookLM oferece diagnostico e renovacao do login no APK', (
+    tester,
+  ) async {
     final controlador = MqttControlador(Configuracao(token: 'x'));
     controlador.conectadoBroker = true;
     controlador.equipamentoOnline = true;
@@ -53,11 +53,51 @@ void main() {
       estudosAtivo: true,
       notebooklmEstado: 'auth',
     );
-    await tester.pumpWidget(MaterialApp(
-      home: AppScope(controlador: controlador, child: const TelaPrincipal()),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppScope(controlador: controlador, child: const TelaPrincipal()),
+      ),
+    );
     expect(find.text('DIAGNOSTICAR SESSAO'), findsOneWidget);
     expect(find.text('RENOVAR LOGIN NO PC'), findsOneWidget);
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.widgetWithText(OutlinedButton, 'DIAGNOSTICAR SESSAO'),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.widgetWithText(OutlinedButton, 'RENOVAR LOGIN NO PC'),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    controlador.dispose();
+  });
+
+  testWidgets('menu mostra NotebookLM mesmo sem estado do PC', (tester) async {
+    final controlador = MqttControlador(Configuracao());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppScope(controlador: controlador, child: const TelaPrincipal()),
+      ),
+    );
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Conta NotebookLM'));
+    await tester.pumpAndSettle();
+    expect(find.text('Aguardando estado do PC'), findsOneWidget);
+    expect(find.text('DIAGNOSTICAR SESSAO'), findsOneWidget);
+    expect(find.text('RENOVAR LOGIN NO PC'), findsOneWidget);
+    final diagnosticar = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'DIAGNOSTICAR SESSAO'),
+    );
+    expect(diagnosticar.onPressed, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
     controlador.dispose();
   });
 
