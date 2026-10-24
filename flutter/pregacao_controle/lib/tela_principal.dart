@@ -13,7 +13,6 @@ import 'main.dart';
 import 'mqtt_controlador.dart';
 import 'protocolo.dart';
 import 'tela_configuracoes.dart';
-import 'tela_notebooklm.dart';
 
 class TelaPrincipal extends StatefulWidget {
   const TelaPrincipal({super.key});
@@ -111,7 +110,7 @@ class _TelaPrincipalState extends State<TelaPrincipal>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    cfg.aparelho,
+                    cfg.aparelho.isEmpty ? 'Controle Android' : cfg.aparelho,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 18),
@@ -154,19 +153,10 @@ class _TelaPrincipalState extends State<TelaPrincipal>
   Widget _menu() {
     return PopupMenuButton<String>(
       onSelected: (valor) {
-        switch (valor) {
-          case 'config':
-            _abrirConfiguracoes();
-          case 'notebooklm':
-            Navigator.push<void>(
-              context,
-              MaterialPageRoute(builder: (_) => TelaNotebookLm(mqtt: mqtt)),
-            );
-        }
+        if (valor == 'config') _abrirConfiguracoes();
       },
       itemBuilder: (context) => const [
         PopupMenuItem(value: 'config', child: Text('Configuracoes')),
-        PopupMenuItem(value: 'notebooklm', child: Text('Conta NotebookLM')),
       ],
     );
   }
@@ -189,9 +179,7 @@ class _TelaPrincipalState extends State<TelaPrincipal>
             ),
             const SizedBox(height: 8),
             const Text(
-              'Os dados do servico remoto ja vem preenchidos: voce digita '
-              'so o token (esta no painel do equipamento, cartao '
-              'CONTROLE REMOTO).',
+              'Informe servidor, ID do equipamento e token nas configuracoes.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: Colors.grey),
             ),
@@ -354,8 +342,6 @@ class _TelaPrincipalState extends State<TelaPrincipal>
         // (o agente republica so o que o app emite via SSE job_progress).
         _progressoWidget(mqtt),
 
-        if (st?.estudosAtivo == true) NotebookLmPanel(mqtt: mqtt),
-
         _programacaoWidget(mqtt),
 
         // mensagem (erros, detalhes de ack)
@@ -474,7 +460,9 @@ class _TelaPrincipalState extends State<TelaPrincipal>
   Future<void> _abrirConfiguracoes() async {
     final nova = await Navigator.push<Configuracao>(
       context,
-      MaterialPageRoute(builder: (_) => TelaConfiguracoes(atual: mqtt.cfg)),
+      MaterialPageRoute(
+        builder: (_) => TelaConfiguracoes(atual: mqtt.cfg, mqtt: mqtt),
+      ),
     );
     if (nova != null && mounted) {
       mqtt.aplicarConfiguracao(nova);

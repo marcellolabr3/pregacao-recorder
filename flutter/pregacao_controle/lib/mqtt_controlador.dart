@@ -591,10 +591,13 @@ class MqttControlador extends ChangeNotifier {
     return 'Falha ao conectar: $e';
   }
 
-  /// Troca as configuracoes (apos Configuracoes) e reconecta.
+  /// Atualiza a aparencia sem derrubar a sessao MQTT. Reconecta apenas se
+  /// algum dado da conexao tiver mudado na edicao publica.
   void aplicarConfiguracao(Configuracao nova) {
+    final conexaoMudou = !cfg.mesmaConexao(nova);
     cfg = nova;
     notifyListeners();
+    if (!conexaoMudou) return;
     if (nova.pronto) {
       conectar();
     } else {

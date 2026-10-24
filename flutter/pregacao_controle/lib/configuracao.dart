@@ -1,5 +1,5 @@
-// Configuracao do operador. A edicao pessoal do APK recebe os dados do
-// broker no build; as alteracoes feitas no celular ficam no Keystore.
+// A edicao pessoal recebe a conexao MQTT no build. So a aparencia escolhida
+// no celular pode sobrescrever esses dados.
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -13,6 +13,7 @@ class Configuracao {
   String token;
   String logoPath;
   String backgroundPath;
+  final bool conexaoFixa;
 
   Configuracao({
     this.servidor = padraoServidor,
@@ -23,38 +24,81 @@ class Configuracao {
     this.token = '',
     this.logoPath = '',
     this.backgroundPath = '',
+    this.conexaoFixa = false,
   });
 
-  // valores de fabrica: identificadores PUBLICOS do servico remoto
+  // O build publico exige um ID informado pelo operador. O ID antigo
+  // pregacao-igreja-01 nao identifica o PC ativo e nao deve ser sugerido.
   static const padraoServidor = 'd1901dc1.ala.us-east-1.emqxsl.com';
-  static const padraoAparelho = 'pregacao-igreja-01';
+  static const padraoAparelho = '';
+
+  static const _hostIncorporado = String.fromEnvironment(
+    'PREGACAO_MOBILE_HOST',
+  );
+  static const _portaIncorporada = String.fromEnvironment(
+    'PREGACAO_MOBILE_PORT',
+  );
+  static const _tlsIncorporado = String.fromEnvironment('PREGACAO_MOBILE_TLS');
+  static const _aparelhoIncorporado = String.fromEnvironment(
+    'PREGACAO_MOBILE_DEVICE_ID',
+  );
+  static const _usuarioIncorporado = String.fromEnvironment(
+    'PREGACAO_MOBILE_USERNAME',
+  );
+  static const _tokenIncorporado = String.fromEnvironment(
+    'PREGACAO_MOBILE_PASSWORD',
+  );
+
+  static bool get temConexaoIncorporada =>
+      _hostIncorporado.isNotEmpty &&
+      _aparelhoIncorporado.isNotEmpty &&
+      _tokenIncorporado.isNotEmpty;
 
   /// Valores incorporados somente ao APK pessoal por --dart-define-from-file.
   /// O build publico continua sem credenciais.
   static Configuracao inicial() {
-    const servidor = String.fromEnvironment('PREGACAO_MOBILE_HOST');
-    const porta = String.fromEnvironment('PREGACAO_MOBILE_PORT');
-    const tls = String.fromEnvironment('PREGACAO_MOBILE_TLS');
-    const aparelho = String.fromEnvironment('PREGACAO_MOBILE_DEVICE_ID');
-    const usuario = String.fromEnvironment('PREGACAO_MOBILE_USERNAME');
-    const token = String.fromEnvironment('PREGACAO_MOBILE_PASSWORD');
     return Configuracao(
-      servidor: servidor.isEmpty ? padraoServidor : servidor,
-      porta: int.tryParse(porta) ?? 8883,
-      tls: tls.isEmpty ? true : tls == 'true',
-      aparelho: aparelho.isEmpty ? padraoAparelho : aparelho,
-      usuario: usuario.isEmpty ? 'operador' : usuario,
-      token: token,
+      servidor: _hostIncorporado.isEmpty ? padraoServidor : _hostIncorporado,
+      porta: int.tryParse(_portaIncorporada) ?? 8883,
+      tls: _tlsIncorporado.isEmpty ? true : _tlsIncorporado == 'true',
+      aparelho: _aparelhoIncorporado.isEmpty
+          ? padraoAparelho
+          : _aparelhoIncorporado,
+      usuario: _usuarioIncorporado.isEmpty ? 'operador' : _usuarioIncorporado,
+      token: _tokenIncorporado,
+      conexaoFixa: temConexaoIncorporada,
     );
   }
 
-  /// Existe configuracao suficiente para tentar conectar? Sem token a tela
-  /// principal mostra a orientacao, em vez de cair num erro de autenticacao
-  /// que nao explica nada.
+  /// Existe configuracao suficiente para tentar conectar?
   bool get pronto =>
       servidor.trim().isNotEmpty &&
       aparelho.trim().isNotEmpty &&
       token.trim().isNotEmpty;
+
+  bool mesmaConexao(Configuracao outra) =>
+      servidor == outra.servidor &&
+      porta == outra.porta &&
+      tls == outra.tls &&
+      aparelho == outra.aparelho &&
+      usuario == outra.usuario &&
+      token == outra.token;
+
+  /// Migra configuracoes antigas sem reutilizar host, ID ou token salvos.
+  static Configuracao comAparenciaSalva(
+    Configuracao incorporada,
+    Map<String, dynamic> salva,
+  ) => Configuracao(
+    servidor: incorporada.servidor,
+    porta: incorporada.porta,
+    tls: incorporada.tls,
+    aparelho: incorporada.aparelho,
+    usuario: incorporada.usuario,
+    token: incorporada.token,
+    logoPath: salva['logo_path'] as String? ?? '',
+    backgroundPath: salva['background_path'] as String? ?? '',
+    conexaoFixa: true,
+  );
 
   Map<String, dynamic> toJson() => {
     'servidor': servidor.trim(),
@@ -85,20 +129,28 @@ class ArmazenamentoSeguro {
   static const _storage = FlutterSecureStorage();
 
   Future<Configuracao> carregar() async {
+    final incorporada = Configuracao.inicial();
     try {
       final bruto = await _storage.read(key: _chave);
-      if (bruto == null || bruto.isEmpty) return Configuracao.inicial();
+      if (bruto == null || bruto.isEmpty) return incorporada;
       final dados = jsonDecode(bruto);
-      if (dados is Map<String, dynamic>) return Configuracao.fromJson(dados);
-      return Configuracao.inicial();
+      if (dados is Map<String, dynamic>) {
+        return Configuracao.temConexaoIncorporada
+            ? Configuracao.comAparenciaSalva(incorporada, dados)
+            : Configuracao.fromJson(dados);
+      }
+      return incorporada;
     } catch (_) {
       // armazenamento inacessivel (ex.: keystore corrompido): volta ao
       // padrao de fabrica em vez de travar o app
-      return Configuracao.inicial();
+      return incorporada;
     }
   }
 
   Future<void> salvar(Configuracao cfg) async {
-    await _storage.write(key: _chave, value: jsonEncode(cfg.toJson()));
+    final dados = Configuracao.temConexaoIncorporada
+        ? {'logo_path': cfg.logoPath, 'background_path': cfg.backgroundPath}
+        : cfg.toJson();
+    await _storage.write(key: _chave, value: jsonEncode(dados));
   }
 }

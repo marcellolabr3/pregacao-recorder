@@ -42,10 +42,14 @@ Future<void> _capturar(
 }
 
 void main() {
-  testWidgets('NotebookLM oferece diagnostico e renovacao do login no APK', (
-    tester,
-  ) async {
-    final controlador = MqttControlador(Configuracao(token: 'x'));
+  testWidgets('NotebookLM fica apenas nas Configuracoes', (tester) async {
+    final controlador = MqttControlador(
+      Configuracao(
+        aparelho: 'pregacao-lab-aska',
+        token: 'x',
+        conexaoFixa: true,
+      ),
+    );
     controlador.conectadoBroker = true;
     controlador.equipamentoOnline = true;
     controlador.estado = const EstadoEquipamento(
@@ -58,6 +62,21 @@ void main() {
         home: AppScope(controlador: controlador, child: const TelaPrincipal()),
       ),
     );
+    expect(find.text('DIAGNOSTICAR SESSAO'), findsNothing);
+    expect(find.text('RENOVAR LOGIN NO PC'), findsNothing);
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    expect(find.text('Conta NotebookLM'), findsNothing);
+    await tester.tap(find.text('Configuracoes'));
+    await tester.pumpAndSettle();
+    expect(find.text('PC VINCULADO'), findsOneWidget);
+    expect(find.text('pregacao-lab-aska'), findsOneWidget);
+    expect(find.text('Servidor (broker MQTT)'), findsNothing);
+    expect(find.text('Porta'), findsNothing);
+    expect(find.text('Conexao segura (TLS)'), findsNothing);
+    expect(find.text('ID do equipamento'), findsNothing);
+    expect(find.text('Usuario'), findsNothing);
+    expect(find.text('Token'), findsNothing);
     expect(find.text('DIAGNOSTICAR SESSAO'), findsOneWidget);
     expect(find.text('RENOVAR LOGIN NO PC'), findsOneWidget);
     expect(
@@ -76,11 +95,21 @@ void main() {
           .onPressed,
       isNotNull,
     );
+    await tester.pumpWidget(const SizedBox.shrink());
     controlador.dispose();
   });
 
-  testWidgets('menu mostra NotebookLM mesmo sem estado do PC', (tester) async {
-    final controlador = MqttControlador(Configuracao());
+  testWidgets('Configuracoes mostram NotebookLM sem estado do PC', (
+    tester,
+  ) async {
+    final controlador = MqttControlador(
+      Configuracao(
+        aparelho: 'pregacao-lab-aska',
+        token: 'x',
+        conexaoFixa: true,
+      ),
+    );
+    controlador.conectadoBroker = true;
     await tester.pumpWidget(
       MaterialApp(
         home: AppScope(controlador: controlador, child: const TelaPrincipal()),
@@ -88,7 +117,7 @@ void main() {
     );
     await tester.tap(find.byType(PopupMenuButton<String>));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Conta NotebookLM'));
+    await tester.tap(find.text('Configuracoes'));
     await tester.pumpAndSettle();
     expect(find.text('Aguardando estado do PC'), findsOneWidget);
     expect(find.text('DIAGNOSTICAR SESSAO'), findsOneWidget);
@@ -97,6 +126,10 @@ void main() {
       find.widgetWithText(OutlinedButton, 'DIAGNOSTICAR SESSAO'),
     );
     expect(diagnosticar.onPressed, isNull);
+    final renovar = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'RENOVAR LOGIN NO PC'),
+    );
+    expect(renovar.onPressed, isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     controlador.dispose();
   });
@@ -108,7 +141,9 @@ void main() {
   });
 
   testWidgets('previa: PRONTO e ONLINE', (tester) async {
-    final controlador = MqttControlador(Configuracao(token: 'x'));
+    final controlador = MqttControlador(
+      Configuracao(aparelho: 'pregacao-lab-aska', token: 'x'),
+    );
     // sem conexao real: os campos de estado sao injetados direto
     controlador.conectadoBroker = true;
     controlador.equipamentoOnline = true;
@@ -124,7 +159,9 @@ void main() {
   });
 
   testWidgets('previa: GRAVANDO com cronometro e eventos', (tester) async {
-    final controlador = MqttControlador(Configuracao(token: 'x'));
+    final controlador = MqttControlador(
+      Configuracao(aparelho: 'pregacao-lab-aska', token: 'x'),
+    );
     controlador.conectadoBroker = true;
     controlador.equipamentoOnline = true;
     controlador.nomeArquivo = '2026-10-18_100000_pregacao.wav';

@@ -3,24 +3,6 @@ import 'package:flutter/material.dart';
 import 'mqtt_controlador.dart';
 import 'protocolo.dart';
 
-/// Entrada permanente no menu, inclusive antes de chegar o estado MQTT.
-class TelaNotebookLm extends StatelessWidget {
-  final MqttControlador mqtt;
-
-  const TelaNotebookLm({super.key, required this.mqtt});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Conta NotebookLM')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [NotebookLmPanel(mqtt: mqtt)],
-      ),
-    );
-  }
-}
-
 class NotebookLmPanel extends StatefulWidget {
   final MqttControlador mqtt;
 

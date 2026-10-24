@@ -1,4 +1,24 @@
-# Atualização do APK — 24/10/2026
+# Atualização do APK 2.9.3 — 24/10/2026
+
+O APK pessoal `2.9.3` (`versionCode` 18) foi gerado e copiado para
+`dist-pacote-pessoal/Controle Android.apk`, `E:\Controle Android.apk` e
+`E:\Controle Android 2.9.3.apk`. As três cópias têm 52.709.802 bytes e o mesmo
+SHA-256: `9954E7EDE89B0DBCF97D61D7F9E996E3008AFEF18BC240201877B2BB59B284DA`.
+`aapt` confirmou a versão e `apksigner` confirmou a assinatura, com a mesma
+chave da versão anterior. A versão `2.9.2` permanece na mídia como backup.
+
+Nesta edição pessoal, os comandos do NotebookLM aparecem somente em
+**Configurações**. A conexão MQTT do operador e o ID do PC vinculado vêm do
+próprio APK; antigos valores MQTT salvos no celular são ignorados, preservando
+a aparência. Salvar a aparência não reinicia a conexão. O ID legado
+`pregacao-igreja-01` foi removido do APK pessoal. As três arquiteturas do
+APK foram verificadas quanto ao ID atual e aos textos da nova tela.
+
+Passaram **47 testes Flutter** e `flutter analyze --no-pub` terminou sem
+problemas. O instalador Windows não foi alterado. Sem celular conectado ao
+ADB, a instalação e a aparência no aparelho físico ainda não foram conferidas.
+
+# Atualização do APK 2.9.2 — 24/10/2026 (histórico)
 
 O APK pessoal `2.9.2` (`versionCode` 17) está em
 `dist-pacote-pessoal/Controle Android.apk`, com SHA-256

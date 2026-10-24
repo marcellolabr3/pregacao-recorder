@@ -1,16 +1,18 @@
-// Configuracoes do operador: a edicao pessoal ja traz a conexao completa;
-// alteracoes feitas no celular ficam no armazenamento protegido do aparelho.
+// Na edicao pessoal, a conexao MQTT e fixa; so a aparencia e ajustavel.
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'configuracao.dart';
+import 'mqtt_controlador.dart';
+import 'tela_notebooklm.dart';
 
 class TelaConfiguracoes extends StatefulWidget {
   final Configuracao atual;
+  final MqttControlador mqtt;
 
-  const TelaConfiguracoes({super.key, required this.atual});
+  const TelaConfiguracoes({super.key, required this.atual, required this.mqtt});
 
   @override
   State<TelaConfiguracoes> createState() => _TelaConfiguracoesState();
@@ -61,63 +63,78 @@ class _TelaConfiguracoesState extends State<TelaConfiguracoes> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(
-            controller: _servidor,
-            keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              labelText: 'Servidor (broker MQTT)',
-              hintText: Configuracao.padraoServidor,
-              helperText: 'Identificador publico do servico remoto.',
+          if (widget.atual.conexaoFixa) ...[
+            const Text(
+              'PC VINCULADO',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _porta,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(
-              labelText: 'Porta',
-              hintText: '8883',
+            const SizedBox(height: 6),
+            Text(widget.atual.aparelho),
+            const Text(
+              'A conexao MQTT deste APK ja esta definida.',
+              style: TextStyle(fontSize: 13),
             ),
-          ),
-          SwitchListTile(
-            title: const Text('Conexao segura (TLS)'),
-            value: _tls,
-            onChanged: (v) => setState(() => _tls = v),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _aparelho,
-            decoration: const InputDecoration(
-              labelText: 'ID do equipamento',
-              hintText: Configuracao.padraoAparelho,
-              helperText: 'Mesmo ID que aparece no painel do equipamento.',
+          ] else ...[
+            TextField(
+              controller: _servidor,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'Servidor (broker MQTT)',
+                hintText: Configuracao.padraoServidor,
+                helperText: 'Identificador publico do servico remoto.',
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _usuario,
-            decoration: const InputDecoration(
-              labelText: 'Usuario',
-              hintText: 'operador',
+            const SizedBox(height: 12),
+            TextField(
+              controller: _porta,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: 'Porta',
+                hintText: '8883',
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _token,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Token',
-              helperText:
-                  'Credencial dos operadores (cartao CONTROLE REMOTO do '
-                  'equipamento). Na edicao pessoal ja vem preenchida.',
+            SwitchListTile(
+              title: const Text('Conexao segura (TLS)'),
+              value: _tls,
+              onChanged: (v) => setState(() => _tls = v),
             ),
-          ),
-          const SizedBox(height: 18),
-          FilledButton(
-            onPressed: _salvar,
-            child: const Text('SALVAR ACESSO E CONECTAR'),
-          ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _aparelho,
+              decoration: const InputDecoration(
+                labelText: 'ID do equipamento',
+                hintText: Configuracao.padraoAparelho,
+                helperText: 'Mesmo ID que aparece no painel do equipamento.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _usuario,
+              decoration: const InputDecoration(
+                labelText: 'Usuario',
+                hintText: 'operador',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _token,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Token',
+                helperText:
+                    'Credencial dos operadores (cartao CONTROLE REMOTO do '
+                    'equipamento). Na edicao pessoal ja vem preenchida.',
+              ),
+            ),
+            const SizedBox(height: 18),
+            FilledButton(
+              onPressed: _salvar,
+              child: const Text('SALVAR ACESSO E CONECTAR'),
+            ),
+          ],
+          const Divider(height: 38),
+          NotebookLmPanel(mqtt: widget.mqtt),
           const Divider(height: 38),
           const Text(
             'APARENCIA',
@@ -272,35 +289,47 @@ class _TelaConfiguracoesState extends State<TelaConfiguracoes> {
   }
 
   Future<void> _salvar() async {
-    final servidor = _servidor.text.trim();
-    final aparelho = _aparelho.text.trim();
-    // trim tambem no token: um espaco invisivel (teclado/colar) ja derruba a
-    // autenticacao no broker, e o operador jura que digitou a senha certa
-    final token = _token.text.trim();
-    final porta = int.tryParse(_porta.text.trim()) ?? 0;
-
-    if (servidor.isEmpty || aparelho.isEmpty || token.isEmpty) {
-      setState(
-        () => _erro = 'Servidor, ID do equipamento e token sao obrigatorios.',
+    final Configuracao nova;
+    if (widget.atual.conexaoFixa) {
+      nova = Configuracao(
+        servidor: widget.atual.servidor,
+        porta: widget.atual.porta,
+        tls: widget.atual.tls,
+        aparelho: widget.atual.aparelho,
+        usuario: widget.atual.usuario,
+        token: widget.atual.token,
+        logoPath: _logoPath,
+        backgroundPath: _backgroundPath,
+        conexaoFixa: true,
       );
-      return;
+    } else {
+      final servidor = _servidor.text.trim();
+      final aparelho = _aparelho.text.trim();
+      final token = _token.text.trim();
+      final porta = int.tryParse(_porta.text.trim()) ?? 0;
+      if (servidor.isEmpty || aparelho.isEmpty || token.isEmpty) {
+        setState(
+          () => _erro = 'Servidor, ID do equipamento e token sao obrigatorios.',
+        );
+        return;
+      }
+      if (porta < 1 || porta > 65535) {
+        setState(() => _erro = 'Porta invalida.');
+        return;
+      }
+      nova = Configuracao(
+        servidor: servidor,
+        porta: porta,
+        tls: _tls,
+        aparelho: aparelho,
+        usuario: _usuario.text.trim().isEmpty
+            ? 'operador'
+            : _usuario.text.trim(),
+        token: token,
+        logoPath: _logoPath,
+        backgroundPath: _backgroundPath,
+      );
     }
-    if (porta < 1 || porta > 65535) {
-      setState(() => _erro = 'Porta invalida.');
-      return;
-    }
-    final nova = Configuracao(
-      servidor: servidor,
-      porta: porta,
-      tls: _tls,
-      aparelho: aparelho,
-      usuario: _usuario.text.trim().isEmpty ? 'operador' : _usuario.text.trim(),
-      token: token,
-      logoPath: _logoPath,
-      backgroundPath: _backgroundPath,
-    );
-    // grava no armazenamento protegido e devolve para a tela principal,
-    // que ja reconecta com os novos dados
     try {
       await ArmazenamentoSeguro().salvar(nova);
       if (mounted) Navigator.pop(context, nova);

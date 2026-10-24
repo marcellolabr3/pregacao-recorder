@@ -2,8 +2,8 @@
 
 Use `Gerador de Estudo.exe` e `Controle Android.apk` de `E:\` ou de
 `dist-pacote-pessoal/`. Os arquivos `.sha256` ao lado deles permitem conferir
-as cópias. O APK atual é o `2.9.2`; o anterior está preservado na mídia como
-`Controle Android 2.9.1.apk`.
+as cópias. O APK atual é o `2.9.3`; a versão `2.9.2` ficou preservada na
+mídia com o número da versão no nome.
 
 O instalador leva a configuração atual do broker MQTT, a autorização renovável
 do Google Drive e a sessão atual do NotebookLM. Se o login durável do
@@ -22,12 +22,14 @@ local privado, pois contêm credenciais de acesso.
    **Onde gravar** no novo PC. Faça **TESTAR SINAL** e salve. O disco e o nome
    da interface podem ser diferentes dos usados no PC antigo.
 3. Confira no painel o status do **Google Drive**, **NotebookLM**, **WhatsApp**
-   e **CONTROLE REMOTO**. No celular, abra o menu **Conta NotebookLM**. Use
+   e **CONTROLE REMOTO**. No celular, abra **Configurações**. Use
    **DIAGNOSTICAR SESSAO** para verificar a sessão e tentar renová-la quando
    houver token durável. **RENOVAR LOGIN NO PC** abre a entrada no navegador do
    computador caso a sessão não possa ser recuperada. O celular não recebe a
    senha da conta Google.
-   A autorização do Drive foi copiada da origem; se o Google a
+   Esta edição já contém a conexão MQTT do único PC vinculado; servidor, porta,
+   TLS, ID, usuário e token não precisam ser preenchidos no celular. A
+   autorização do Drive foi copiada da origem; se o Google a
    revogar depois, use **CONECTAR CONTA GOOGLE**. Para testar o broker, envie
    **STATUS** pelo celular e confira o ACK.
 4. Faça uma gravação curta, pare e confira o arquivo local e o envio. Gravar

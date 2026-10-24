@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pregacao_controle/configuracao.dart';
+import 'package:pregacao_controle/mqtt_controlador.dart';
 import 'package:pregacao_controle/protocolo.dart';
 
 void main() {
@@ -23,8 +24,13 @@ void main() {
   test('historico retido restaura eventos e nome do arquivo', () {
     final eventos = lerHistorico(const {
       'items': [
-        {'id': 9, 'ts': 1790000000.0, 'kind': 'gravacao_pronta',
-          'message': 'Gravacao finalizada', 'file': 'estudo.mp3'},
+        {
+          'id': 9,
+          'ts': 1790000000.0,
+          'kind': 'gravacao_pronta',
+          'message': 'Gravacao finalizada',
+          'file': 'estudo.mp3',
+        },
       ],
     });
     expect(eventos, hasLength(1));
@@ -37,8 +43,13 @@ void main() {
     final estado = EstadoEquipamento.fromJson(const {
       'state': 'COMPLETED',
       'recent_events': [
-        {'id': 9, 'ts': 1790000000.0, 'kind': 'gravacao_pronta',
-          'message': 'Gravacao finalizada', 'file': 'estudo.mp3'},
+        {
+          'id': 9,
+          'ts': 1790000000.0,
+          'kind': 'gravacao_pronta',
+          'message': 'Gravacao finalizada',
+          'file': 'estudo.mp3',
+        },
       ],
     });
     expect(estado.recentEvents.single.file, 'estudo.mp3');
@@ -303,18 +314,24 @@ void main() {
   });
 
   group('Configuracao', () {
-    test('pronto() exige token (host/ID vem de fabrica)', () {
+    test('pronto() exige ID e token', () {
       expect(Configuracao().pronto, isFalse); // sem token
       final cfg = Configuracao()..token = 'segredo';
+      expect(cfg.pronto, isFalse); // sem ID
+      cfg.aparelho = 'pregacao-lab-aska';
       expect(cfg.pronto, isTrue);
-      final semServidor = Configuracao(servidor: ' ', token: 'x');
+      final semServidor = Configuracao(
+        servidor: ' ',
+        aparelho: 'pregacao-lab-aska',
+        token: 'x',
+      );
       expect(semServidor.pronto, isFalse);
     });
 
-    test('defaults sao os identificadores publicos do servico', () {
+    test('edicao publica nao sugere o ID antigo', () {
       final cfg = Configuracao();
       expect(cfg.servidor, Configuracao.padraoServidor);
-      expect(cfg.aparelho, Configuracao.padraoAparelho);
+      expect(cfg.aparelho, isEmpty);
       expect(cfg.porta, 8883);
       expect(cfg.tls, isTrue);
       expect(cfg.usuario, 'operador');
@@ -343,6 +360,47 @@ void main() {
       expect(volta.logoPath, cfg.logoPath);
       expect(volta.backgroundPath, cfg.backgroundPath);
       expect(Configuracao.fromJson(const {}).logoPath, isEmpty);
+    });
+
+    test('edicao pessoal ignora MQTT antigo salvo e preserva aparencia', () {
+      final incorporada = Configuracao(
+        servidor: 'broker.atual',
+        porta: 8883,
+        tls: true,
+        aparelho: 'pregacao-lab-aska',
+        usuario: 'operador',
+        token: 'token-atual',
+        conexaoFixa: true,
+      );
+      final restaurada = Configuracao.comAparenciaSalva(incorporada, const {
+        'servidor': 'broker.antigo',
+        'porta': 1883,
+        'tls': false,
+        'aparelho': 'pregacao-igreja-01',
+        'usuario': 'outro',
+        'token': 'token-antigo',
+        'logo_path': '/privado/logo.png',
+        'background_path': '/privado/fundo.jpg',
+      });
+      expect(restaurada.mesmaConexao(incorporada), isTrue);
+      expect(restaurada.conexaoFixa, isTrue);
+      expect(restaurada.logoPath, '/privado/logo.png');
+      expect(restaurada.backgroundPath, '/privado/fundo.jpg');
+    });
+
+    test('alterar somente a aparencia nao reinicia a conexao MQTT', () {
+      final anterior = Configuracao(aparelho: 'pregacao-lab-aska', token: 'x');
+      final controlador = MqttControlador(anterior);
+      controlador.aplicarConfiguracao(
+        Configuracao(
+          aparelho: 'pregacao-lab-aska',
+          token: 'x',
+          logoPath: '/privado/logo.png',
+        ),
+      );
+      expect(controlador.fase, FaseConexao.parado);
+      expect(controlador.cfg.logoPath, '/privado/logo.png');
+      controlador.dispose();
     });
   });
 
